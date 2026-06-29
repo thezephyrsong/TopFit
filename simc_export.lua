@@ -16,8 +16,15 @@
 	  - equip=<trigger>_<stat>_<amount>_<ppm|chance>_<dur>_<cd>  (proc encoding, see trinketlogic
 	    discussion -- this build's equip= syntax is its own format, not something trinketlogic's
 	    output maps to directly)
-	  - talents=<wowarmory talent-calc URL string>, glyphs=<list>
+	  - glyphs=<list>
 	  - heroic=1 (no way to tell heroic vs normal item variants apart from itemID alone)
+
+	TALENTS: exported as talents=http://www.wowarmory.com/talent-calc.xml?cid=X&tal=NNNN...,
+	read directly from your live talent allocation via GetTalentInfo(). This is the format
+	the engine's local parser expects (the wowarmory.com site itself has been dead for years --
+	this isn't a live request). Note this is NOT the same encoding as Wowhead's current
+	talent-calc URLs (e.g. wowhead.com/wotlk/talent-calc/...), which use a different scheme
+	entirely and aren't convertible to/from this one.
 
 	STAT COVERAGE: this SimC build is DPS-sim only -- there is no token for resilience, defense
 	rating, dodge/parry rating, mp5, health, mana, feral AP, or spell penetration anywhere in its
@@ -36,6 +43,38 @@ local CLASS_TO_SIMC = {
 	WARLOCK     = "warlock",
 	DRUID       = "druid",
 }
+
+-- Blizzard's old wowarmory.com talent-calc "cid" (class id) numbering. This engine parses
+-- talents=http://www.wowarmory.com/talent-calc.xml?cid=X&tal=NNNN... as a plain string --
+-- the site itself has been dead for over a decade, so this is NOT a live web request, it's
+-- just the string format the engine's local parser recognizes. Wowhead's modern talent-calc
+-- URLs use a completely different encoding and are not interchangeable with this one.
+local CLASS_TO_WOWARMORY_CID = {
+	WARRIOR     = 1,
+	PALADIN     = 2,
+	HUNTER      = 3,
+	ROGUE       = 4,
+	PRIEST      = 5,
+	DEATHKNIGHT = 6,
+	SHAMAN      = 7,
+	MAGE        = 8,
+	WARLOCK     = 9,
+	DRUID       = 11, -- 10 is skipped in this numbering
+}
+
+-- builds the wowarmory-style "tal=" digit string from your CURRENT live talent allocation:
+-- one digit (0-5) per talent, tab 1 then tab 2 then tab 3, in the same order the in-game
+-- talent UI lists them -- which is also the order GetTalentInfo returns them in.
+local function GetWowarmoryTalentString()
+	local digits = {}
+	for tab = 1, GetNumTalentTabs() do
+		for i = 1, GetNumTalents(tab) do
+			local currentRank = select(5, GetTalentInfo(tab, i)) or 0
+			tinsert(digits, tostring(currentRank))
+		end
+	end
+	return table.concat(digits)
+end
 
 local RACE_TO_SIMC = {
 	Human    = "human",
@@ -139,6 +178,13 @@ function TopFit:GenerateSimcExportString()
 	if simcRace then
 		tinsert(lines, "race=" .. simcRace)
 	end
+
+	local cid = CLASS_TO_WOWARMORY_CID[classToken]
+	local talString = GetWowarmoryTalentString()
+	if cid and talString and talString ~= "" then
+		tinsert(lines, "talents=http://www.wowarmory.com/talent-calc.xml?cid=" .. cid .. "&tal=" .. talString)
+	end
+
 	tinsert(lines, "")
 
 	for _, slotInfo in ipairs(SLOT_ORDER) do
@@ -167,7 +213,7 @@ function TopFit:GenerateSimcExportString()
 	tinsert(lines, "")
 	tinsert(lines, "# NOT exported -- fill in by hand if they matter:")
 	tinsert(lines, "#   weapon dps/speed (weapon=...), trinket/weapon procs (equip=...)")
-	tinsert(lines, "#   talents=, glyphs=, heroic=1 flags")
+	tinsert(lines, "#   glyphs=, heroic=1 flags")
 
 	return table.concat(lines, "\n")
 end
