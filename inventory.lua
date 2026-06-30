@@ -211,6 +211,21 @@ function TopFit:GetItemInfoTable(item)
                 totalBonus[stat] = (totalBonus[stat] or 0) + value
             end
         end
+
+        -- Use:/Equip: proc effects. Only folded into totalBonus when a real cooldown is known
+        -- (click-to-use trinkets, or the rare Equip proc that states an internal cooldown) --
+        -- see procparser.lua's header comment for why chance-based procs with no stated
+        -- cooldown are deliberately left out of scoring rather than guessed at.
+        local procInfo = TopFit:ParseItemProc(itemLink)
+        local hasUnscoredProc = false
+        if procInfo then
+            local effectiveValue = TopFit:GetProcEffectiveValue(procInfo)
+            if effectiveValue then
+                totalBonus[procInfo.statKey] = (totalBonus[procInfo.statKey] or 0) + effectiveValue
+            else
+                hasUnscoredProc = true
+            end
+        end
         
         local result = {
             ["itemLink"] = itemLink,
@@ -225,6 +240,8 @@ function TopFit:GetItemInfoTable(item)
             ["gemBonus"] = gemBonus,
             ["equipLocationsByType"] = TopFit:GetEquipLocationsByInvType(itemEquipLoc),
             ["totalBonus"] = totalBonus,
+            ["procInfo"] = procInfo,
+            ["hasUnscoredProc"] = hasUnscoredProc,
         }
         
         return result

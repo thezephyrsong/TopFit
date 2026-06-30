@@ -12,12 +12,22 @@
 	same workaround -- it hasn't been verified against that yet.
 
 	KNOWN GAPS (not exported, fill in by hand if they matter for your sim):
-	  - weapon=<type>_<speed>speed_<min>min_<max>max  (needs weapon tooltip parsing)
-	  - equip=<trigger>_<stat>_<amount>_<ppm|chance>_<dur>_<cd>  (proc encoding, see trinketlogic
-	    discussion -- this build's equip= syntax is its own format, not something trinketlogic's
-	    output maps to directly)
 	  - glyphs=<list>
 	  - heroic=1 (no way to tell heroic vs normal item variants apart from itemID alone)
+	  - ammo_dps=<value> for Hunters (ammo's flat ranged-damage bonus isn't parsed yet)
+
+	PROC EFFECTS (Use:/Equip:): handled by procparser.lua. Click-to-use trinkets with a stated
+	cooldown are emitted as a real "actions+=/use_item,name=<slug>" line -- this is the format
+	the bundled example profiles actually use for those, and it's correct regardless of whether
+	the engine recognizes the specific item (it just won't simulate an effect it doesn't know,
+	which is true for any custom-server item either way; this module can't change that).
+	Passive on-equip "chance on hit/cast" procs are emitted ONLY as a "# possible proc:" comment
+	with the parsed stat/amount/duration, never as a real equip= line -- this engine's equip=
+	syntax also encodes a *trigger event* (onattackhit / onspellcast / onspelldamage / etc.)
+	that cannot be reliably determined from tooltip text, since differently-triggered procs can
+	read identically. Fabricating a guessed trigger would produce a profile that looks precise
+	but may simulate the wrong condition; the comment is there for you to encode by hand once
+	you know (or test) what actually triggers it.
 
 	TALENTS: exported as talents=http://www.wowarmory.com/talent-calc.xml?cid=X&tal=NNNN...,
 	read directly from your live talent allocation via GetTalentInfo(). This is the format
@@ -131,7 +141,95 @@ local SLOT_ORDER = {
 	{ "RangedSlot",        "ranged" },
 }
 
--- turns an item name into a SimC-style slug: lowercase, non-alphanumerics -> underscores
+-- maps GetAuctionItemSubClasses(1) [Weapon category] index -> SimC weapon type token, reverse-
+-- engineered from the bundled example profiles (axe2h/mace2h/sword2h for 2H variants; polearms
+-- and staves have no "2h" variant since every polearm/staff is already 2H). Indices 12 (Misc)
+-- and 17 (Fishing Poles) have no SimC token and are intentionally omitted.
+-- Uses the same locale-safe technique as TopFit:IsOnehandedWeapon() elsewhere in this codebase:
+-- compare against the locally-translated string fetched by stable index, never hardcode English.
+local WEAPON_SUBCLASS_INDEX_TO_SIMC = {
+	[1]  = "axe",      -- One-Handed Axes
+	[2]  = "axe2h",    -- Two-Handed Axes
+	[3]  = "bow",      -- Bows
+	[4]  = "gun",      -- Guns
+	[5]  = "mace",     -- One-Handed Maces
+	[6]  = "mace2h",   -- Two-Handed Maces
+	[7]  = "polearm",  -- Polearms
+	[8]  = "sword",    -- One-Handed Swords
+	[9]  = "sword2h",  -- Two-Handed Swords
+	[10] = "staff",    -- Staves
+	[11] = "fist",     -- Fist Weapons
+	[13] = "dagger",   -- Daggers
+	[14] = "thrown",   -- Thrown
+	[15] = "crossbow", -- Crossbows
+	[16] = "wand",     -- Wands
+}
+
+-- returns the SimC weapon type token for an item link, or nil if it isn't a weapon at all
+-- (shields, held-in-offhand items, idols/totems/librams/sigils all correctly fall through to nil)
+local function GetSimcWeaponType(itemLink)
+	local subclass = select(7, GetItemInfo(itemLink))
+	if not subclass then return nil end
+	for index, simcToken in pairs(WEAPON_SUBCLASS_INDEX_TO_SIMC) do
+		if subclass == select(index, GetAuctionItemSubClasses(1)) then
+			return simcToken
+		end
+	end
+	return nil
+end
+
+-- scans a weapon's tooltip for its speed and damage range. There is no clean Lua API for this
+-- on arbitrary items in this client era, so -- consistent with how this codebase already handles
+-- socket bonuses and BoE detection -- this reads the tooltip text directly.
+-- NOTE: the tooltip only ever displays whole-number damage (the client rounds it for display),
+-- so these values will be slightly less precise than a database-sourced export like Wowhead's;
+-- that's an inherent limitation of reading it off the tooltip rather than a bug.
+-- NOTE: relies on the English tooltip words "Speed" and "Damage", consistent with the same
+-- English-client assumption already made for the Force Armor Type filter.
+local function GetWeaponSpeedAndDamage(itemLink)
+	TopFit.scanTooltip:SetOwner(UIParent, 'ANCHOR_NONE')
+	TopFit.scanTooltip:SetHyperlink(itemLink)
+	local numLines = TopFit.scanTooltip:NumLines()
+
+	local speed, minDmg, maxDmg
+	for i = 1, numLines do
+		local leftLine = getglobal("TFScanTooltip" .. "TextLeft" .. i)
+		local leftLineText = leftLine:GetText()
+		if leftLineText then
+			local dmgMin, dmgMax = leftLineText:match("^(%d+)%s*%-%s*(%d+)%s+Damage")
+			if dmgMin then
+				minDmg, maxDmg = tonumber(dmgMin), tonumber(dmgMax)
+			end
+			local speedMatch = leftLineText:match("Speed%s+([%d%.]+)")
+			if speedMatch then
+				speed = tonumber(speedMatch)
+			end
+		end
+	end
+	TopFit.scanTooltip:Hide()
+
+	return speed, minDmg, maxDmg
+end
+
+-- builds the "weapon=type_X.XXspeed_MINmin_MAXmax" field, or nil if this isn't a weapon
+-- or the tooltip scan came back incomplete
+local function BuildWeaponField(itemLink)
+	local simcType = GetSimcWeaponType(itemLink)
+	if not simcType then return nil end
+
+	local speed, minDmg, maxDmg = GetWeaponSpeedAndDamage(itemLink)
+	if not (speed and minDmg and maxDmg) then return nil end
+
+	return ("weapon=%s_%.2fspeed_%dmin_%dmax"):format(simcType, speed, minDmg, maxDmg)
+end
+
+-- slots that can hold a weapon (as opposed to e.g. off-hand shields/held-items, which
+-- BuildWeaponField already filters out naturally via GetSimcWeaponType returning nil for them)
+local WEAPON_SLOTS = {
+	MainHandSlot = true,
+	SecondaryHandSlot = true,
+	RangedSlot = true,
+}
 local function Slugify(name)
 	if not name or name == "" then return "unknown_item" end
 	name = name:lower()
@@ -187,6 +285,9 @@ function TopFit:GenerateSimcExportString()
 
 	tinsert(lines, "")
 
+	local useItemActions = {}
+	local procComments = {}
+
 	for _, slotInfo in ipairs(SLOT_ORDER) do
 		local slotName, simcField = slotInfo[1], slotInfo[2]
 		local slotID = TopFit.slots[slotName]
@@ -195,7 +296,8 @@ function TopFit:GenerateSimcExportString()
 		if itemLink then
 			local itemTable = TopFit:GetCachedItem(itemLink)
 			local itemName = GetItemInfo(itemLink)
-			local fieldParts = { simcField .. "=" .. Slugify(itemName) }
+			local slug = Slugify(itemName)
+			local fieldParts = { simcField .. "=" .. slug }
 
 			local statsBlob = itemTable and BonusTableToSimcBlob(itemTable.itemBonus)
 			if statsBlob then tinsert(fieldParts, "stats=" .. statsBlob) end
@@ -206,14 +308,48 @@ function TopFit:GenerateSimcExportString()
 			local enchantBlob = itemTable and BonusTableToSimcBlob(itemTable.enchantBonus)
 			if enchantBlob then tinsert(fieldParts, "enchant=" .. enchantBlob) end
 
+			if WEAPON_SLOTS[slotName] then
+				local weaponField = BuildWeaponField(itemLink)
+				if weaponField then tinsert(fieldParts, weaponField) end
+			end
+
 			tinsert(lines, table.concat(fieldParts, ","))
+
+			-- Use:/Equip: procs. Use-effects with a real stated cooldown become an actual
+			-- action list entry the engine can act on (matches the bundled example profiles'
+			-- own format for this exact case). Equip-effects -- and any proc whose cooldown
+			-- couldn't be determined -- become a comment only; see header for why.
+			local procInfo = itemTable and itemTable.procInfo
+			if procInfo then
+				if procInfo.trigger == "use" and procInfo.cooldown then
+					tinsert(useItemActions, "actions+=/use_item,name=" .. slug)
+				else
+					local statName = STAT_TO_SIMC[procInfo.statKey] or procInfo.statKey
+					local desc = ("%s (%s): +%s %s"):format(itemName, procInfo.trigger, procInfo.amount, statName)
+					if procInfo.duration then desc = desc .. (" for %ds"):format(procInfo.duration) end
+					if procInfo.cooldown then desc = desc .. (", %ds cooldown"):format(procInfo.cooldown) end
+					tinsert(procComments, "#   " .. desc .. " -- proc chance/trigger unknown, verify and encode manually")
+				end
+			end
+		end
+	end
+
+	if #useItemActions > 0 then
+		tinsert(lines, "")
+		for _, action in ipairs(useItemActions) do
+			tinsert(lines, action)
 		end
 	end
 
 	tinsert(lines, "")
 	tinsert(lines, "# NOT exported -- fill in by hand if they matter:")
-	tinsert(lines, "#   weapon dps/speed (weapon=...), trinket/weapon procs (equip=...)")
-	tinsert(lines, "#   glyphs=, heroic=1 flags")
+	tinsert(lines, "#   glyphs=, heroic=1 flags, ammo_dps= (Hunters)")
+	if #procComments > 0 then
+		tinsert(lines, "# Possible procs found (could not auto-encode, see simc_export.lua header):")
+		for _, comment in ipairs(procComments) do
+			tinsert(lines, comment)
+		end
+	end
 
 	return table.concat(lines, "\n")
 end
