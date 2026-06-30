@@ -86,6 +86,26 @@ local function GetWowarmoryTalentString()
 	return table.concat(digits)
 end
 
+-- diagnostic: prints exactly what GetNumTalentTabs()/GetNumTalents() report per tab, plus
+-- each talent's name and max rank, so a count mismatch against the in-game UI can be pinned
+-- down precisely instead of guessed at.
+function TopFit:DebugTalentCounts()
+	local numTabs = GetNumTalentTabs()
+	TopFit:Print("GetNumTalentTabs() = " .. tostring(numTabs))
+	local total = 0
+	for tab = 1, numTabs do
+		local tabName = select(1, GetTalentTabInfo(tab))
+		local numTalents = GetNumTalents(tab)
+		total = total + numTalents
+		TopFit:Print(("Tab %d (%s): GetNumTalents() = %d"):format(tab, tostring(tabName), numTalents))
+		for i = 1, numTalents do
+			local name, _, _, _, currentRank, maxRank = GetTalentInfo(tab, i)
+			TopFit:Print(("  [%d] %s -- rank %d/%d"):format(i, tostring(name), currentRank or 0, maxRank or 0))
+		end
+	end
+	TopFit:Print("Total talent slots across all tabs = " .. total)
+end
+
 local RACE_TO_SIMC = {
 	Human    = "human",
 	Dwarf    = "dwarf",
@@ -142,40 +162,32 @@ local SLOT_ORDER = {
 }
 
 -- maps GetAuctionItemSubClasses(1) [Weapon category] index -> SimC weapon type token, reverse-
--- engineered from the bundled example profiles (axe2h/mace2h/sword2h for 2H variants; polearms
--- and staves have no "2h" variant since every polearm/staff is already 2H). Indices 12 (Misc)
--- and 17 (Fishing Poles) have no SimC token and are intentionally omitted.
--- Uses the same locale-safe technique as TopFit:IsOnehandedWeapon() elsewhere in this codebase:
--- compare against the locally-translated string fetched by stable index, never hardcode English.
-local WEAPON_SUBCLASS_INDEX_TO_SIMC = {
-	[1]  = "axe",      -- One-Handed Axes
-	[2]  = "axe2h",    -- Two-Handed Axes
-	[3]  = "bow",      -- Bows
-	[4]  = "gun",      -- Guns
-	[5]  = "mace",     -- One-Handed Maces
-	[6]  = "mace2h",   -- Two-Handed Maces
-	[7]  = "polearm",  -- Polearms
-	[8]  = "sword",    -- One-Handed Swords
-	[9]  = "sword2h",  -- Two-Handed Swords
-	[10] = "staff",    -- Staves
-	[11] = "fist",     -- Fist Weapons
-	[13] = "dagger",   -- Daggers
-	[14] = "thrown",   -- Thrown
-	[15] = "crossbow", -- Crossbows
-	[16] = "wand",     -- Wands
-}
-
--- returns the SimC weapon type token for an item link, or nil if it isn't a weapon at all
--- (shields, held-in-offhand items, idols/totems/librams/sigils all correctly fall through to nil)
+-- maps a weapon's itemSubType (the string GetItemInfo() already returns directly -- e.g.
+-- "Daggers", "One-Handed Swords", "Two-Handed Maces" -- this IS the localized display text,
+-- no lookup table needed to get it) to a SimC weapon type token.
+-- NOTE: this matches against the English text. If this server runs a non-English client,
+-- these substrings won't match and weapon= will simply be omitted -- same caveat already
+-- noted for the Force Armor Type filter elsewhere in this addon.
 local function GetSimcWeaponType(itemLink)
-	local subclass = select(7, GetItemInfo(itemLink))
-	if not subclass then return nil end
-	for index, simcToken in pairs(WEAPON_SUBCLASS_INDEX_TO_SIMC) do
-		if subclass == select(index, GetAuctionItemSubClasses(1)) then
-			return simcToken
-		end
-	end
-	return nil
+	local subType = select(7, GetItemInfo(itemLink))
+	if not subType then return nil end
+
+	local isTwoHand = subType:find("Two%-Handed") ~= nil
+
+	if subType:find("Axe") then return isTwoHand and "axe2h" or "axe" end
+	if subType:find("Mace") then return isTwoHand and "mace2h" or "mace" end
+	if subType:find("Sword") then return isTwoHand and "sword2h" or "sword" end
+	if subType:find("Dagger") then return "dagger" end
+	if subType:find("Fist") then return "fist" end
+	if subType:find("Polearm") then return "polearm" end
+	if subType:find("Staves") or subType:find("Staff") then return "staff" end
+	if subType:find("Crossbow") then return "crossbow" end -- must check before "Bow"
+	if subType:find("Bow") then return "bow" end
+	if subType:find("Gun") then return "gun" end
+	if subType:find("Wand") then return "wand" end
+	if subType:find("Thrown") then return "thrown" end
+
+	return nil -- not a weapon subType at all (shields, held-in-offhand, etc.)
 end
 
 -- scans a weapon's tooltip for its speed and damage range. There is no clean Lua API for this

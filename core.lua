@@ -240,8 +240,10 @@ function TopFit:ChatCommand(input)
             TopFit:ShowExportDialog(rest and rest:lower() == "pawn")
         elseif command == "simc" then
             TopFit:ShowSimcExportDialog()
+        elseif command == "talentdebug" then
+            TopFit:DebugTalentCounts()
         else
-            TopFit:Print("Available Options:\n  show - shows the calculations frame\n  options - shows TopFit's options\n  import - import a Pawn/AskMrRobot/TopFit weight string as a new set\n  export [pawn] - export the selected set as a string (add 'pawn' for Pawn format)\n  simc - export your currently equipped gear as a .simc profile")
+            TopFit:Print("Available Options:\n  show - shows the calculations frame\n  options - shows TopFit's options\n  import - import a Pawn/AskMrRobot/TopFit weight string as a new set\n  export [pawn] - export the selected set as a string (add 'pawn' for Pawn format)\n  simc - export your currently equipped gear as a .simc profile\n  talentdebug - print raw talent tab/count info for debugging")
         end
     end
 end

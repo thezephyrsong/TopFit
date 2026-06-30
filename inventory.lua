@@ -216,10 +216,13 @@ function TopFit:GetItemInfoTable(item)
         -- (click-to-use trinkets, or the rare Equip proc that states an internal cooldown) --
         -- see procparser.lua's header comment for why chance-based procs with no stated
         -- cooldown are deliberately left out of scoring rather than guessed at.
-        local procInfo = TopFit:ParseItemProc(itemLink)
+        -- Guarded with TopFit.ParseItemProc (not a direct call) so that if procparser.lua
+        -- failed to load or isn't present, item caching still works -- an optional module
+        -- being missing should never break core inventory scanning.
+        local procInfo = TopFit.ParseItemProc and TopFit:ParseItemProc(itemLink)
         local hasUnscoredProc = false
         if procInfo then
-            local effectiveValue = TopFit:GetProcEffectiveValue(procInfo)
+            local effectiveValue = TopFit.GetProcEffectiveValue and TopFit:GetProcEffectiveValue(procInfo)
             if effectiveValue then
                 totalBonus[procInfo.statKey] = (totalBonus[procInfo.statKey] or 0) + effectiveValue
             else
