@@ -172,22 +172,25 @@ local function GetSimcWeaponType(itemLink)
 	local subType = select(7, GetItemInfo(itemLink))
 	if not subType then return nil end
 
-	local isTwoHand = subType:find("Two%-Handed") ~= nil
+	-- Convert to lowercase to prevent case-sensitivity match failures
+	subType = subType:lower()
 
-	if subType:find("Axe") then return isTwoHand and "axe2h" or "axe" end
-	if subType:find("Mace") then return isTwoHand and "mace2h" or "mace" end
-	if subType:find("Sword") then return isTwoHand and "sword2h" or "sword" end
-	if subType:find("Dagger") then return "dagger" end
-	if subType:find("Fist") then return "fist" end
-	if subType:find("Polearm") then return "polearm" end
-	if subType:find("Staves") or subType:find("Staff") then return "staff" end
-	if subType:find("Crossbow") then return "crossbow" end
-	if subType:find("Bow") then return "bow" end
-	if subType:find("Gun") then return "gun" end
-	if subType:find("Wand") then return "wand" end
-	if subType:find("Thrown") then return "thrown" end
+	local isTwoHand = subType:find("two%-handed") ~= nil or subType:find("2h") ~= nil
 
-	return nil
+	if subType:find("axe") then return isTwoHand and "axe2h" or "axe" end
+	if subType:find("mace") then return isTwoHand and "mace2h" or "mace" end
+	if subType:find("sword") then return isTwoHand and "sword2h" or "sword" end
+	if subType:find("dagger") then return "dagger" end
+	if subType:find("fist") then return "fist" end
+	if subType:find("polearm") then return "polearm" end
+	if subType:find("staves") or subType:find("staff") then return "staff" end
+	if subType:find("crossbow") then return "crossbow" end
+	if subType:find("bow") then return "bow" end
+	if subType:find("gun") then return "gun" end
+	if subType:find("wand") then return "wand" end
+	if subType:find("thrown") then return "thrown" end
+
+	return nil -- Not a weapon type token (shields, held items, etc.)
 end
 
 -- scans a weapon's tooltip for its speed and damage range. There is no clean Lua API for this
@@ -206,13 +209,15 @@ local function GetWeaponSpeedAndDamage(itemLink)
 	local speed, minDmg, maxDmg
 	for i = 1, numLines do
 		local leftLine = getglobal("TFScanTooltip" .. "TextLeft" .. i)
-		local leftLineText = leftLine:GetText()
+		local leftLineText = leftLine and leftLine:GetText()
 		if leftLineText then
-			local dmgMin, dmgMax = leftLineText:match("^(%d+)%s*%-%s*(%d+)%s+Damage")
+			-- Extract damage range digits
+			local dmgMin, dmgMax = leftLineText:match("^(%d+)%s*%-%s*(%d+)%s+[Dd]amage")
 			if dmgMin then
 				minDmg, maxDmg = tonumber(dmgMin), tonumber(dmgMax)
 			end
-			local speedMatch = leftLineText:match("Speed%s+([%d%.]+)")
+			-- Case-insensitive check for Speed property
+			local speedMatch = leftLineText:match("[Ss]peed%s+([%d%.]+)")
 			if speedMatch then
 				speed = tonumber(speedMatch)
 			end
