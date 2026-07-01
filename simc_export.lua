@@ -181,13 +181,13 @@ local function GetSimcWeaponType(itemLink)
 	if subType:find("Fist") then return "fist" end
 	if subType:find("Polearm") then return "polearm" end
 	if subType:find("Staves") or subType:find("Staff") then return "staff" end
-	if subType:find("Crossbow") then return "crossbow" end -- must check before "Bow"
+	if subType:find("Crossbow") then return "crossbow" end
 	if subType:find("Bow") then return "bow" end
 	if subType:find("Gun") then return "gun" end
 	if subType:find("Wand") then return "wand" end
 	if subType:find("Thrown") then return "thrown" end
 
-	return nil -- not a weapon subType at all (shields, held-in-offhand, etc.)
+	return nil
 end
 
 -- scans a weapon's tooltip for its speed and damage range. There is no clean Lua API for this
@@ -224,7 +224,6 @@ local function GetWeaponSpeedAndDamage(itemLink)
 end
 
 -- builds the "weapon=type_X.XXspeed_MINmin_MAXmax" field, or nil if this isn't a weapon
--- or the tooltip scan came back incomplete
 local function BuildWeaponField(itemLink)
 	local simcType = GetSimcWeaponType(itemLink)
 	if not simcType then return nil end
@@ -232,6 +231,7 @@ local function BuildWeaponField(itemLink)
 	local speed, minDmg, maxDmg = GetWeaponSpeedAndDamage(itemLink)
 	if not (speed and minDmg and maxDmg) then return nil end
 
+	-- Correct formatting string using underscores to separate properties
 	return ("weapon=%s_%.2fspeed_%dmin_%dmax"):format(simcType, speed, minDmg, maxDmg)
 end
 
