@@ -130,7 +130,7 @@ local WEAPON_SLOTS = {
 }
 
 -- ============================================================================
--- EXPOSED GLOBAL MAPPERS (Enables in-game macro verification)
+-- EXPOSED GLOBAL MAPPERS (Enables tooltips and script validations)
 -- ============================================================================
 
 function TopFit:GetSimcWeaponType(itemLink)
@@ -163,21 +163,38 @@ function TopFit:BuildWeaponField(itemLink)
 	local simcType = self:GetSimcWeaponType(itemLink)
 	if not simcType then return nil end
 
-	-- Native speed lookup from GetItemInfo position 14
-	local _, _, _, itemLevel, _, _, subType, _, _, _, _, _, _, speed = GetItemInfo(itemLink)
+	-- Ensure the processing scanning frame exists safely
+	local tt = TopFit.scanTooltip or CreateFrame("GameTooltip", "TopFitScanTooltip", nil, "GameTooltipTemplate")
+	tt:SetOwner(UIParent, 'ANCHOR_NONE')
+	tt:SetHyperlink(itemLink)
 	
-	speed = (speed and speed > 0) and speed or 2.60
-	itemLevel = itemLevel or 200
+	local speed, minDmg, maxDmg
+	local numLines = tt:NumLines() or 0
 
-	-- Calculate robust mathematical approximations for min/max weapon values
-	local isTwoHand = subType and (subType:lower():find("two%-handed") or subType:lower():find("2h") or subType:lower():find("staff") or subType:lower():find("polearm"))
-	local baseDps = (itemLevel * 0.7) - 40
-	if baseDps < 10 then baseDps = 10 end
-	if isTwoHand then baseDps = baseDps * 1.3 end
+	for i = 1, numLines do
+		local leftLine = _G[tt:GetName() .. "TextLeft" .. i]
+		local text = leftLine and leftLine:GetText()
+		
+		if text then
+			-- 1. Parse Weapon Attack Speed
+			local speedMatch = text:match("[Ss]peed%s+([%d%.]+)")
+			if speedMatch then
+				speed = tonumber(speedMatch)
+			end
+			
+			-- 2. Parse Damage Boundaries
+			local dmgMin, dmgMax = text:match("^(%d+)%s*%-%s*(%d+)")
+			if dmgMin and (text:lower():find("damage") or text:lower():find("schaden") or text:lower():find("dégâts")) then
+				minDmg, maxDmg = tonumber(dmgMin), tonumber(dmgMax)
+			end
+		end
+	end
+	tt:Hide()
 
-	local avgDamage = baseDps * speed
-	local minDmg = math.floor(avgDamage * 0.85)
-	local maxDmg = math.floor(avgDamage * 1.15)
+	-- Safe fallbacks if UI lines fail to paint into screen buffer
+	speed = speed or 2.60
+	minDmg = minDmg or 100
+	maxDmg = maxDmg or 150
 
 	return ("weapon=%s_%.2fspeed_%dmin_%dmax"):format(simcType, speed, minDmg, maxDmg)
 end
@@ -322,7 +339,7 @@ function TopFit:GenerateSimcExportString()
 	for _, slotInfo in ipairs(SLOT_ORDER) do
 		local slotName, simcField = slotInfo[1], slotInfo[2]
 		
-		-- Explicit fallback inventory mappings to ensure functionality across custom UI scopes
+		-- Explicit fallback inventory mappings to ensure layout robustness
 		local slotID = TopFit.slots and TopFit.slots[slotName]
 		if not slotID then
 			if slotName == "MainHandSlot" then slotID = 16
