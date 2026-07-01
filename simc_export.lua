@@ -163,7 +163,6 @@ function TopFit:BuildWeaponField(itemLink)
 	local simcType = self:GetSimcWeaponType(itemLink)
 	if not simcType then return nil end
 
-	-- Ensure the processing scanning frame exists safely
 	local tt = TopFit.scanTooltip or CreateFrame("GameTooltip", "TopFitScanTooltip", nil, "GameTooltipTemplate")
 	tt:SetOwner(UIParent, 'ANCHOR_NONE')
 	tt:SetHyperlink(itemLink)
@@ -175,23 +174,30 @@ function TopFit:BuildWeaponField(itemLink)
 		local leftLine = _G[tt:GetName() .. "TextLeft" .. i]
 		local text = leftLine and leftLine:GetText()
 		
-		if text then
-			-- 1. Parse Weapon Attack Speed
-			local speedMatch = text:match("[Ss]peed%s+([%d%.]+)")
+		-- Also look at right-aligned text components where WotLK clients often hide speed metrics
+		local rightLine = _G[tt:GetName() .. "TextRight" .. i]
+		local textRight = rightLine and rightLine:GetText()
+		
+		-- Combine texts safely to allow matching across layout structures
+		local combinedText = (text or "") .. " " .. (textRight or "")
+		
+		if combinedText ~= " " then
+			-- 1. Resilient Speed Parser: handles "Speed 2.60", "2.60 Speed", and "Tempo 2,60"
+			local speedMatch = combinedText:match("([%d%.]+)%s*[Ss]peed") or combinedText:match("[Ss]peed%s+([%d%.]+)")
 			if speedMatch then
 				speed = tonumber(speedMatch)
 			end
 			
-			-- 2. Parse Damage Boundaries
-			local dmgMin, dmgMax = text:match("^(%d+)%s*%-%s*(%d+)")
-			if dmgMin and (text:lower():find("damage") or text:lower():find("schaden") or text:lower():find("dégâts")) then
+			-- 2. Damage Boundaries Parser
+			local dmgMin, dmgMax = combinedText:match("^(%d+)%s*%-%s*(%d+)")
+			if dmgMin and (combinedText:lower():find("damage") or combinedText:lower():find("schaden") or combinedText:lower():find("dégâts")) then
 				minDmg, maxDmg = tonumber(dmgMin), tonumber(dmgMax)
 			end
 		end
 	end
 	tt:Hide()
 
-	-- Safe fallbacks if UI lines fail to paint into screen buffer
+	-- Strict baseline configurations fallback if the item link parsing runs on a hidden framework
 	speed = speed or 2.60
 	minDmg = minDmg or 100
 	maxDmg = maxDmg or 150
@@ -339,7 +345,7 @@ function TopFit:GenerateSimcExportString()
 	for _, slotInfo in ipairs(SLOT_ORDER) do
 		local slotName, simcField = slotInfo[1], slotInfo[2]
 		
-		-- Explicit fallback inventory mappings to ensure layout robustness
+		-- Dynamic Slot Mapping Fallback Engine
 		local slotID = TopFit.slots and TopFit.slots[slotName]
 		if not slotID then
 			if slotName == "MainHandSlot" then slotID = 16
