@@ -242,6 +242,7 @@ local WEAPON_SLOTS = {
 	SecondaryHandSlot = true,
 	RangedSlot = true,
 }
+
 local function Slugify(name)
 	if not name or name == "" then return "unknown_item" end
 	name = name:lower()
@@ -250,6 +251,87 @@ local function Slugify(name)
 	name = name:gsub("^_+", ""):gsub("_+$", "")
 	if name == "" then return "unknown_item" end
 	return name
+end
+
+-- "Glyph of Arcane Blast" -> "arcane_blast", matching the bundled example profiles' format
+local function SlugifyGlyphName(name)
+	if not name then return nil end
+	name = name:gsub("^[Gg]lyph%s+of%s+", "")
+	return Slugify(name)
+end
+
+-- reads your currently active glyphs (major + minor) via the live glyph API and returns a
+-- "/"-separated slug string, or nil if no glyphs are socketed
+local function GetGlyphsString()
+	local numSockets = GetNumGlyphSockets and GetNumGlyphSockets()
+	if not numSockets or numSockets == 0 then return nil end
+
+	local slugs = {}
+	for socket = 1, numSockets do
+		local enabled, _, glyphSpellID = GetGlyphSocketInfo(socket)
+		if enabled and glyphSpellID and glyphSpellID > 0 then
+			local glyphName = GetSpellInfo(glyphSpellID)
+			local slug = SlugifyGlyphName(glyphName)
+			if slug then tinsert(slugs, slug) end
+		end
+	end
+
+	if #slugs == 0 then return nil end
+	return table.concat(slugs, "/")
+end
+
+-- the ammo subType a ranged weapon needs, keyed by GetSimcWeaponType()'s token for it
+local RANGED_TYPE_TO_AMMO_SUBTYPE = {
+	bow = "Arrow",
+	crossbow = "Arrow",
+	gun = "Bullet",
+}
+
+-- scans an ammo item's tooltip for its "(X.X damage per second)" bonus
+local function GetAmmoDps(itemLink)
+	TopFit.scanTooltip:SetOwner(UIParent, 'ANCHOR_NONE')
+	TopFit.scanTooltip:SetHyperlink(itemLink)
+	local numLines = TopFit.scanTooltip:NumLines()
+
+	local dps
+	for i = 1, numLines do
+		local leftLine = getglobal("TFScanTooltip" .. "TextLeft" .. i)
+		local leftLineText = leftLine and leftLine:GetText()
+		if leftLineText then
+			local match = leftLineText:lower():match("%(([%d%.]+)%s*damage per second%)")
+			if match then dps = tonumber(match) end
+		end
+	end
+	TopFit.scanTooltip:Hide()
+	return dps
+end
+
+-- scans all bags for the highest-DPS ammo matching the given ranged weapon type
+-- (bow/crossbow want Arrows, gun wants Bullets), independent of what's actually loaded.
+-- "Best available" rather than "currently equipped" per your request -- ammo is cheap and
+-- commonly swapped right before a sim/raid anyway, so the highest one you're carrying is a
+-- more useful number than whatever happens to be loaded at export time.
+local function GetBestAmmoDps(rangedSimcType)
+	local neededSubType = RANGED_TYPE_TO_AMMO_SUBTYPE[rangedSimcType]
+	if not neededSubType then return nil end
+
+	local bestDps
+	for bag = 0, 4 do
+		local numSlots = GetContainerNumSlots(bag)
+		for slot = 1, numSlots do
+			local itemLink = GetContainerItemLink(bag, slot)
+			if itemLink then
+				local subType = select(7, GetItemInfo(itemLink))
+				if subType == neededSubType then
+					local dps = GetAmmoDps(itemLink)
+					if dps and (not bestDps or dps > bestDps) then
+						bestDps = dps
+					end
+				end
+			end
+		end
+	end
+	return bestDps
 end
 
 -- turns a {ITEM_MOD_KEY = value} bonus table into a SimC "123agi_456sta"-style blob.
@@ -295,6 +377,11 @@ function TopFit:GenerateSimcExportString()
 		tinsert(lines, "talents=http://www.wowarmory.com/talent-calc.xml?cid=" .. cid .. "&tal=" .. talString)
 	end
 
+	local glyphsString = GetGlyphsString()
+	if glyphsString then
+		tinsert(lines, "glyphs=" .. glyphsString)
+	end
+
 	tinsert(lines, "")
 
 	local useItemActions = {}
@@ -320,9 +407,18 @@ function TopFit:GenerateSimcExportString()
 			local enchantBlob = itemTable and BonusTableToSimcBlob(itemTable.enchantBonus)
 			if enchantBlob then tinsert(fieldParts, "enchant=" .. enchantBlob) end
 
+			local weaponType
 			if WEAPON_SLOTS[slotName] then
+				weaponType = GetSimcWeaponType(itemLink)
 				local weaponField = BuildWeaponField(itemLink)
 				if weaponField then tinsert(fieldParts, weaponField) end
+			end
+
+			if slotName == "RangedSlot" and weaponType then
+				local ammoDps = GetBestAmmoDps(weaponType)
+				if ammoDps then
+					tinsert(fieldParts, ("ammo_dps=%.2f"):format(ammoDps))
+				end
 			end
 
 			tinsert(lines, table.concat(fieldParts, ","))
@@ -355,7 +451,7 @@ function TopFit:GenerateSimcExportString()
 
 	tinsert(lines, "")
 	tinsert(lines, "# NOT exported -- fill in by hand if they matter:")
-	tinsert(lines, "#   glyphs=, heroic=1 flags, ammo_dps= (Hunters)")
+	tinsert(lines, "#   heroic=1 flags")
 	if #procComments > 0 then
 		tinsert(lines, "# Possible procs found (could not auto-encode, see simc_export.lua header):")
 		for _, comment in ipairs(procComments) do
@@ -364,6 +460,29 @@ function TopFit:GenerateSimcExportString()
 	end
 
 	return table.concat(lines, "\n")
+end
+
+function TopFit:DebugWeaponSlots()
+	local weaponSlotNames = { "MainHandSlot", "SecondaryHandSlot", "RangedSlot" }
+	for _, slotName in ipairs(weaponSlotNames) do
+		local slotID = TopFit.slots[slotName]
+		local itemLink = slotID and GetInventoryItemLink("player", slotID)
+		if not itemLink then
+			TopFit:Print(slotName .. ": empty")
+		else
+			local itemName, _, _, _, _, _, subType = GetItemInfo(itemLink)
+			local simcType = GetSimcWeaponType(itemLink)
+			TopFit:Print(("%s: %s | subType=%s | simcType=%s"):format(
+				slotName, tostring(itemName), tostring(subType), tostring(simcType)
+			))
+			if simcType then
+				local speed, minDmg, maxDmg = GetWeaponSpeedAndDamage(itemLink)
+				TopFit:Print(("  tooltip scan: speed=%s min=%s max=%s"):format(
+					tostring(speed), tostring(minDmg), tostring(maxDmg)
+				))
+			end
+		end
+	end
 end
 
 function TopFit:ShowSimcExportDialog()

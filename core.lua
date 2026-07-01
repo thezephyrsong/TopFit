@@ -242,8 +242,10 @@ function TopFit:ChatCommand(input)
             TopFit:ShowSimcExportDialog()
         elseif command == "talentdebug" then
             TopFit:DebugTalentCounts()
+        elseif command == "weapondebug" then
+            TopFit:DebugWeaponSlots()
         else
-            TopFit:Print("Available Options:\n  show - shows the calculations frame\n  options - shows TopFit's options\n  import - import a Pawn/AskMrRobot/TopFit weight string as a new set\n  export [pawn] - export the selected set as a string (add 'pawn' for Pawn format)\n  simc - export your currently equipped gear as a .simc profile\n  talentdebug - print raw talent tab/count info for debugging")
+            TopFit:Print("Available Options:\n  show - shows the calculations frame\n  options - shows TopFit's options\n  import - import a Pawn/AskMrRobot/TopFit weight string as a new set\n  export [pawn] - export the selected set as a string (add 'pawn' for Pawn format)\n  simc - export your currently equipped gear as a .simc profile\n  talentdebug - print raw talent tab/count info for debugging\n  weapondebug - print weapon slot subType/speed/damage scan results for debugging")
         end
     end
 end
