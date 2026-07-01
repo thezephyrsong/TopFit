@@ -288,6 +288,11 @@ function TopFit:OnInitialize()
     end
     
     -- list of weight categories and stats
+    -- TOPFIT_WEAPON_SPEED is a TopFit-invented pseudo-stat (weapon base speed in seconds,
+    -- parsed from the tooltip in simc_export.lua's TopFit:ParseWeaponTooltip and injected into
+    -- itemBonus by inventory.lua) -- not a real Blizzard ITEM_MOD_* token, so unlike the others
+    -- it needs its own display-name global for the Weights & Caps UI to show something readable.
+    _G["TOPFIT_WEAPON_SPEED"] = "Weapon Speed"
     TopFit.statList = {
         ["Basic Attributes"] = {
             [1] = "ITEM_MOD_AGILITY_SHORT",
@@ -301,6 +306,7 @@ function TopFit:OnInitialize()
             [2] = "ITEM_MOD_ATTACK_POWER_SHORT",
             [3] = "ITEM_MOD_EXPERTISE_RATING_SHORT",
             [4] = "ITEM_MOD_FERAL_ATTACK_POWER_SHORT",
+            [5] = "TOPFIT_WEAPON_SPEED",
         },
         ["Caster"] = {
             [1] = "ITEM_MOD_SPELL_PENETRATION_SHORT",

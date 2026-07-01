@@ -157,50 +157,118 @@ function TopFit:GetSimcWeaponType(itemLink)
 	return nil
 end
 
-function TopFit:BuildWeaponField(itemLink)
+-- locale-tolerant "does this line mention damage" check, used to gate the min-max dmg match
+-- so we don't accidentally grab an unrelated "12 - 34" style number range from another line
+local DAMAGE_KEYWORDS = { "damage", "schaden", "d\195\169g\195\162ts", "da\195\177o", "danno" }
+local function ContainsDamageKeyword(text)
+	local lower = text:lower()
+	for _, kw in ipairs(DAMAGE_KEYWORDS) do
+		if lower:find(kw, 1, true) then return true end
+	end
+	return false
+end
+
+-- live, post-haste attack speed for whichever hand is asked for. Only meaningful for melee
+-- (main hand / off hand) -- WotLK exposes this straight from the client, no tooltip needed.
+-- We do NOT use this as the primary source: simc wants the weapon's BASE speed and applies
+-- haste itself, so feeding it an already-hasted number would double-count haste. It's only
+-- used to sanity-check (and as a last-resort fallback for) what we parsed from the tooltip.
+local function GetLiveMeleeSpeed(slotName)
+	if slotName == "MainHandSlot" then
+		return (UnitAttackSpeed("player"))
+	elseif slotName == "SecondaryHandSlot" then
+		local _, off = UnitAttackSpeed("player")
+		return off
+	end
+	return nil
+end
+
+-- Parses base weapon speed and damage range straight from the tooltip. WotLK weapons don't
+-- expose these via GetItemStats -- they're plain item properties, not "bonus" stats, so the
+-- tooltip is the only source. Returns speed, minDmg, maxDmg (any may be nil if unparsable).
+-- Shared by the SimC export (simc weapon= line) and by inventory.lua's stat caching (letting
+-- weapon speed itself be weighted, e.g. for a spec that wants a slow main hand).
+function TopFit:ParseWeaponTooltip(itemLink)
 	if not itemLink then return nil end
-	
-	local simcType = self:GetSimcWeaponType(itemLink)
-	if not simcType then return nil end
 
 	local tt = TopFit.scanTooltip or CreateFrame("GameTooltip", "TopFitScanTooltip", nil, "GameTooltipTemplate")
 	tt:SetOwner(UIParent, 'ANCHOR_NONE')
 	tt:SetHyperlink(itemLink)
-	
+
 	local speed, minDmg, maxDmg
 	local numLines = tt:NumLines() or 0
 
 	for i = 1, numLines do
 		local leftLine = _G[tt:GetName() .. "TextLeft" .. i]
 		local text = leftLine and leftLine:GetText()
-		
+
 		-- Also look at right-aligned text components where WotLK clients often hide speed metrics
 		local rightLine = _G[tt:GetName() .. "TextRight" .. i]
 		local textRight = rightLine and rightLine:GetText()
-		
+
 		-- Combine texts safely to allow matching across layout structures
 		local combinedText = (text or "") .. " " .. (textRight or "")
-		
+
 		if combinedText ~= " " then
-			-- 1. Resilient Speed Parser: handles "Speed 2.60", "2.60 Speed", and "Tempo 2,60"
-			local speedMatch = combinedText:match("([%d%.]+)%s*[Ss]peed") or combinedText:match("[Ss]peed%s+([%d%.]+)")
-			if speedMatch then
-				speed = tonumber(speedMatch)
+			-- 1. Resilient Speed Parser: handles "Speed 2.60", "2.60 Speed", comma-decimal locales
+			-- ("Tempo 2,60"), and a couple of common non-English labels. First match wins so a
+			-- stray number later in the tooltip (e.g. a proc ICD) can't clobber a good read.
+			if not speed then
+				local speedMatch = combinedText:match("[Ss]peed%s*([%d,%.]+)")
+					or combinedText:match("([%d,%.]+)%s*[Ss]peed")
+					or combinedText:match("[Tt]empo%s*([%d,%.]+)")
+					or combinedText:match("[Vv]itesse%s*([%d,%.]+)")
+					or combinedText:match("[Gg]eschwindigkeit%s*([%d,%.]+)")
+				if speedMatch then
+					speed = tonumber((speedMatch:gsub(",", ".")))
+				end
 			end
-			
-			-- 2. Damage Boundaries Parser
-			local dmgMin, dmgMax = combinedText:match("^(%d+)%s*%-%s*(%d+)")
-			if dmgMin and (combinedText:lower():find("damage") or combinedText:lower():find("schaden") or combinedText:lower():find("dégâts")) then
-				minDmg, maxDmg = tonumber(dmgMin), tonumber(dmgMax)
+
+			-- 2. Damage Boundaries Parser -- anchored to the LEFT line only (the right line can
+			-- contain unrelated numbers like a level requirement) and gated on a damage keyword
+			-- appearing somewhere on the same line.
+			if not minDmg then
+				local dmgMin, dmgMax = (text or ""):match("^%s*(%d+)%s*%-%s*(%d+)")
+				if dmgMin and ContainsDamageKeyword(text or "") then
+					minDmg, maxDmg = tonumber(dmgMin), tonumber(dmgMax)
+				end
 			end
 		end
 	end
 	tt:Hide()
 
-	-- Strict baseline configurations fallback if the item link parsing runs on a hidden framework
-	speed = speed or 2.60
-	minDmg = minDmg or 100
-	maxDmg = maxDmg or 150
+	return speed, minDmg, maxDmg
+end
+
+function TopFit:BuildWeaponField(itemLink, slotName)
+	if not itemLink then return nil end
+
+	local simcType = self:GetSimcWeaponType(itemLink)
+	if not simcType then return nil end
+
+	local speed, minDmg, maxDmg = self:ParseWeaponTooltip(itemLink)
+
+	-- Melee sanity check: base (tooltip) speed can never be LOWER than the current live speed,
+	-- since haste only ever shortens the swing timer. If it is, the tooltip parse grabbed the
+	-- wrong number (e.g. matched an unrelated stat) -- distrust it rather than export garbage.
+	local liveSpeed = GetLiveMeleeSpeed(slotName)
+	if speed and liveSpeed and liveSpeed > 0 and speed < liveSpeed - 0.01 then
+		TopFit:Print(("|cffff5555TopFit:|r weapon speed parse for %s looked wrong (tooltip read %.2f, but live speed is %.2f) -- discarding that value."):format(itemLink, speed, liveSpeed))
+		speed = nil
+	end
+
+	-- Last-resort fallback for melee only: if tooltip parsing failed outright but the weapon is
+	-- actually equipped right now, the live speed is a usable (if haste-inflated) stand-in --
+	-- better than nothing, and flagged clearly so it gets checked by hand.
+	if not speed and liveSpeed and liveSpeed > 0 then
+		speed = liveSpeed
+		TopFit:Print(("|cffffcc00TopFit:|r couldn't read base weapon speed for %s from its tooltip -- used the current live speed (%.2f) instead. This may include haste; verify before simming."):format(itemLink, liveSpeed))
+	end
+
+	if not speed or not minDmg or not maxDmg then
+		TopFit:Print(("|cffff5555TopFit:|r could not fully read weapon speed/damage for %s from its tooltip -- weapon= line omitted, fill it in by hand."):format(itemLink))
+		return nil
+	end
 
 	return ("weapon=%s_%.2fspeed_%dmin_%dmax"):format(simcType, speed, minDmg, maxDmg)
 end
@@ -373,7 +441,7 @@ function TopFit:GenerateSimcExportString()
 
 			-- Process Weapons configuration payload strings securely
 			if WEAPON_SLOTS[slotName] then
-				local weaponField = self:BuildWeaponField(itemLink)
+				local weaponField = self:BuildWeaponField(itemLink, slotName)
 				if weaponField then tinsert(fieldParts, weaponField) end
 			end
 
@@ -437,11 +505,13 @@ function TopFit:DebugWeaponSlots()
 		else
 			local itemName, _, _, _, _, _, subType = GetItemInfo(itemLink)
 			local simcType = self:GetSimcWeaponType(itemLink)
-			TopFit:Print(("%s: %s | subType=%s | simcType=%s"):format(
-				slotName, tostring(itemName), tostring(subType), tostring(simcType)
+			local liveSpeed = GetLiveMeleeSpeed(slotName)
+			TopFit:Print(("%s: %s | subType=%s | simcType=%s%s"):format(
+				slotName, tostring(itemName), tostring(subType), tostring(simcType),
+				liveSpeed and (" | live speed=%.2f"):format(liveSpeed) or ""
 			))
 			if simcType then
-				local field = self:BuildWeaponField(itemLink)
+				local field = self:BuildWeaponField(itemLink, slotName)
 				TopFit:Print("  Generated Row Fragment: " .. tostring(field))
 			end
 		end

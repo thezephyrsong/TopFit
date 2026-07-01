@@ -81,6 +81,18 @@ function TopFit:GetItemInfoTable(item)
         
         -- item stats
         local itemBonus = GetItemStats(itemLink)
+
+        -- weapon speed isn't a real "bonus" stat -- GetItemStats never returns it, since it's a
+        -- base item property, not something itemization adds on top. Some specs want to weight
+        -- it directly though (e.g. wanting a slow main hand), so parse it from the tooltip (via
+        -- simc_export.lua's shared parser) and fold it in as a pseudo-stat like any other.
+        -- Guarded with TopFit.ParseWeaponTooltip existing in case simc_export.lua didn't load.
+        if TopFit.GetSimcWeaponType and TopFit:GetSimcWeaponType(itemLink) then
+            local weaponSpeed = TopFit:ParseWeaponTooltip(itemLink)
+            if weaponSpeed and weaponSpeed > 0 then
+                itemBonus["TOPFIT_WEAPON_SPEED"] = weaponSpeed
+            end
+        end
         
         -- gems
         local gemBonus = {}
