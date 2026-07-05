@@ -521,7 +521,6 @@ function TopFit:CreateStatsPlugin()
     end)
     
     TopFit.RegisterCallback("TopFit_stats", "OnSetChanged", function(event, setId)
-        TopFit:Print("|cff00ff00[DEBUG]|r stats.lua OnSetChanged fired, setId=" .. tostring(setId)) -- TEMP, remove once diagnosed
         if (setId) then
             -- enable inputs
             statsFrame.addStatButton:Enable()
