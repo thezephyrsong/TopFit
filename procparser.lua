@@ -99,6 +99,85 @@ local function ParseStatAndAmount(text, statNames)
 	return nil
 end
 
+-- Decodes one of simc's compact proc-effect strings (see simc_proc_data.lua's header for the
+-- grammar) into a structured table: { trigger, stat, amount, procChance, procPPM, duration,
+-- cooldown, maxStack, tick, reverse }. Any field absent from the string is left nil. Returns an
+-- empty table (not nil) for unparseable/marker strings like "custom" (DK runeforges) so callers
+-- can treat "found nothing useful" uniformly rather than needing a separate nil check.
+function TopFit:DecodeSimcEffectString(str)
+	if not str or str == "" then return {} end
+
+	local tokens = {}
+	for tok in str:gmatch("[^_]+") do
+		tinsert(tokens, tok)
+	end
+	if #tokens == 0 then return {} end
+
+	local result = {}
+	local idx = 1
+
+	-- Trigger type (e.g. "OnAttackHit") -- absent for get_use_encoding's simple activated
+	-- trinkets, which have no proc trigger at all (player activates them directly).
+	if tokens[1]:match("^On%u") then
+		result.trigger = tokens[1]
+		idx = 2
+	end
+
+	-- Amount + Stat/School is always the next token, e.g. "612ArPen", "8SP", "1880Arcane"
+	if tokens[idx] then
+		local amount, stat = tokens[idx]:match("^([%d%.]+)(%a+)$")
+		if amount then
+			result.amount = tonumber(amount)
+			result.stat = stat
+			idx = idx + 1
+		end
+	end
+
+	-- Remaining tokens (chance%, PPM, Stack, Dur, Cd, Tick, reverse) can appear in varying
+	-- order across entries, so match each token independently instead of assuming positions.
+	for i = idx, #tokens do
+		local tok = tokens[i]
+		if tok == "reverse" then
+			result.reverse = true
+		else
+			local pct = tok:match("^([%d%.]+)%%$")
+			if pct then
+				result.procChance = tonumber(pct)
+			else
+				local num, suffix = tok:match("^([%d%.]+)(%a+)$")
+				if num and suffix then
+					num = tonumber(num)
+					if suffix == "PPM" then result.procPPM = num
+					elseif suffix == "Stack" then result.maxStack = num
+					elseif suffix == "Dur" then result.duration = num
+					elseif suffix == "Cd" then result.cooldown = num
+					elseif suffix == "Tick" then result.tick = num
+					end
+				end
+			end
+		end
+	end
+
+	return result
+end
+
+-- Looks up itemLink's name against simc's extracted proc database (simc_proc_data.lua),
+-- preferring the "normal" variant over "heroic" since we don't independently know which
+-- quality tier a given Triumvirate item corresponds to. Returns a decoded table, or nil if
+-- there's no entry under this trigger's section for this item name.
+function TopFit:LookupSimcProcData(itemLink, section)
+	if not itemLink or not TopFit.SimcProcData or not TopFit.SimcProcData[section] then return nil end
+	local name = GetItemInfo(itemLink)
+	if not name then return nil end
+
+	local entry = TopFit.SimcProcData[section][TopFit:Slugify(name)]
+	if not entry then return nil end
+
+	local raw = entry.normal or entry.heroic
+	if not raw then return nil end
+	return TopFit:DecodeSimcEffectString(raw)
+end
+
 -- scans itemLink's tooltip for a Use:/Equip: proc line and parses it.
 -- returns a table: { trigger = "use"/"equip", statKey, amount, duration, cooldown (or nil) }
 -- or nil if no parseable proc effect was found
@@ -134,8 +213,26 @@ function TopFit:ParseItemProc(itemLink)
 
 	if not (statKey and amount) then return nil end
 
+	-- Fill gaps (never overrides) using simc's extracted proc database: WotLK tooltips very
+	-- often omit the internal cooldown and/or duration entirely for "Chance on hit"-style
+	-- equip procs, which is exactly the missing piece that made these unscoreable before.
+	-- Item NAMES are known to match Triumvirate's items; the AMOUNT may not (retuned for the
+	-- level-60 cap), so amount always comes from the tooltip parse above, never from here.
+	local preciseTrigger, procChance, procPPM
+	local simcData = TopFit:LookupSimcProcData(itemLink, trigger == "use" and "use" or "equip")
+	if simcData then
+		cooldown = cooldown or simcData.cooldown
+		duration = duration or simcData.duration
+		preciseTrigger = simcData.trigger
+		procChance = simcData.procChance
+		procPPM = simcData.procPPM
+	end
+
 	return {
 		trigger = trigger,
+		preciseTrigger = preciseTrigger, -- e.g. "OnAttackHit", when known from simc's data
+		procChance = procChance,         -- percent chance per trigger event, when known
+		procPPM = procPPM,               -- procs-per-minute, when known (alternate to procChance)
 		statKey = statKey,
 		amount = amount,
 		duration = duration,

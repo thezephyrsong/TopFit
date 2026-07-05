@@ -277,7 +277,7 @@ end
 -- TEXT FORMATTING HELPERS
 -- ============================================================================
 
-local function Slugify(name)
+function TopFit:Slugify(name)
 	if not name or name == "" then return "unknown_item" end
 	name = name:lower()
 	name = name:gsub("'", "")
@@ -286,6 +286,7 @@ local function Slugify(name)
 	if name == "" then return "unknown_item" end
 	return name
 end
+local function Slugify(name) return TopFit:Slugify(name) end
 
 local function SlugifyGlyphName(name)
 	if not name then return nil end

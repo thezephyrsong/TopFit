@@ -627,47 +627,43 @@ function TopFit:CreateProgressFrame()
         statScrollFrameContent.statValueStatusBars = {}
         statScrollFrameContent.capNameFontStrings = {}
         statScrollFrameContent.capValueFontStrings = {}
-
         
+        -- function for changing set name
         function TopFit.ProgressFrame:SetSelectedSet(setCode)
-    -- NEW FIX: If no set code is provided, or if the provided code doesn't exist in the DB
-    if not setCode or not TopFit.db.profile.sets[setCode] then
-        -- Correctly traverse the dictionary keys using pairs to find the first valid set
-        if TopFit.db.profile.sets then
-            for id, _ in pairs(TopFit.db.profile.sets) do
-                setCode = id
-                break -- Grab the first valid set found and exit the loop
+            if not setCode then
+                -- select the first set
+                local i = 1
+                if TopFit.db.profile.sets and TopFit.db.profile.sets ~= {} then
+                    while (not TopFit.db.profile.sets["set_"..i]) and (i < 1000) do i = i + 1 end
+                    setCode = "set_"..i
+                end
             end
-        end
-    end
-    
-    -- KEEP THIS: The original UI logic that manages your buttons
-    if not TopFit.db.profile.sets[setCode] then
-        TopFit.ProgressFrame.selectedSet = nil
-        -- disable some buttons
-        TopFit.ProgressFrame.deleteSetButton:Disable()
-        TopFit.ProgressFrame.startButton:Disable()
-        TopFit.ProgressFrame.renameSetButton:Disable()
-        TopFit.ProgressFrame.forceArmorTypeCheckbox:SetChecked(false)
-    else
-        -- (re-)enable buttons
-        TopFit.ProgressFrame.deleteSetButton:Enable()
-        TopFit.ProgressFrame.startButton:Enable()
-        TopFit.ProgressFrame.renameSetButton:Enable()
-        
-        TopFit.ProgressFrame.selectedSet = setCode
-        UIDropDownMenu_SetSelectedValue(TopFit.ProgressFrame.setDropDown, setCode)
-        UIDropDownMenu_SetText(TopFit.ProgressFrame.setDropDown, TopFit.db.profile.sets[setCode].name)
-        TopFit.ProgressFrame:SetSetName(TopFit.db.profile.sets[setCode].name)
-        TopFit.ProgressFrame.forceArmorTypeCheckbox:SetChecked(TopFit.db.profile.sets[setCode].forceArmorType)
-        
-        -- generate pseudo equipment set to display when selecting a set
-        local combination = {
-            items = {},
-            totalStats = {},
-            totalScore = 0,
-        }
-
+            
+            if not TopFit.db.profile.sets[setCode] then
+                TopFit.ProgressFrame.selectedSet = nil
+                -- disable some buttons
+                TopFit.ProgressFrame.deleteSetButton:Disable()
+                TopFit.ProgressFrame.startButton:Disable()
+                TopFit.ProgressFrame.renameSetButton:Disable()
+                TopFit.ProgressFrame.forceArmorTypeCheckbox:SetChecked(false)
+            else
+                -- (re-)enable buttons
+                TopFit.ProgressFrame.deleteSetButton:Enable()
+                TopFit.ProgressFrame.startButton:Enable()
+                TopFit.ProgressFrame.renameSetButton:Enable()
+                
+                TopFit.ProgressFrame.selectedSet = setCode
+                UIDropDownMenu_SetSelectedValue(TopFit.ProgressFrame.setDropDown, setCode)
+                UIDropDownMenu_SetText(TopFit.ProgressFrame.setDropDown, TopFit.db.profile.sets[setCode].name)
+                TopFit.ProgressFrame:SetSetName(TopFit.db.profile.sets[setCode].name)
+                TopFit.ProgressFrame.forceArmorTypeCheckbox:SetChecked(TopFit.db.profile.sets[setCode].forceArmorType)
+                
+                -- generate pseudo equipment set to display when selecting a set
+                local combination = {
+                    items = {},
+                    totalStats = {},
+                    totalScore = 0,
+                }
                 local itemPositions = GetEquipmentSetLocations(TopFit:GenerateSetName(TopFit.db.profile.sets[setCode].name))
                 --local items = GetEquipmentSetItemIDs(TopFit:GenerateSetName(TopFit.db.profile.sets[setCode].name))
                 if itemPositions then
