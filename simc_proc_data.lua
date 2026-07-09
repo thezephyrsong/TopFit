@@ -22,7 +22,16 @@ TopFit.SimcProcData = {
 		["ashen_band_of_unmatched_destruction"] = { normal = "OnSpellCastHit_285SP_10%_10Dur_60Cd" },
 		["ashen_band_of_unmatched_might"] = { normal = "OnAttackHit_480AP_1PPM_10Dur_60Cd" },
 		["ashen_band_of_unmatched_vengeance"] = { normal = "OnAttackHit_480AP_1PPM_10Dur_60Cd" },
+		["anvil_of_titans"] = { normal = "OnAttackHit_1000AP_10%_10Dur_50Cd" },  -- UNVERIFIED: retail placeholder, not yet confirmed against a Triumvirate tooltip
+		["atiesh_greatstaff_of_the_guardian"] = { normal = "OnSpellCast_250SP_15%_20Dur_45Cd" },  -- real proc also grants +135 spell crit rating simultaneously; engine's grammar only supports one stat per proc, crit component omitted
 		["bandits_insignia"] = { normal = "OnAttackHit_1880Arcane_15%_45Cd" },
+		["blade_of_wizardry"] = { normal = "OnSpellCast_280Haste_10%_6Dur" },  -- UNVERIFIED: retail placeholder, proc chance/ICD not stated on retail tooltip either, assumed 10%/no ICD
+		["crusaders_locket"] = { normal = "OnAttackHit_258Expertise_15%_10Dur_45Cd" },  -- UNVERIFIED: retail placeholder
+		["dmc_berserker"] = { normal = "OnSpellHit_35Crit_3Stack_50%_12Dur" },  -- UNVERIFIED: retail placeholder; retail trigger is on dealing OR taking a spell hit, engine only supports "dealt" side
+		["dmc_death"] = { normal = "OnSpellHit_2000Shadow_15%_45Cd" },  -- UNVERIFIED: retail placeholder, value = midpoint of retail 1750-2250 range
+		["dragonmaw"] = { normal = "OnAttackHit_127Haste_10%_10Dur" },  -- CONFIRMED via Triumvirate tooltip
+		["dragonstrike"] = { normal = "OnAttackHit_127Haste_10%_10Dur" },  -- CONFIRMED via Triumvirate tooltip + in-game screenshot
+		["drakefist_hammer"] = { normal = "OnAttackHit_127Haste_10%_10Dur" },  -- UNVERIFIED: assumed same as dragonmaw/dragonstrike (same weapon family), not yet found in an item scan
 		["banner_of_victory"] = { normal = "OnAttackHit_1008AP_20%_10Dur_50Cd" },
 		["black_magic"] = { normal = "OnSpellDirectHit_250Haste_35%_10Dur_35Cd" },
 		["blood_of_the_old_god"] = { normal = "OnAttackCrit_1284AP_10%_10Dur_50Cd" },
@@ -42,38 +51,59 @@ TopFit.SimcProcData = {
 		["eye_of_magtheridon"] = { normal = "OnSpellCastMiss_170SP_10Dur" },
 		["eye_of_the_broodmother"] = { normal = "OnSpellDamage_25SP_5Stack_10Dur" },
 		["flare_of_the_heavens"] = { normal = "OnSpellCast_850SP_10%_10Dur_45Cd" },
+		["flow_of_knowledge"] = { normal = "OnSpellCast_590SP_10%_10Dur_50Cd" },  -- UNVERIFIED: retail placeholder
 		["forge_ember"] = { normal = "OnSpellCastHit_512SP_10%_10Dur_45Cd" },
+		["frostforged_champion"] = { normal = "OnAttackHit_480AP_1PPM_10Dur_60Cd" },  -- UNVERIFIED: retail placeholder (PvP resilience trinket)
+		["frostforged_sage"] = { normal = "OnSpellHit_285SP_10%_10Dur_60Cd" },  -- UNVERIFIED: retail placeholder (PvP resilience trinket)
 		["fury_of_the_five_flights"] = { normal = "OnAttackHit_16AP_20Stack_10Dur" },
 		["grim_toll"] = { normal = "OnAttackHit_612ArPen_15%_10Dur_45Cd" },
 		["herkuml_war_token"] = { normal = "OnAttackHit_17AP_20Stack_10Dur" },
+		["horn_of_agent_fury"] = { normal = "OnAttackHit_1280Holy_15%_45Cd" },  -- UNVERIFIED: retail placeholder, value = midpoint of retail 1024-1536 range
+		["jetzes_bell"] = { normal = "OnSpellCast_125MP5_10%_15Dur_50Cd" },  -- UNVERIFIED: retail placeholder
+		["jousters_fury_alliance"] = { normal = "OnAttackHit_328Crit_10%_10Dur_50Cd" },  -- UNVERIFIED: retail placeholder
+		["jousters_fury_horde"] = { normal = "OnAttackHit_328Crit_10%_10Dur_50Cd" },  -- UNVERIFIED: retail placeholder
 		["illustration_of_the_dragon_soul"] = { normal = "OnSpellCast_20SP_10Stack_10Dur" },
 		["lightning_capacitor"] = { normal = "OnSpellDirectCrit_750Nature_3Stack_2.5Cd" },
 		["lightweave"] = { normal = "OnSpellCast_295SP_35%_15Dur_60Cd" },
 		["lightweave_embroidery"] = { normal = "OnSpellCast_295SP_35%_15Dur_60Cd" },
+		["lionheart_executioner"] = { normal = "OnAttackHit_70Str_10%_10Dur" },  -- CONFIRMED via Triumvirate tooltip; flat +8% Fear resist is a separate base "Equip:" stat, not part of this proc
+		["madness_of_the_betrayer"] = { normal = "OnAttackHit_300ArPen_10%_10Dur" },  -- UNVERIFIED: retail placeholder
 		["mark_of_defiance"] = { normal = "OnSpellCastHit_150Mana_15%_15Cd" },
+		["meteorite_whetstone"] = { normal = "OnAttackHit_170Haste_15%_10Dur_45Cd" },  -- Triumvirate: 170 (down from retail 444); flat +18 crit rating is base item stat, not a proc
 		["mirror_of_truth"] = { normal = "OnAttackCrit_1000AP_10%_10Dur_50Cd" },
 		["mithril_pocketwatch"] = { normal = "OnSpellCast_590SP_10%_10Dur_45Cd" },
 		["mjolnir_runestone"] = { normal = "OnAttackHit_665ArPen_15%_10Dur_45Cd" },
 		["muradins_spyglass"] = { normal = "OnSpellDamage_18SP_10Stack_10Dur", heroic = "OnSpellDamage_20SP_10Stack_10Dur" },
 		["needleencrusted_scorpion"] = { normal = "OnAttackCrit_678ArPen_10%_10Dur_50Cd" },
 		["pandoras_plea"] = { normal = "OnSpellCast_751SP_10%_10Dur_45Cd" },
+		["pendulum_of_telluric_currents"] = { normal = "OnSpellHit_673Shadow_15%_45Cd" },  -- Triumvirate: 673 (down from retail avg ~1460); value = midpoint of tooltip's 485-860 range
 		["phylactery_of_the_nameless_lich"] = { normal = "OnSpellTickDamage_1073SP_30%_20Dur_100Cd", heroic = "OnSpellTickDamage_1206SP_30%_20Dur_100Cd" },
 		["purified_lunar_dust"] = { normal = "OnSpellCast_304MP5_10%_15Dur_45Cd" },
 		["pyrite_infuser"] = { normal = "OnAttackCrit_1234AP_10%_10Dur_50Cd" },
 		["quagmirrans_eye"] = { normal = "OnSpellCast_320Haste_10%_6Dur_45Cd" },
 		["reign_of_the_dead"] = { normal = "OnSpellDirectCrit_1882Fire_3Stack_2.0Cd", heroic = "OnSpellDirectCrit_2117Fire_3Stack_2.0Cd" },
 		["reign_of_the_unliving"] = { normal = "OnSpellDirectCrit_1882Fire_3Stack_2.0Cd", heroic = "OnSpellDirectCrit_2117Fire_3Stack_2.0Cd" },
+		["robe_of_the_elder_scribes"] = { normal = "OnSpellCast_130SP_10%_10Dur" },  -- CONFIRMED via wowsims tooltip text; proc chance/ICD not stated on tooltip either, assumed 10%/no ICD
 		["rune_of_razorice"] = { normal = "custom" },
 		["rune_of_the_fallen_crusader"] = { normal = "custom" },
 		["sextant_of_unstable_currents"] = { normal = "OnSpellCrit_190SP_20%_15Dur_45Cd" },
+		["shard_of_contempt"] = { normal = "OnAttackHit_165AP_10%_20Dur", heroic = "OnAttackHit_174AP_10%_20Dur" },  -- CONFIRMED via Triumvirate tooltip (was using retail 230 as placeholder); flat +25/+27 expertise rating is base item stat, not a proc; proc % still unstated, assumed 10%
 		["sharpened_twilight_scale"] = { normal = "OnAttackHit_1304AP_35%_15Dur_45Cd", heroic = "OnAttackHit_1472AP_35%_15Dur_45Cd" },
 		["shiffars_nexus_horn"] = { normal = "OnSpellCrit_225SP_20%_10Dur_45Cd" },
+		["show_of_faith"] = { normal = "OnSpellCast_272MP5_10%_15Dur_50Cd" },  -- UNVERIFIED: retail placeholder
+		["signet_of_edward_the_odd"] = { normal = "OnAttackHit_62Haste_15%_13Dur_45Cd" },  -- CONFIRMED via Triumvirate tooltip + in-game screenshot (was using retail 125 as placeholder); flat +21 AP, +8 haste rating are base "Equip:" stats, not part of this proc
+		["sifs_remembrance"] = { normal = "OnSpellCast_220MP5_10%_15Dur_50Cd" },  -- UNVERIFIED: retail placeholder
 		["solace_of_the_defeated"] = { normal = "OnSpellCast_16MP5_8Stack_10Dur", heroic = "OnSpellCast_18MP5_8Stack_10Dur" },
 		["solace_of_the_fallen"] = { normal = "OnSpellCast_16MP5_8Stack_10Dur", heroic = "OnSpellCast_18MP5_8Stack_10Dur" },
+		["sonic_booster"] = { normal = "OnAttackHit_215AP_35%_10Dur_60Cd" },  -- Triumvirate: 215 (down from retail 430); cooldown per tooltip text ("once every minute"), retail code uses 50s ICD
+		["soul_of_the_dead"] = { normal = "OnSpellCrit_900Mana_25%_45Cd" },  -- UNVERIFIED: retail placeholder - mana battery on spell crit
+		["spark_of_life"] = { normal = "OnSpellCast_105MP5_10%_15Dur_50Cd" },  -- Triumvirate: 105 (down from retail 220)
 		["sundial_of_the_exiled"] = { normal = "OnSpellCast_590SP_10%_10Dur_45Cd" },
 		["swordguard_embroidery"] = { normal = "OnAttackHit_400AP_25%_60Cd" },
+		["the_night_blade"] = { normal = "OnAttackHit_62ArPen_3Stack_10%_10Dur" },  -- CONFIRMED via Triumvirate tooltip (was using retail-derived 435 as placeholder, way off)
 		["thunder_capacitor"] = { normal = "OnSpellDirectCrit_1276Nature_4Stack_2.5Cd" },
 		["timbals_crystal"] = { normal = "OnSpellTickDamage_380Shadow_10%_15Cd" },
+		["vestige_of_haldor"] = { normal = "OnAttackHit_656Fire_15%_45Cd" },  -- Triumvirate: 656 (down from retail avg 1280); value = midpoint of tooltip's 550-762 range
 		["whispering_fanged_skull"] = { normal = "OnAttackHit_1110AP_35%_15Dur_45Cd", heroic = "OnAttackHit_1250AP_35%_15Dur_45Cd" },
 		["wrath_of_cenarius"] = { normal = "OnSpellCastHit_132SP_5%_10Dur" },
 	},
@@ -83,9 +113,13 @@ TopFit.SimcProcData = {
 		["lightweave_embroidery"] = { normal = "1spi" },
 	},
 	["use"] = {
+		["binding_light"] = { normal = "OnSpellCast_66SP_8Stack_20Dur_120Cd", heroic = "OnSpellCast_74SP_8Stack_20Dur_120Cd" },  -- UNVERIFIED: retail placeholder, part of same Ulduar hardmode reward chain as fetish/vengeance below
+		["binding_stone"] = { normal = "OnSpellCast_66SP_8Stack_20Dur_120Cd", heroic = "OnSpellCast_74SP_8Stack_20Dur_120Cd" },  -- UNVERIFIED: retail placeholder
+		["death_knights_anguish"] = { normal = "OnAttackHit_15Crit_10Stack_10%_20Dur_45Cd" },  -- UNVERIFIED: retail placeholder
 		["energy_siphon"] = { normal = "408SP_20Dur_120Cd" },
 		["ephemeral_snowflake"] = { normal = "464Haste_20Dur_120Cd" },
 		["fetish_of_volatile_power"] = { normal = "OnSpellCast_57Haste_8Stack_20Dur_120Cd", heroic = "OnSpellCast_64Haste_8Stack_20Dur_120Cd" },
+		["goblin_rocket_launcher"] = { normal = "1200Fire_120Cd" },  -- CONFIRMED via Triumvirate tooltip: 960-1440 dmg range (avg used), 2min CD; 3s stun not modeled (no CC in DPS sim)
 		["hand_mounted_pyro_rocket"] = { normal = "1837Fire_45Cd" },
 		["hyperspeed_accelerators"] = { normal = "340Haste_12Dur_60Cd" },
 		["living_flame"] = { normal = "505SP_20Dur_120Cd" },
@@ -103,6 +137,7 @@ TopFit.SimcProcData = {
 		["spirit_world_glass"] = { normal = "336Spi_20Dur_120Cd" },
 		["talisman_of_resurgence"] = { normal = "599SP_20Dur_120Cd" },
 		["talisman_of_volatile_power"] = { normal = "OnSpellCast_57Haste_8Stack_20Dur_120Cd", heroic = "OnSpellCast_64Haste_8Stack_20Dur_120Cd" },
+		["the_decapitator"] = { normal = "393Physical_180Cd" },  -- CONFIRMED via Triumvirate tooltip: 373-412 dmg range (avg used), 3min CD; flat +19 crit rating is base item stat, not part of this on-use effect
 		["vengeance_of_the_forsaken"] = { normal = "OnAttackHit_215AP_5Stack_20Dur_120Cd", heroic = "OnAttackHit_250AP_5Stack_20Dur_120Cd" },
 		["victors_call"] = { normal = "OnAttackHit_215AP_5Stack_20Dur_120Cd", heroic = "OnAttackHit_250AP_5Stack_20Dur_120Cd" },
 		["wrathstone"] = { normal = "856AP_20Dur_120Cd" },

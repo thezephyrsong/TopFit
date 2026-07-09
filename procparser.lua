@@ -31,11 +31,24 @@
 	which cannot be reliably inferred from tooltip text -- two procs that read identically in
 	the tooltip can fire on different events. The exporter emits a best-guess comment, not an
 	authoritative equip= line, for exactly this reason.
+
+	2026-07-09: added detection for weapon "Chance on hit:" procs (Dragonstrike, Lionheart
+	Executioner, The Night Blade, etc.) -- these use a distinct tooltip prefix instead of
+	"Equip:" and were previously invisible to this scanner entirely. Tagged with the same
+	trigger = "equip" label as ordinary equip procs since they share the same simc_proc_data.lua
+	section and downstream export handling. Also fixed a case-sensitivity bug in
+	ParseStatAndAmount: proc *sentences* use natural lowercase phrasing ("...your haste rating
+	by 127...") while the stat name table holds the title-case short-form display string ("Haste
+	Rating"), so matching previously failed silently for every such line, not just weapon procs.
 ]]
 
 -- locale-safe trigger-line prefixes, identical technique to the existing socket-bonus scan
 local USE_PREFIX = _G["ITEM_SPELL_TRIGGER_ONUSE"]     -- "Use:" in enUS
 local EQUIP_PREFIX = _G["ITEM_SPELL_TRIGGER_ONEQUIP"] -- "Equip:" in enUS
+local CHANCE_PREFIX = _G["ITEM_SPELL_TRIGGER_ONPROC"] -- "Chance on hit:" in enUS -- weapon "chance on hit" procs
+                                                       -- (Dragonstrike, Lionheart Executioner, etc.) use this distinct
+                                                       -- prefix instead of "Equip:" and were previously invisible to
+                                                       -- this scanner entirely. Confirmed in-game 2026-07-09.
 
 -- builds a flat {statKey -> localized stat name} lookup from TopFit's existing statList,
 -- reused as-is from the same table the socket-bonus scanner already relies on
@@ -77,16 +90,22 @@ end
 -- WoW's Use:/Equip: sentence text is NOT consistently ordered -- some effects read
 -- "grants 1000 Attack Power" (number then stat) and others "Increases Attack Power by 1200"
 -- (stat then number), so both orderings are tried for every known stat name.
+-- NOTE: proc *sentences* ("Increases your haste rating by 127...") use natural lowercase
+-- phrasing, while the stat name table holds the title-case short-form display string ("Haste
+-- Rating", as used in "+15 Haste Rating" stat lines). Matching is done case-insensitively so
+-- one doesn't silently fail against the other -- confirmed via real tooltip text 2026-07-09
+-- (Dragonstrike's "haste rating" line did not match "Haste Rating" case-sensitively).
 local function ParseStatAndAmount(text, statNames)
+	local lowerText = text:lower()
 	for statKey, statName in pairs(statNames) do
-		local escapedName = statName:gsub("%%", "%%%%")
+		local escapedName = statName:gsub("%%", "%%%%"):lower()
 
 		-- order 1: "<number> <statName>" (e.g. "grants 1000 Attack Power")
-		local amount = text:match("([%d,]+)%s*" .. escapedName)
+		local amount = lowerText:match("([%d,]+)%s*" .. escapedName)
 		-- order 2: "<statName> ... <number>" with only "by "/"to " words allowed between
 		-- (e.g. "Increases Attack Power by 1200", "Attack Power by 1,200")
 		if not amount then
-			amount = text:match(escapedName .. "%s*[%a]*%s*[%a]*%s*([%d,]+)")
+			amount = lowerText:match(escapedName .. "%s*[%a]*%s*[%a]*%s*([%d,]+)")
 		end
 
 		if amount then
@@ -200,6 +219,14 @@ function TopFit:ParseItemProc(itemLink)
 				effectLine, trigger = leftLineText, "equip"
 				-- keep scanning -- prefer a "Use:" line if one shows up later, since some
 				-- items have both and Use: is the more reliably-scoreable of the two
+			elseif CHANCE_PREFIX and leftLineText:find(CHANCE_PREFIX, 1, true) then
+				-- weapon "chance on hit" procs (Dragonstrike, Lionheart Executioner, The Night
+				-- Blade, etc.) use this prefix instead of "Equip:". Mechanically these are the
+				-- same category as an equip-triggered proc -- same simc_proc_data.lua section,
+				-- same downstream export handling -- so they're tagged "equip" here too rather
+				-- than introducing a third trigger label that every consumer would need to know
+				-- about. Same non-breaking scan priority as the Equip: branch above.
+				effectLine, trigger = leftLineText, "equip"
 			end
 		end
 	end
