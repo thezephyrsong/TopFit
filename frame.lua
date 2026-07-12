@@ -595,8 +595,15 @@ function TopFit:CreateProgressFrame()
         end)
         
         -- fontstrings for set name
-        TopFit.ProgressFrame.setNameFontString = statScrollFrameContent:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
-        TopFit.ProgressFrame.setNameFontString:SetHeight(32)
+        -- constrained to boxWidth and using a smaller font than before -- long class/spec names
+        -- (e.g. "Enhancement Shaman") were overflowing the ~170px-wide left panel and getting
+        -- clipped by the parent scroll frame since the string previously had no set width to
+        -- wrap against. Word wrap is on by default once a width is set, so long names now wrap
+        -- to a second line instead of running off both edges.
+        TopFit.ProgressFrame.setNameFontString = statScrollFrameContent:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+        TopFit.ProgressFrame.setNameFontString:SetWidth(boxWidth - 4)
+        TopFit.ProgressFrame.setNameFontString:SetHeight(30)
+        TopFit.ProgressFrame.setNameFontString:SetJustifyH("CENTER")
         TopFit.ProgressFrame.setNameFontString:SetPoint("TOP", statScrollFrameContent, "TOP")
         TopFit.ProgressFrame.setNameFontString:SetText("Set Name")
         
@@ -801,8 +808,11 @@ function TopFit:CreateProgressFrame()
                         valueTexts[i]:SetTextHeight(11)
                         --statTexts[i]:SetHeight(32)
                         if i == 1 then
-                            statTexts[i]:SetPoint("TOP", TopFit.ProgressFrame.setScoreFontString, "BOTTOM", 0, -10)
-                            valueTexts[i]:SetPoint("TOP", TopFit.ProgressFrame.setScoreFontString, "BOTTOM", 0, -10)
+                            -- anchored below the "Force armor type" checkbox rather than directly
+                            -- below setScoreFontString -- both were anchored to the same spot
+                            -- before, which made the checkbox overlap this first stat row.
+                            statTexts[i]:SetPoint("TOP", TopFit.ProgressFrame.forceArmorTypeCheckbox, "BOTTOM", 0, -8)
+                            valueTexts[i]:SetPoint("TOP", TopFit.ProgressFrame.forceArmorTypeCheckbox, "BOTTOM", 0, -8)
                             statTexts[i]:SetPoint("LEFT", statScrollFrameContent, "LEFT", 3, 0)
                             valueTexts[i]:SetPoint("RIGHT", statScrollFrameContent, "RIGHT", -3, 0)
                         else

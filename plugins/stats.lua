@@ -24,8 +24,10 @@ function TopFit:CreateStatsPlugin()
     end)
     
     -- option to simulate dualwielding / titan's grip
+    -- anchored to the previous checkbox's bottom (rather than a fixed pixel offset from the
+    -- panel) so row spacing stays correct no matter how many checkboxes precede it.
     if select(2, UnitClass("player")) == "SHAMAN" then
-        statsFrame.simulateDualWieldCheckButton = LibStub("tekKonfig-Checkbox").new(statsFrame, nil, "Force dual-wield", "TOPLEFT", statsFrame, "TOPLEFT", 15, -35)
+        statsFrame.simulateDualWieldCheckButton = LibStub("tekKonfig-Checkbox").new(statsFrame, nil, "Force dual-wield", "TOPLEFT", statsFrame.includeInTooltipCheckButton, "BOTTOMLEFT", 0, -6)
         statsFrame.simulateDualWieldCheckButton.tiptext = "|cffffffffCheck to calculate this set with dualwielding in mind even if your current spec does not allow you to. If left off, the set will be calculated with your current spec in mind."
         if TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet then
             statsFrame.simulateDualWieldCheckButton:SetChecked(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].simulateDualWield)
@@ -46,7 +48,7 @@ function TopFit:CreateStatsPlugin()
             end
         end)
     elseif select(2, UnitClass("player")) == "WARRIOR" then
-        statsFrame.simulateTitansGripCheckButton = LibStub("tekKonfig-Checkbox").new(statsFrame, nil, "Force Titan's Grip", "TOPLEFT", statsFrame, "TOPLEFT", 15, -35)
+        statsFrame.simulateTitansGripCheckButton = LibStub("tekKonfig-Checkbox").new(statsFrame, nil, "Force Titan's Grip", "TOPLEFT", statsFrame.includeInTooltipCheckButton, "BOTTOMLEFT", 0, -6)
         statsFrame.simulateTitansGripCheckButton.tiptext = "|cffffffffCheck to calculate this set with Titan's Grip in mind even if your current spec does not include it. If left off, the set will be calculated with your current spec in mind."
         if TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet then
             statsFrame.simulateTitansGripCheckButton:SetChecked(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].simulateTitansGrip)
@@ -72,8 +74,8 @@ function TopFit:CreateStatsPlugin()
     -- Available for any class -- useful whenever you want to theorycraft/compare a 2H build,
     -- e.g. Enhancement Shaman 2H vs dual-wield, or Fury Warrior 2H vs Titan's Grip.
     do
-        local yOffset = (statsFrame.simulateDualWieldCheckButton or statsFrame.simulateTitansGripCheckButton) and -55 or -35
-        statsFrame.forceTwoHandedCheckButton = LibStub("tekKonfig-Checkbox").new(statsFrame, nil, "Force two-handed", "TOPLEFT", statsFrame, "TOPLEFT", 15, yOffset)
+        local anchorTo = statsFrame.simulateDualWieldCheckButton or statsFrame.simulateTitansGripCheckButton or statsFrame.includeInTooltipCheckButton
+        statsFrame.forceTwoHandedCheckButton = LibStub("tekKonfig-Checkbox").new(statsFrame, nil, "Force two-handed", "TOPLEFT", anchorTo, "BOTTOMLEFT", 0, -6)
         statsFrame.forceTwoHandedCheckButton.tiptext = "|cffffffffCheck to always recommend a two-handed weapon and leave the offhand slot empty for this set, regardless of dual-wield or Titan's Grip availability."
         if TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet then
             statsFrame.forceTwoHandedCheckButton:SetChecked(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].forceTwoHanded)
@@ -216,7 +218,10 @@ function TopFit:CreateStatsPlugin()
     UIDropDownMenu_JustifyText(statsFrame.statDropDown, "LEFT")
     
     statsFrame.addStatButton = CreateFrame("Button", "TopFit_ProgressFrame_expandButton", statsFrame, "UIPanelButtonTemplate")
-    statsFrame.addStatButton:SetPoint("TOPLEFT", statsFrame, "TOPLEFT", 5, -65)
+    -- anchored to the bottom of the Force two-handed checkbox (always the last row in the
+    -- stack) rather than a fixed pixel offset from the panel, so it never overlaps the
+    -- checkboxes above it regardless of how many are shown for the current class.
+    statsFrame.addStatButton:SetPoint("TOPLEFT", statsFrame.forceTwoHandedCheckButton, "BOTTOMLEFT", -10, -15)
     statsFrame.addStatButton:SetText("Add stat...")
     statsFrame.addStatButton:SetHeight(22)
     statsFrame.addStatButton:SetWidth(80)
