@@ -197,6 +197,22 @@ function TopFit:LookupSimcProcData(itemLink, section)
 	return TopFit:DecodeSimcEffectString(raw)
 end
 
+-- distinguishes an actual chance/triggered effect line from an ordinary flat, always-on
+-- "Equip: +N Stat" passive bonus. Both use the identical "Equip:" tooltip prefix in WoW's UI,
+-- but only a genuine proc/triggered effect will either say "chance" (the overwhelming majority
+-- of phrasing: "have a chance to...", "Chance on hit:...") or state a buff duration ("for N
+-- sec") -- a flat passive stat is permanent while worn and does neither. Without this filter,
+-- literally every item with a secondary-stat Equip: line (the majority of rare+ gear) gets
+-- misidentified as having an unparsed proc. Found 2026-07-11 after the case-sensitivity fix
+-- made stat/amount extraction succeed on these flat lines too, which had been silently masking
+-- this pre-existing ambiguity.
+local function LooksLikeTriggeredEffect(text)
+	local lower = text:lower()
+	if lower:find("chance") then return true end
+	if text:match("for%s+%d+%s*sec") then return true end
+	return false
+end
+
 -- scans itemLink's tooltip for a Use:/Equip: proc line and parses it.
 -- returns a table: { trigger = "use"/"equip", statKey, amount, duration, cooldown (or nil) }
 -- or nil if no parseable proc effect was found
@@ -215,7 +231,7 @@ function TopFit:ParseItemProc(itemLink)
 			if leftLineText:find(USE_PREFIX, 1, true) then
 				effectLine, trigger = leftLineText, "use"
 				break
-			elseif leftLineText:find(EQUIP_PREFIX, 1, true) then
+			elseif leftLineText:find(EQUIP_PREFIX, 1, true) and LooksLikeTriggeredEffect(leftLineText) then
 				effectLine, trigger = leftLineText, "equip"
 				-- keep scanning -- prefer a "Use:" line if one shows up later, since some
 				-- items have both and Use: is the more reliably-scoreable of the two
@@ -225,7 +241,9 @@ function TopFit:ParseItemProc(itemLink)
 				-- same category as an equip-triggered proc -- same simc_proc_data.lua section,
 				-- same downstream export handling -- so they're tagged "equip" here too rather
 				-- than introducing a third trigger label that every consumer would need to know
-				-- about. Same non-breaking scan priority as the Equip: branch above.
+				-- about. Same non-breaking scan priority as the Equip: branch above. No
+				-- LooksLikeTriggeredEffect filter needed here -- this prefix IS the "chance"
+				-- word already, and flat stats are never phrased this way to begin with.
 				effectLine, trigger = leftLineText, "equip"
 			end
 		end
