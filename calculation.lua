@@ -92,6 +92,13 @@ function TopFit:CalculateRecommendations()
         TopFit.playerCanTitansGrip = true
     end
     
+    -- "Force Two-Handed": always recommend a 2H mainhand and leave the offhand empty,
+    -- overriding whatever the class/spec would otherwise allow (dual-wield, Titan's Grip, etc.)
+    TopFit.playerForceTwoHanded = false
+    if (TopFit.db.profile.sets[TopFit.setCode].forceTwoHanded) then
+        TopFit.playerForceTwoHanded = true
+    end
+    
     TopFit:InitSemiRecursiveCalculations()
 end
 
@@ -176,6 +183,29 @@ function TopFit:ReduceItemList()
         if (slotID == 17) then -- offhand
             --TODO: check if forced item is a weapon and remove all weapons from mainhand if player cannot dualwield
             -- always remove all 2H-weapons from mainhand
+        end
+    end
+    
+    -- "Force Two-Handed": drop every 1H/mainhand-only weapon from the mainhand candidate list
+    -- (leaving only 2H weapons) and clear the offhand candidate list entirely, so the
+    -- recursive search and best-in-slot logic can never assemble a 1H+offhand combo.
+    -- Slots with an explicitly forced item are left untouched, same as other reductions above.
+    if TopFit.playerForceTwoHanded then
+        if TopFit.itemListBySlot[16] and not self.db.profile.sets[TopFit.setCode].forced[16] then
+            for i = #(TopFit.itemListBySlot[16]), 1, -1 do
+                local itemTable = TopFit:GetCachedItem(TopFit.itemListBySlot[16][i].itemLink)
+                -- check itemEquipLoc directly rather than IsOnehandedWeapon(), which is talent-context-
+                -- dependent (it reports Titan's Grip-eligible 2H weapons as "one-handed"); here we want
+                -- every genuine 2H weapon kept regardless of Titan's Grip status.
+                if not itemTable or itemTable.itemEquipLoc ~= "INVTYPE_2HWEAPON" then
+                    tremove(TopFit.itemListBySlot[16], i)
+                end
+            end
+        end
+        if TopFit.itemListBySlot[17] and not self.db.profile.sets[TopFit.setCode].forced[17] then
+            for i = #(TopFit.itemListBySlot[17]), 1, -1 do
+                tremove(TopFit.itemListBySlot[17], i)
+            end
         end
     end
     

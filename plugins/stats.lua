@@ -34,7 +34,15 @@ function TopFit:CreateStatsPlugin()
         statsFrame.simulateDualWieldCheckButton:SetScript("OnClick", function(self)
             checksound(self)
             if (TopFit.ProgressFrame.selectedSet) then
-                TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].simulateDualWield = not TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].simulateDualWield
+                local set = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet]
+                set.simulateDualWield = not set.simulateDualWield
+                -- mutually exclusive with Force two-handed
+                if set.simulateDualWield and set.forceTwoHanded then
+                    set.forceTwoHanded = false
+                    if statsFrame.forceTwoHandedCheckButton then
+                        statsFrame.forceTwoHandedCheckButton:SetChecked(false)
+                    end
+                end
             end
         end)
     elseif select(2, UnitClass("player")) == "WARRIOR" then
@@ -47,7 +55,50 @@ function TopFit:CreateStatsPlugin()
         statsFrame.simulateTitansGripCheckButton:SetScript("OnClick", function(self)
             checksound(self)
             if (TopFit.ProgressFrame.selectedSet) then
-                TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].simulateTitansGrip = not TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].simulateTitansGrip
+                local set = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet]
+                set.simulateTitansGrip = not set.simulateTitansGrip
+                -- mutually exclusive with Force two-handed
+                if set.simulateTitansGrip and set.forceTwoHanded then
+                    set.forceTwoHanded = false
+                    if statsFrame.forceTwoHandedCheckButton then
+                        statsFrame.forceTwoHandedCheckButton:SetChecked(false)
+                    end
+                end
+            end
+        end)
+    end
+    
+    -- option to force a two-handed weapon (empty offhand), overriding dual-wield/Titan's Grip.
+    -- Available for any class -- useful whenever you want to theorycraft/compare a 2H build,
+    -- e.g. Enhancement Shaman 2H vs dual-wield, or Fury Warrior 2H vs Titan's Grip.
+    do
+        local yOffset = (statsFrame.simulateDualWieldCheckButton or statsFrame.simulateTitansGripCheckButton) and -55 or -35
+        statsFrame.forceTwoHandedCheckButton = LibStub("tekKonfig-Checkbox").new(statsFrame, nil, "Force two-handed", "TOPLEFT", statsFrame, "TOPLEFT", 15, yOffset)
+        statsFrame.forceTwoHandedCheckButton.tiptext = "|cffffffffCheck to always recommend a two-handed weapon and leave the offhand slot empty for this set, regardless of dual-wield or Titan's Grip availability."
+        if TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet then
+            statsFrame.forceTwoHandedCheckButton:SetChecked(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].forceTwoHanded)
+        end
+        local checksound = statsFrame.forceTwoHandedCheckButton:GetScript("OnClick")
+        statsFrame.forceTwoHandedCheckButton:SetScript("OnClick", function(self)
+            checksound(self)
+            if (TopFit.ProgressFrame.selectedSet) then
+                local set = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet]
+                set.forceTwoHanded = not set.forceTwoHanded
+                -- mutually exclusive with Force dual-wield / Force Titan's Grip
+                if set.forceTwoHanded then
+                    if set.simulateDualWield then
+                        set.simulateDualWield = false
+                        if statsFrame.simulateDualWieldCheckButton then
+                            statsFrame.simulateDualWieldCheckButton:SetChecked(false)
+                        end
+                    end
+                    if set.simulateTitansGrip then
+                        set.simulateTitansGrip = false
+                        if statsFrame.simulateTitansGripCheckButton then
+                            statsFrame.simulateTitansGripCheckButton:SetChecked(false)
+                        end
+                    end
+                end
             end
         end)
     end
@@ -534,6 +585,10 @@ function TopFit:CreateStatsPlugin()
                 statsFrame.simulateTitansGripCheckButton:Enable()
                 statsFrame.simulateTitansGripCheckButton:SetChecked(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].simulateTitansGrip)
             end
+            if (statsFrame.forceTwoHandedCheckButton) then
+                statsFrame.forceTwoHandedCheckButton:Enable()
+                statsFrame.forceTwoHandedCheckButton:SetChecked(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].forceTwoHanded)
+            end
         else
             -- no set selected, disable inputs
             statsFrame.addStatButton:Disable()
@@ -543,6 +598,9 @@ function TopFit:CreateStatsPlugin()
             end
             if (statsFrame.simulateTitansGripCheckButton) then
                 statsFrame.simulateTitansGripCheckButton:Disable()
+            end
+            if (statsFrame.forceTwoHandedCheckButton) then
+                statsFrame.forceTwoHandedCheckButton:Disable()
             end
         end
         statsFrame:UpdateSetStats()
