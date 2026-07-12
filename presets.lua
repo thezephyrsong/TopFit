@@ -3,12 +3,19 @@ function TopFit:GetPresets()
         local playerRace = select(2,UnitRace("player"))
         
         if not TopFit.presets then -- don't want to create new tables every time this function is called
-                local spellCap = math.ceil(26.23 * (17 - (playerRace == "Draenei" and 1 or 0) - ((playerClass == "PRIEST" or playerClass == "DRUID") and 3 or 0)))
-                local spellCapMinus3 = math.ceil(26.23 * (14 - (playerRace == "Draenei" and 1 or 0) - ((playerClass == "PRIEST" or playerClass == "DRUID") and 3 or 0)))
-                local spellCapMinus6 = math.ceil(26.23 * (11 - (playerRace == "Draenei" and 1 or 0) - ((playerClass == "PRIEST" or playerClass == "DRUID") and 3 or 0)))
-                local meleeCap = math.ceil(32.79 * ((TopFit.playerCanDualWield and 27 or 8) - (playerRace == "Draenei" and 1 or 0)))
-                local meleeCapMinus3 = math.ceil(32.79 * (((TopFit.playerCanDualWield and playerClass ~= "HUNTER") and 24 or 5) - (playerRace == "Draenei" and 1 or 0)))
-                local meleeCapDW = math.ceil(32.79 * 24)
+                -- Rating-per-percent conversion for hit rating scales with player level. 26.23 (spell)
+                -- and 32.79 (melee) are the retail level-80 constants; Triumvirate is a level-60 cap
+                -- server, where the confirmed conversions (cross-checked against simc-triumvirate and
+                -- in-game tooltips) are 8 rating/1% spell hit and 10 rating/1% melee hit. The target
+                -- percentages themselves (17/14/11 spell, 27/8/24/5 melee) come from the fixed +3-level
+                -- boss/player level-difference mechanic and are unaffected by the level-60 cap, so only
+                -- the conversion constants change here.
+                local spellCap = math.ceil(8 * (17 - (playerRace == "Draenei" and 1 or 0) - ((playerClass == "PRIEST" or playerClass == "DRUID") and 3 or 0)))
+                local spellCapMinus3 = math.ceil(8 * (14 - (playerRace == "Draenei" and 1 or 0) - ((playerClass == "PRIEST" or playerClass == "DRUID") and 3 or 0)))
+                local spellCapMinus6 = math.ceil(8 * (11 - (playerRace == "Draenei" and 1 or 0) - ((playerClass == "PRIEST" or playerClass == "DRUID") and 3 or 0)))
+                local meleeCap = math.ceil(10 * ((TopFit.playerCanDualWield and 27 or 8) - (playerRace == "Draenei" and 1 or 0)))
+                local meleeCapMinus3 = math.ceil(10 * (((TopFit.playerCanDualWield and playerClass ~= "HUNTER") and 24 or 5) - (playerRace == "Draenei" and 1 or 0)))
+                local meleeCapDW = math.ceil(10 * 24)
         
                 TopFit.presets = {
                         ["DEATHKNIGHT"] = {
