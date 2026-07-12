@@ -52,7 +52,7 @@ TopFit.SimcProcData = {
 		["eye_of_the_broodmother"] = { normal = "OnSpellDamage_25SP_5Stack_10Dur" },
 		["flare_of_the_heavens"] = { normal = "OnSpellCast_850SP_10%_10Dur_45Cd" },
 		["flow_of_knowledge"] = { normal = "OnSpellCast_590SP_10%_10Dur_50Cd" },  -- UNVERIFIED: retail placeholder
-		["forge_ember"] = { normal = "OnSpellCastHit_512SP_10%_10Dur_45Cd" },
+		["forge_ember"] = { normal = "OnSpellCastHit_115SP_10%_10Dur_45Cd", heroic = "OnSpellCastHit_172SP_10%_10Dur_45Cd" },  -- CONFIRMED via Triumvirate tooltip (mirror file was stale at retail 512)
 		["frostforged_champion"] = { normal = "OnAttackHit_480AP_1PPM_10Dur_60Cd" },  -- UNVERIFIED: retail placeholder (PvP resilience trinket)
 		["frostforged_sage"] = { normal = "OnSpellHit_285SP_10%_10Dur_60Cd" },  -- UNVERIFIED: retail placeholder (PvP resilience trinket)
 		["fury_of_the_five_flights"] = { normal = "OnAttackHit_16AP_20Stack_10Dur" },
@@ -69,18 +69,18 @@ TopFit.SimcProcData = {
 		["lionheart_executioner"] = { normal = "OnAttackHit_70Str_10%_10Dur" },  -- CONFIRMED via Triumvirate tooltip; flat +8% Fear resist is a separate base "Equip:" stat, not part of this proc
 		["madness_of_the_betrayer"] = { normal = "OnAttackHit_300ArPen_10%_10Dur" },  -- UNVERIFIED: retail placeholder
 		["mark_of_defiance"] = { normal = "OnSpellCastHit_150Mana_15%_15Cd" },
-		["meteorite_whetstone"] = { normal = "OnAttackHit_170Haste_15%_10Dur_45Cd" },  -- Triumvirate: 170 (down from retail 444); flat +18 crit rating is base item stat, not a proc
+		["meteorite_whetstone"] = { normal = "OnAttackHit_170Haste_15%_10Dur_45Cd", heroic = "OnAttackHit_177Haste_15%_10Dur_45Cd" },  -- CONFIRMED via Triumvirate tooltip, both tiers; flat crit rating (18/25) is base item stat, not a proc
 		["mirror_of_truth"] = { normal = "OnAttackCrit_1000AP_10%_10Dur_50Cd" },
 		["mithril_pocketwatch"] = { normal = "OnSpellCast_590SP_10%_10Dur_45Cd" },
 		["mjolnir_runestone"] = { normal = "OnAttackHit_665ArPen_15%_10Dur_45Cd" },
 		["muradins_spyglass"] = { normal = "OnSpellDamage_18SP_10Stack_10Dur", heroic = "OnSpellDamage_20SP_10Stack_10Dur" },
 		["needleencrusted_scorpion"] = { normal = "OnAttackCrit_678ArPen_10%_10Dur_50Cd" },
 		["pandoras_plea"] = { normal = "OnSpellCast_751SP_10%_10Dur_45Cd" },
-		["pendulum_of_telluric_currents"] = { normal = "OnSpellHit_673Shadow_15%_45Cd" },  -- Triumvirate: 673 (down from retail avg ~1460); value = midpoint of tooltip's 485-860 range
+		["pendulum_of_telluric_currents"] = { normal = "OnSpellHit_673Shadow_15%_45Cd", heroic = "OnSpellHit_700Shadow_15%_45Cd" },  -- CONFIRMED via Triumvirate tooltip, both tiers
 		["phylactery_of_the_nameless_lich"] = { normal = "OnSpellTickDamage_1073SP_30%_20Dur_100Cd", heroic = "OnSpellTickDamage_1206SP_30%_20Dur_100Cd" },
 		["purified_lunar_dust"] = { normal = "OnSpellCast_304MP5_10%_15Dur_45Cd" },
 		["pyrite_infuser"] = { normal = "OnAttackCrit_1234AP_10%_10Dur_50Cd" },
-		["quagmirrans_eye"] = { normal = "OnSpellCast_320Haste_10%_6Dur_45Cd" },
+		["quagmirrans_eye"] = { normal = "OnSpellCast_192Haste_10%_6Dur_45Cd", heroic = "OnSpellCast_215Haste_10%_6Dur_45Cd" },  -- CONFIRMED via Triumvirate tooltip, both tiers (mirror file was stale at retail 320)
 		["reign_of_the_dead"] = { normal = "OnSpellDirectCrit_1882Fire_3Stack_2.0Cd", heroic = "OnSpellDirectCrit_2117Fire_3Stack_2.0Cd" },
 		["reign_of_the_unliving"] = { normal = "OnSpellDirectCrit_1882Fire_3Stack_2.0Cd", heroic = "OnSpellDirectCrit_2117Fire_3Stack_2.0Cd" },
 		["robe_of_the_elder_scribes"] = { normal = "OnSpellCast_130SP_10%_10Dur" },  -- CONFIRMED via wowsims tooltip text; proc chance/ICD not stated on tooltip either, assumed 10%/no ICD
@@ -89,7 +89,7 @@ TopFit.SimcProcData = {
 		["sextant_of_unstable_currents"] = { normal = "OnSpellCrit_190SP_20%_15Dur_45Cd" },
 		["shard_of_contempt"] = { normal = "OnAttackHit_165AP_10%_20Dur", heroic = "OnAttackHit_174AP_10%_20Dur" },  -- CONFIRMED via Triumvirate tooltip (was using retail 230 as placeholder); flat +25/+27 expertise rating is base item stat, not a proc; proc % still unstated, assumed 10%
 		["sharpened_twilight_scale"] = { normal = "OnAttackHit_1304AP_35%_15Dur_45Cd", heroic = "OnAttackHit_1472AP_35%_15Dur_45Cd" },
-		["shiffars_nexus_horn"] = { normal = "OnSpellCrit_225SP_20%_10Dur_45Cd" },
+		["shiffars_nexus_horn"] = { normal = "OnSpellCrit_135SP_20%_10Dur_45Cd" },  -- CONFIRMED via Triumvirate tooltip (mirror file was stale at 225)
 		["show_of_faith"] = { normal = "OnSpellCast_272MP5_10%_15Dur_50Cd" },  -- UNVERIFIED: retail placeholder
 		["signet_of_edward_the_odd"] = { normal = "OnAttackHit_62Haste_15%_13Dur_45Cd" },  -- CONFIRMED via Triumvirate tooltip + in-game screenshot (was using retail 125 as placeholder); flat +21 AP, +8 haste rating are base "Equip:" stats, not part of this proc
 		["sifs_remembrance"] = { normal = "OnSpellCast_220MP5_10%_15Dur_50Cd" },  -- UNVERIFIED: retail placeholder
@@ -97,12 +97,12 @@ TopFit.SimcProcData = {
 		["solace_of_the_fallen"] = { normal = "OnSpellCast_16MP5_8Stack_10Dur", heroic = "OnSpellCast_18MP5_8Stack_10Dur" },
 		["sonic_booster"] = { normal = "OnAttackHit_215AP_35%_10Dur_60Cd" },  -- Triumvirate: 215 (down from retail 430); cooldown per tooltip text ("once every minute"), retail code uses 50s ICD
 		["soul_of_the_dead"] = { normal = "OnSpellCrit_900Mana_25%_45Cd" },  -- UNVERIFIED: retail placeholder - mana battery on spell crit
-		["spark_of_life"] = { normal = "OnSpellCast_105MP5_10%_15Dur_50Cd" },  -- Triumvirate: 105 (down from retail 220)
-		["sundial_of_the_exiled"] = { normal = "OnSpellCast_590SP_10%_10Dur_45Cd" },
+		["spark_of_life"] = { normal = "OnSpellCast_105MP5_10%_15Dur_50Cd", heroic = "OnSpellCast_109MP5_10%_15Dur_50Cd" },  -- CONFIRMED via Triumvirate tooltip, both tiers
+		["sundial_of_the_exiled"] = { normal = "OnSpellCast_168SP_10%_10Dur_45Cd" },  -- CONFIRMED via Triumvirate tooltip (mirror file was stale at retail 590)
 		["swordguard_embroidery"] = { normal = "OnAttackHit_400AP_25%_60Cd" },
 		["the_night_blade"] = { normal = "OnAttackHit_62ArPen_3Stack_10%_10Dur" },  -- CONFIRMED via Triumvirate tooltip (was using retail-derived 435 as placeholder, way off)
 		["thunder_capacitor"] = { normal = "OnSpellDirectCrit_1276Nature_4Stack_2.5Cd" },
-		["timbals_crystal"] = { normal = "OnSpellTickDamage_380Shadow_10%_15Cd" },
+		["timbals_focusing_crystal"] = { normal = "OnSpellTickDamage_283Shadow_10%_45Cd", heroic = "OnSpellTickDamage_297Shadow_10%_45Cd" },  -- FIXED: was slugged "timbals_crystal", which never matches the real item name "Timbal's Focusing Crystal" -- dead code. Values now match tooltip midpoints; school not stated on tooltip, Shadow assumed
 		["vestige_of_haldor"] = { normal = "OnAttackHit_656Fire_15%_45Cd" },  -- Triumvirate: 656 (down from retail avg 1280); value = midpoint of tooltip's 550-762 range
 		["whispering_fanged_skull"] = { normal = "OnAttackHit_1110AP_35%_15Dur_45Cd", heroic = "OnAttackHit_1250AP_35%_15Dur_45Cd" },
 		["wrath_of_cenarius"] = { normal = "OnSpellCastHit_132SP_5%_10Dur" },
@@ -126,7 +126,7 @@ TopFit.SimcProcData = {
 		["maghias_misguided_quill"] = { normal = "716SP_20Dur_120Cd" },
 		["mark_of_norgannon"] = { normal = "491Haste_20Dur_120Cd" },
 		["mark_of_supremacy"] = { normal = "1024AP_20Dur_120Cd" },
-		["nevermelting_ice_crystal"] = { normal = "OnSpellDirectCrit_184Crit_5Stack_20Dur_180Cd_reverse" },
+		["nevermelting_ice_crystal"] = { normal = "OnSpellDirectCrit_73Crit_5Stack_20Dur_180Cd_reverse" },  -- CONFIRMED via Triumvirate tooltip: 73 per stack, 5 stacks = 365 total (was 184, didn't match tooltip math)
 		["platinum_disks_of_battle"] = { normal = "752AP_20Dur_120Cd" },
 		["platinum_disks_of_sorcery"] = { normal = "440SP_20Dur_120Cd" },
 		["platinum_disks_of_swiftness"] = { normal = "375Haste_20Dur_120Cd" },
