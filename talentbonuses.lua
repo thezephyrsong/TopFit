@@ -90,3 +90,85 @@ TopFit.talentRatingBonuses["DEATHKNIGHT"] = {
     -- Ebon Plaguebringer (tab 3 "Unholy", spellId 51099): +1% crit/rank, 3 ranks.
     { tab = 3, index = 28, stat = "ITEM_MOD_CRIT_RATING_SHORT", perPoint = 14 },
 }
+
+-- ============================================================================================
+-- The classes below use STANDARD RETAIL TAB ORDERING as their tab-number label (e.g. Mage
+-- Arcane=1/Fire=2/Frost=3), which is NOT the same thing as this data file's own internal
+-- declaration order -- those two disagree for at least one class already confirmed in-code
+-- (Warrior's own data lists tabs as [arms, protection, fury], but calculation.lua's existing,
+-- game-confirmed GetTalentInfo(2, 27) Titan's Grip check proves tab 2 is actually Fury, not
+-- Protection). Standard retail ordering is what's used throughout, since it's consistent with
+-- the two tabs that ARE confirmed in-code (Shaman Enhancement=2, Warrior Fury=2) -- but for every
+-- class below, NEITHER the tab number NOR the index has an independent in-code confirmation the
+-- way those two do. Verify before trusting, same as everywhere else in this file.
+--
+-- A couple of these talents grant "hitPercent" without specifying melee/spell/ranged in
+-- Triumvirate's own data (unlike Virulence or Precision, which say so explicitly) -- in those
+-- cases the type below was inferred from what the class/spec actually uses (e.g. a pure caster's
+-- hit talent is spell, a pure melee class's is melee). Hunter's Focused Aim is a special case:
+-- it's ranged hit, and Triumvirate's stat-scaling data doesn't give a separate ranged-hit
+-- conversion constant, only melee and spell -- retail WotLK uses the same conversion for ranged
+-- and melee hit rating, so melee's constant is used here, but this hasn't been separately
+-- confirmed for Triumvirate.
+TopFit.talentRatingBonuses["DRUID"] = {
+    -- Balance of Power (tab 1 "Balance", spellId 33592): +3% spell hit/rank, 2 ranks.
+    { tab = 1, index = 17, stat = "ITEM_MOD_HIT_RATING_SHORT", percentPerPoint = 3, percentType = "spell" },
+}
+
+TopFit.talentRatingBonuses["HUNTER"] = {
+    -- Focused Aim (tab 2 "Marksmanship", spellId 53620): +1% ranged hit/rank, 3 ranks.
+    -- Uses the melee hit conversion (see note above) since Triumvirate doesn't expose a
+    -- separate ranged conversion constant.
+    { tab = 2, index = 2, stat = "ITEM_MOD_HIT_RATING_SHORT", percentPerPoint = 1, percentType = "melee" },
+    -- Master Marksman (tab 2 "Marksmanship", spellId 34485): +1% crit/rank, 5 ranks.
+    { tab = 2, index = 21, stat = "ITEM_MOD_CRIT_RATING_SHORT", perPoint = 14 },
+    -- Killer Instinct (tab 3 "Survival", spellId 19370): +1% crit/rank, 3 ranks.
+    { tab = 3, index = 15, stat = "ITEM_MOD_CRIT_RATING_SHORT", perPoint = 14 },
+    -- Master Tactician (tab 3 "Survival", spellId 34506): +2% crit/rank, 5 ranks.
+    { tab = 3, index = 22, stat = "ITEM_MOD_CRIT_RATING_SHORT", perPoint = 28 },
+}
+
+TopFit.talentRatingBonuses["MAGE"] = {
+    -- Arcane Focus (tab 1 "Arcane", spellId 11222): +1% spell hit/rank, 3 ranks.
+    { tab = 1, index = 2, stat = "ITEM_MOD_HIT_RATING_SHORT", percentPerPoint = 1, percentType = "spell" },
+    -- Pyromaniac (tab 2 "Fire", spellId 34293): +1% crit/rank, 3 ranks.
+    { tab = 2, index = 19, stat = "ITEM_MOD_CRIT_RATING_SHORT", perPoint = 14 },
+    -- Precision (tab 3 "Frost", spellId 29438): +1% spell hit/rank, 3 ranks.
+    { tab = 3, index = 6, stat = "ITEM_MOD_HIT_RATING_SHORT", percentPerPoint = 1, percentType = "spell" },
+}
+
+TopFit.talentRatingBonuses["PALADIN"] = {
+    -- Enlightened Judgements (tab 1 "Holy", spellId 53556): +2% hit/rank, 2 ranks. Judgement is a
+    -- spell-type ability in retail's hit-chance model, so this uses the spell hit conversion.
+    { tab = 1, index = 25, stat = "ITEM_MOD_HIT_RATING_SHORT", percentPerPoint = 2, percentType = "spell" },
+    -- Conviction (tab 3 "Retribution", spellId 20117): +1% crit/rank, 5 ranks.
+    { tab = 3, index = 7, stat = "ITEM_MOD_CRIT_RATING_SHORT", perPoint = 14 },
+}
+
+TopFit.talentRatingBonuses["PRIEST"] = {
+    -- Shadow Focus (tab 3 "Shadow", spellId 15260): +1% spell hit/rank, 3 ranks.
+    { tab = 3, index = 6, stat = "ITEM_MOD_HIT_RATING_SHORT", percentPerPoint = 1, percentType = "spell" },
+}
+
+TopFit.talentRatingBonuses["ROGUE"] = {
+    -- Malice (tab 1 "Assassination", spellId 14138): +1% crit/rank, 5 ranks.
+    { tab = 1, index = 3, stat = "ITEM_MOD_CRIT_RATING_SHORT", perPoint = 14 },
+    -- Precision (tab 2 "Combat", spellId 13705): +1% hit/rank, 5 ranks. Rogue is a pure melee
+    -- class, so this uses the melee hit conversion.
+    { tab = 2, index = 6, stat = "ITEM_MOD_HIT_RATING_SHORT", percentPerPoint = 1, percentType = "melee" },
+}
+
+TopFit.talentRatingBonuses["WARLOCK"] = {
+    -- Suppression (tab 1 "Affliction", spellId 18174): +1% spell hit/rank, 3 ranks.
+    { tab = 1, index = 2, stat = "ITEM_MOD_HIT_RATING_SHORT", percentPerPoint = 1, percentType = "spell" },
+    -- Demonic Tactics (tab 2 "Demonology", spellId 30242): +2% crit/rank, 5 ranks.
+    { tab = 2, index = 21, stat = "ITEM_MOD_CRIT_RATING_SHORT", perPoint = 28 },
+}
+
+TopFit.talentRatingBonuses["WARRIOR"] = {
+    -- Cruelty (tab 2 "Fury", spellId 12320): +1% crit/rank, 5 ranks.
+    { tab = 2, index = 3, stat = "ITEM_MOD_CRIT_RATING_SHORT", perPoint = 14 },
+    -- Precision (tab 2 "Fury", spellId 29590): +1% MELEE hit/rank (explicit in Triumvirate's
+    -- data), 3 ranks.
+    { tab = 2, index = 13, stat = "ITEM_MOD_HIT_RATING_SHORT", percentPerPoint = 1, percentType = "melee" },
+}
