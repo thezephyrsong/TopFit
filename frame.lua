@@ -777,10 +777,10 @@ function TopFit:CreateProgressFrame()
             
             table.sort(statList, function(a, b)
                 local score1, score2 = 0, 0
-                if set[a] and ((not caps) or (not caps[a]) or (not caps[a]["active"]) or (caps[a]["soft"])) then
+                if set[a] and ((not caps) or (not caps[a]) or (not TopFit:HasActiveHardCap(caps[a]))) then
                     score1 = combination.totalStats[a] * set[a]
                 end
-                if set[b] and ((not caps) or (not caps[b]) or (not caps[b]["active"]) or (caps[b]["soft"])) then
+                if set[b] and ((not caps) or (not caps[b]) or (not TopFit:HasActiveHardCap(caps[b]))) then
                     score2 = combination.totalStats[b] * set[b]
                 end
                 
@@ -851,33 +851,39 @@ function TopFit:CreateProgressFrame()
             end
             statScrollFrameContent.capHeader:Hide()
             
-            for stat, capTable in pairs(caps) do
-                if capTable.active then
-                    if not capNameTexts[i] then
-                        capNameTexts[i] = statScrollFrameContent:CreateFontString(nil, "ARTWORK", "GameFontHighlightExtraSmall")
-                        capValueTexts[i] = statScrollFrameContent:CreateTexture()
-                        capValueTexts[i]:SetWidth(11)
-                        capValueTexts[i]:SetHeight(11)
-                        if i == 1 then
-                            capNameTexts[i]:SetPoint("TOPLEFT", statScrollFrameContent.capHeader, "BOTTOMLEFT")
-                            capValueTexts[i]:SetPoint("TOP", statScrollFrameContent.capHeader, "BOTTOM")
-                            capValueTexts[i]:SetPoint("RIGHT", statScrollFrameContent, "RIGHT")
-                        else
-                            capNameTexts[i]:SetPoint("TOPLEFT", capNameTexts[i - 1], "BOTTOMLEFT")
-                            capValueTexts[i]:SetPoint("TOPRIGHT", capValueTexts[i - 1], "BOTTOMRIGHT")
+            for stat, capList in pairs(caps) do
+                for _, capTable in ipairs(capList) do
+                    if capTable.active then
+                        if not capNameTexts[i] then
+                            capNameTexts[i] = statScrollFrameContent:CreateFontString(nil, "ARTWORK", "GameFontHighlightExtraSmall")
+                            capValueTexts[i] = statScrollFrameContent:CreateTexture()
+                            capValueTexts[i]:SetWidth(11)
+                            capValueTexts[i]:SetHeight(11)
+                            if i == 1 then
+                                capNameTexts[i]:SetPoint("TOPLEFT", statScrollFrameContent.capHeader, "BOTTOMLEFT")
+                                capValueTexts[i]:SetPoint("TOP", statScrollFrameContent.capHeader, "BOTTOM")
+                                capValueTexts[i]:SetPoint("RIGHT", statScrollFrameContent, "RIGHT")
+                            else
+                                capNameTexts[i]:SetPoint("TOPLEFT", capNameTexts[i - 1], "BOTTOMLEFT")
+                                capValueTexts[i]:SetPoint("TOPRIGHT", capValueTexts[i - 1], "BOTTOMRIGHT")
+                            end
                         end
+                        -- a stat can have several independent caps now (e.g. Hit Rating: Spell Hit +
+                        -- Dual Wield Hit) -- append the entry's label, if it has one, so rows are
+                        -- distinguishable instead of all reading just "Hit Rating"
+                        local baseName = _G[stat] or string.gsub(stat, "SET: ", "")
+                        capNameTexts[i]:SetText(capTable.label and (baseName .. " (" .. capTable.label .. ")") or baseName)
+                        if (combination.totalStats[stat] or 0) >= TopFit:GetEffectiveCapValue(stat, capTable.value) then
+                            capValueTexts[i]:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-Ready")
+                        else
+                            capValueTexts[i]:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-NotReady")
+                        end
+                        capNameTexts[i]:Show()
+                        capValueTexts[i]:Show()
+                        statScrollFrameContent.capHeader:Show()
+                        
+                        i = i + 1
                     end
-                    capNameTexts[i]:SetText((_G[stat] or string.gsub(stat, "SET: ", "")))
-                    if (combination.totalStats[stat]) and (combination.totalStats[stat] >= capTable.value) then
-                        capValueTexts[i]:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-Ready")
-                    else
-                        capValueTexts[i]:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-NotReady")
-                    end
-                    capNameTexts[i]:Show()
-                    capValueTexts[i]:Show()
-                    statScrollFrameContent.capHeader:Show()
-                    
-                    i = i + 1
                 end
             end
             -- anchor to bottom of stat list

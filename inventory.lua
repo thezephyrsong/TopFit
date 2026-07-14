@@ -281,7 +281,7 @@ function TopFit:CalculateItemScore(itemLink)
         for stat, statValue in pairs(set) do
             if itemTable.totalBonus[stat] then
                 -- check for hard cap on this stat
-                if ((not caps) or (not caps[stat]) or (not caps[stat]["active"]) or (caps[stat]["soft"])) then
+                if ((not caps) or (not caps[stat]) or (not TopFit:HasActiveHardCap(caps[stat]))) then
                     itemScore = itemScore + statValue * itemTable.totalBonus[stat]
                 else
                     -- part of hard cap, score calculated extra
@@ -297,7 +297,7 @@ function TopFit:CalculateItemScore(itemLink)
         for stat, statValue in pairs(set) do
             if itemTable.itemBonus[stat] then
                 -- check for hard cap on this stat
-                if ((not caps) or (not caps[stat]) or (not caps[stat]["active"]) or (caps[stat]["soft"])) then
+                if ((not caps) or (not caps[stat]) or (not TopFit:HasActiveHardCap(caps[stat]))) then
                     rawScore = rawScore + statValue * itemTable.itemBonus[stat]
                 else
                     -- part of hard cap, score calculated extra

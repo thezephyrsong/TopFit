@@ -1,3 +1,16 @@
+-- caps[stat] is now a list of independent cap entries (see calculation.lua/core.lua) so a stat can
+-- carry several thresholds at once. The point-and-click editor below only surfaces the first entry
+-- ("slot 1" -- the primary cap for that stat); additional entries, like a preset's secondary Dual
+-- Wield Hit cap alongside its primary Spell Hit cap, can be viewed/edited with /topfit caps. This
+-- keeps the existing row layout untouched rather than risking new overlapping widgets for a
+-- multi-slot editor that can't be visually verified here.
+local function GetOrCreatePrimaryCap(stat)
+    local caps = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps
+    caps[stat] = caps[stat] or {}
+    caps[stat][1] = caps[stat][1] or { active = false, soft = false, value = 0 }
+    return caps[stat][1]
+end
+
 function TopFit:CreateStatsPlugin()
     local statsFrame, pluginId = TopFit:RegisterPlugin("Weights & Caps", "Use this tab to set weights and caps for your sets, defining their basic behavior.")
     
@@ -272,8 +285,8 @@ function TopFit:CreateStatsPlugin()
         local sortableStatWeightTable = {}
         if TopFit.ProgressFrame.selectedSet then
             -- little fix: set values for active caps to 0 if they are nil, so they are always shown
-            for stat, capTable in pairs(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps) do
-                if capTable.active and TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights[stat] == nil then
+            for stat, capList in pairs(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps) do
+                if TopFit:IsStatCapped(capList) and TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights[stat] == nil then
                     TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights[stat] = 0
                 end
             end
@@ -301,26 +314,26 @@ function TopFit:CreateStatsPlugin()
                 
             elseif order == "CapAsc" then
                 -- capped stats first, then ordered by name
-                local a_capped = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[a[1]]
-                local b_capped = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[b[1]]
-                if (a_capped and a_capped.active) and (b_capped and b_capped.active) then
+                local a_capped = TopFit:IsStatCapped(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[a[1]])
+                local b_capped = TopFit:IsStatCapped(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[b[1]])
+                if a_capped and b_capped then
                     return nameA < nameB
-                elseif a_capped and a_capped.active then
+                elseif a_capped then
                     return true
-                elseif b_capped and b_capped.active then
+                elseif b_capped then
                     return false
                 else
                     return nameA < nameB
                 end
             elseif order == "CapDesc" then
                 -- capped stats last, then ordered by name
-                local a_capped = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[a[1]]
-                local b_capped = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[b[1]]
-                if (a_capped and a_capped.active) and (b_capped and b_capped.active) then
+                local a_capped = TopFit:IsStatCapped(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[a[1]])
+                local b_capped = TopFit:IsStatCapped(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[b[1]])
+                if a_capped and b_capped then
                     return nameA < nameB
-                elseif a_capped and a_capped.active then
+                elseif a_capped then
                     return false
-                elseif b_capped and b_capped.active then
+                elseif b_capped then
                     return true
                 else
                     return nameA < nameB
@@ -419,11 +432,8 @@ function TopFit:CreateStatsPlugin()
                 capTypeButtons[i]:SetAlpha(0.5)
                 capTypeButtons[i]:SetScript("OnClick", function(self)
                     local stat = statsFrame.editStatButtons[self.i].myStat
-                    if TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat].soft then
-                        TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat].soft = false
-                    else
-                        TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat].soft = true
-                    end
+                    local primaryCap = GetOrCreatePrimaryCap(stat)
+                    primaryCap.soft = not primaryCap.soft
                     statsFrame:UpdateSetStats()
                 end)
                 
@@ -432,20 +442,8 @@ function TopFit:CreateStatsPlugin()
                 capBoxes[i]:SetPoint("LEFT", valueTexts[i], "RIGHT")
                 capBoxes[i]:SetScript("OnClick", function(self)
                     local stat = statsFrame.editStatButtons[self.i].myStat
-                    if not TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat] then
-                        -- create new cap
-                        TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat] = {
-                            active = true,
-                            soft = false,
-                            value = 0,
-                        }
-                    else
-                        if TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat].active then
-                            TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat].active = false
-                        else
-                            TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat].active = true
-                        end
-                    end
+                    local primaryCap = GetOrCreatePrimaryCap(stat)
+                    primaryCap.active = not primaryCap.active
                     
                     statsFrame:UpdateSetStats()
                     TopFit:CalculateScores()
@@ -456,11 +454,24 @@ function TopFit:CreateStatsPlugin()
             valueTexts[i]:Show()
             statTexts[i]:SetText(_G[stat] or string.gsub(stat, "SET: ", "Set: "))
             valueTexts[i]:SetText(value)
-            if TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat] and TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat].active then
+            local capList = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat]
+            local primaryCap = capList and capList[1]
+            if primaryCap and primaryCap.active then
                 capBoxes[i]:SetChecked(true)
-                capTexts[i]:SetText("   Cap")
-                capValueTexts[i]:SetText(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat].value)
-                capTypeTexts[i]:SetText(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat].soft and "Soft" or "Hard")
+                -- if this stat has additional active cap entries beyond the primary one (e.g. a
+                -- secondary Dual Wield Hit cap alongside a primary Spell Hit cap), show a count --
+                -- edit them with /topfit caps, since this row only edits the primary entry
+                local extraActive = 0
+                if capList then
+                    for idx = 2, #capList do
+                        if capList[idx].active then
+                            extraActive = extraActive + 1
+                        end
+                    end
+                end
+                capTexts[i]:SetText(extraActive > 0 and ("   Cap (+" .. extraActive .. ")") or "   Cap")
+                capValueTexts[i]:SetText(primaryCap.value)
+                capTypeTexts[i]:SetText(primaryCap.soft and "Soft" or "Hard")
                 capValueTexts[i]:Show()
                 capTypeTexts[i]:Show()
                 capButtons[i]:Show()
@@ -536,7 +547,7 @@ function TopFit:CreateStatsPlugin()
                         if value == 0 then value = nil end
                         TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights[stat] = value
                     else
-                        TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat].value = value
+                        GetOrCreatePrimaryCap(stat).value = value
                     end
                 else
                     TopFit:Debug("invalid input")
@@ -552,7 +563,7 @@ function TopFit:CreateStatsPlugin()
             statsFrame.editStatValueTexts[statID]:Hide()
         else
             statsFrame.statEditTextBox:SetPoint("RIGHT", statsFrame.statCapValueTexts[statID], "RIGHT")
-            statsFrame.statEditTextBox:SetText(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[statsFrame.editStatButtons[statID].myStat].value)
+            statsFrame.statEditTextBox:SetText(GetOrCreatePrimaryCap(statsFrame.editStatButtons[statID].myStat).value)
             statsFrame.statCapValueTexts[statID]:Hide()
         end
         statsFrame.statEditTextBox:Show()

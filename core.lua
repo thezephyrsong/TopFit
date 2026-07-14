@@ -244,10 +244,127 @@ function TopFit:ChatCommand(input)
             TopFit:DebugTalentCounts()
         elseif command == "weapondebug" then
             TopFit:DebugWeaponSlots()
+        elseif command == "caps" then
+            TopFit:CapsCommand(rest)
         else
-            TopFit:Print("Available Options:\n  show - shows the calculations frame\n  options - shows TopFit's options\n  import - import a Pawn/AskMrRobot/TopFit weight string as a new set\n  export [pawn] - export the selected set as a string (add 'pawn' for Pawn format)\n  simc - export your currently equipped gear as a .simc profile\n  talentdebug - print raw talent tab/count info for debugging\n  weapondebug - print weapon slot subType/speed/damage scan results for debugging")
+            TopFit:Print("Available Options:\n  show - shows the calculations frame\n  options - shows TopFit's options\n  import - import a Pawn/AskMrRobot/TopFit weight string as a new set\n  export [pawn] - export the selected set as a string (add 'pawn' for Pawn format)\n  simc - export your currently equipped gear as a .simc profile\n  talentdebug - print raw talent tab/count info for debugging\n  weapondebug - print weapon slot subType/speed/damage scan results for debugging\n  caps - list/add/remove/toggle cap entries for the selected set (type 'caps' alone for help)")
         end
     end
+end
+
+-- Finds the ITEM_MOD_* (or other) stat token matching a human-typed name, e.g. "Hit Rating" or
+-- the raw token itself. Used by the /topfit caps command, since caps[stat] is keyed by the raw
+-- Blizzard constant name, which nobody wants to type out by hand in chat.
+function TopFit:ResolveStatToken(input)
+    if not input or input == "" then
+        return nil
+    end
+    -- exact token match first (e.g. "ITEM_MOD_HIT_RATING_SHORT")
+    if _G[input] and TopFit.statList then
+        for _, tokens in pairs(TopFit.statList) do
+            for _, token in ipairs(tokens) do
+                if token == input then
+                    return token
+                end
+            end
+        end
+    end
+    -- otherwise match against the human-readable display name, case-insensitively
+    local lowerInput = input:lower()
+    if TopFit.statList then
+        for _, tokens in pairs(TopFit.statList) do
+            for _, token in ipairs(tokens) do
+                local displayName = _G[token]
+                if displayName and displayName:lower() == lowerInput then
+                    return token
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- /topfit caps                                          -- list every cap entry for the selected set
+-- /topfit caps add <stat> <value> <soft|hard> [label]    -- add a new cap entry for a stat
+-- /topfit caps remove <stat> <slot#>                     -- delete a specific entry
+-- /topfit caps toggle <stat> <slot#>                     -- flip a specific entry's active state
+--
+-- Text-based on purpose: caps[stat] can now hold several independent entries (e.g. Hit Rating
+-- carrying both a Spell Hit cap and a Dual Wield Hit cap), and building a second point-and-click
+-- editor for that inside the existing cramped stat row risks the same kind of overlapping-widget
+-- bugs the checkbox layout already had -- this covers the same ground without any new frames.
+function TopFit:CapsCommand(rest)
+    if not TopFit.ProgressFrame or not TopFit.ProgressFrame.selectedSet then
+        TopFit:Print("No set is currently selected.")
+        return
+    end
+    local setCode = TopFit.ProgressFrame.selectedSet
+    local caps = TopFit.db.profile.sets[setCode].caps
+    
+    local subcommand, args = rest:trim():match("^(%S*)%s*(.-)$")
+    subcommand = subcommand and subcommand:lower()
+    
+    if subcommand == "" then
+        -- list mode
+        TopFit:Print("Cap entries for \"" .. TopFit.db.profile.sets[setCode].name .. "\":")
+        local any = false
+        for stat, capList in pairs(caps) do
+            local displayName = _G[stat] or stat
+            for slot, entry in ipairs(capList) do
+                any = true
+                TopFit:Print(("  [%s] slot %d: value=%s, %s, %s%s"):format(
+                    displayName, slot, tostring(entry.value), entry.soft and "soft" or "hard",
+                    entry.active and "active" or "inactive",
+                    entry.label and (" -- " .. entry.label) or ""))
+            end
+        end
+        if not any then
+            TopFit:Print("  (none)")
+        end
+        TopFit:Print("Use '/topfit caps add <stat> <value> <soft|hard> [label]', 'remove <stat> <slot#>', or 'toggle <stat> <slot#>'.")
+        return
+    end
+    
+    if subcommand == "add" then
+        local statInput, value, capType, label = args:match("^(%S+)%s+(%S+)%s+(%S+)%s*(.-)$")
+        local statKey = statInput and TopFit:ResolveStatToken(statInput)
+        value = tonumber(value)
+        if not statKey or not value or not (capType and (capType:lower() == "soft" or capType:lower() == "hard")) then
+            TopFit:Print("Usage: /topfit caps add <stat> <value> <soft|hard> [label]")
+            return
+        end
+        caps[statKey] = caps[statKey] or {}
+        tinsert(caps[statKey], {
+            active = true,
+            soft = capType:lower() == "soft",
+            value = value,
+            label = (label ~= "" and label) or nil,
+        })
+        TopFit:Print(("Added cap slot %d for %s: %s (%s)."):format(#caps[statKey], _G[statKey] or statKey, value, capType:lower()))
+        TopFit:CalculateScores()
+        return
+    end
+    
+    if subcommand == "remove" or subcommand == "toggle" then
+        local statInput, slot = args:match("^(%S+)%s+(%d+)$")
+        local statKey = statInput and TopFit:ResolveStatToken(statInput)
+        slot = tonumber(slot)
+        if not statKey or not slot or not caps[statKey] or not caps[statKey][slot] then
+            TopFit:Print(("Usage: /topfit caps %s <stat> <slot#> -- use '/topfit caps' to see valid slots."):format(subcommand))
+            return
+        end
+        if subcommand == "remove" then
+            tremove(caps[statKey], slot)
+            TopFit:Print(("Removed slot %d for %s."):format(slot, _G[statKey] or statKey))
+        else
+            caps[statKey][slot].active = not caps[statKey][slot].active
+            TopFit:Print(("Slot %d for %s is now %s."):format(slot, _G[statKey] or statKey, caps[statKey][slot].active and "active" or "inactive"))
+        end
+        TopFit:CalculateScores()
+        return
+    end
+    
+    TopFit:Print("Usage: /topfit caps [add|remove|toggle] ...")
 end
 
 function TopFit:OnInitialize()
@@ -282,8 +399,23 @@ function TopFit:OnInitialize()
         for stat, value in pairs(table.weights) do
             table.weights[stat] = tonumber(value) or nil
         end
-        for _, capTable in pairs(table.caps) do
-            capTable.value = tonumber(capTable.value)
+        
+        -- migrate caps from the old "one cap per stat" format ({value=,soft=,active=}) to the
+        -- new "list of caps per stat" format ({{value=,soft=,active=,label=}, ...}), which allows
+        -- several independent thresholds on the same stat -- e.g. Hit Rating carrying a hard Spell
+        -- Hit cap alongside a soft Dual Wield Hit cap. Old-format entries have a "value" field
+        -- directly on them; new-format entries are themselves a list of cap tables, so a top-level
+        -- "value" field reliably tells the two apart. Safe to run every login: an already-migrated
+        -- entry has no top-level "value" field, so it's left untouched.
+        for stat, capEntry in pairs(table.caps) do
+            if capEntry.value ~= nil and capEntry[1] == nil then
+                table.caps[stat] = { capEntry }
+            end
+        end
+        for stat, capList in pairs(table.caps) do
+            for _, capTable in ipairs(capList) do
+                capTable.value = tonumber(capTable.value)
+            end
         end
     end
     

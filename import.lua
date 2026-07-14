@@ -122,11 +122,12 @@ local function ParseTopFit(importString)
 	caps:gsub('([^ =]+)=([^ ,;]+)%s*;%s*([^ ,;]+)%s*', function(stat, amount, capType)
 		local statKey = statNameToKey[stat]
 		if statKey then
-			capTable[statKey] = {
+			capTable[statKey] = capTable[statKey] or {}
+			tinsert(capTable[statKey], {
 				value  = tonumber(amount),
 				soft   = capType and capType:lower() == 'soft',
 				active = true,
-			}
+			})
 		end
 	end)
 
@@ -231,10 +232,14 @@ function TopFit:GenerateExportString(pawnFormat)
 	end
 
 	local caps
-	for stat, data in pairs(set.caps) do
+	for stat, capList in pairs(set.caps) do
 		local statName = GetInverseStat(stat)
-		if statName and data.active then
-			caps = (caps and caps .. ', ' or '') .. statName .. '=' .. data.value .. '; ' .. (data.soft and 'Soft' or 'Hard')
+		if statName then
+			for _, data in ipairs(capList) do
+				if data.active then
+					caps = (caps and caps .. ', ' or '') .. statName .. '=' .. data.value .. '; ' .. (data.soft and 'Soft' or 'Hard')
+				end
+			end
 		end
 	end
 	if caps then stats = (stats or '') .. ' : ' .. caps end

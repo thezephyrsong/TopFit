@@ -16,6 +16,13 @@ function TopFit:GetPresets()
                 local meleeCap = math.ceil(10 * ((TopFit.playerCanDualWield and 27 or 8) - (playerRace == "Draenei" and 1 or 0)))
                 local meleeCapMinus3 = math.ceil(10 * (((TopFit.playerCanDualWield and playerClass ~= "HUNTER") and 24 or 5) - (playerRace == "Draenei" and 1 or 0)))
                 local meleeCapDW = math.ceil(10 * 24)
+                -- "Uncrittable" defense cap: tanks need enough Defense Skill above their base
+                -- (level*5) to reach the fixed 5.6% reduced-crit-chance threshold against a +3-level
+                -- boss -- that 140-skill-point requirement is level-independent (a flat 0.04%-per-point
+                -- mechanic), but the rating-per-skill-point conversion scales with level. Confirmed
+                -- against Triumvirate's own DBC-derived rating table (source: "triumvirate-dbc",
+                -- level 60): DEFENSE_RATING_TO_SKILL = 1.5, i.e. 1.5 rating per skill point.
+                local defenseCap = math.ceil(140 * 1.5)
         
                 TopFit.presets = {
                         ["DEATHKNIGHT"] = {
@@ -39,14 +46,20 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
                                                 },
                                                 ["ITEM_MOD_DEFENSE_SKILL_RATING_SHORT"] = {
-                                                        ["value"] = 689,
+                                                    {
+                                                        ["value"] = defenseCap,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Defense Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -69,14 +82,20 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCapDW,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Dual Wield Hit Cap",
+                                                    },
                                                 },
                                                 ["ITEM_MOD_DEFENSE_SKILL_RATING_SHORT"] = {
-                                                        ["value"] = "689",
+                                                    {
+                                                        ["value"] = defenseCap,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Defense Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -97,9 +116,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -119,9 +141,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCapDW,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Dual Wield Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -141,9 +166,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -167,9 +195,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -190,9 +221,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -210,9 +244,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = spellCap,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Spell Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -247,9 +284,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCapMinus3,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -268,9 +308,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCapMinus3,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -290,9 +333,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCapMinus3,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -313,9 +359,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = spellCapMinus6,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Spell Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -334,9 +383,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = spellCapMinus3,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Spell Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -355,9 +407,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = spellCapMinus3,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Spell Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -392,9 +447,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -420,14 +478,20 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
                                                 },
                                                 ["ITEM_MOD_DEFENSE_SKILL_RATING_SHORT"] = {
-                                                        ["value"] = 689,
+                                                    {
+                                                        ["value"] = defenseCap,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Defense Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -447,9 +511,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = spellCapMinus3,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Spell Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -499,9 +566,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = math.ceil(22*10),
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Dual Wield Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -521,9 +591,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = math.ceil(22*10),
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Dual Wield Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -543,9 +616,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = math.ceil(22*10),
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Dual Wield Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -569,9 +645,18 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
-                                                        ["value"] = meleeCapDW,
+                                                    {
+                                                        ["value"] = spellCap,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Spell Hit Cap",
+                                                    },
+                                                    {
+                                                        ["value"] = meleeCapDW,
+                                                        ["soft"] = true,
+                                                        ["active"] = true,
+                                                        ["label"] = "Dual Wield Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -588,9 +673,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = spellCapMinus3,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Spell Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -623,9 +711,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = spellCapMinus3,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Spell Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -643,9 +734,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = spellCap,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Spell Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -663,9 +757,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = spellCap,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Spell Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -687,9 +784,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCapDW,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Dual Wield Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -715,14 +815,20 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
                                                 },
                                                 ["ITEM_MOD_DEFENSE_SKILL_RATING_SHORT"] = {
-                                                        ["value"] = "689",
+                                                    {
+                                                        ["value"] = defenseCap,
                                                         ["soft"] = true,
                                                         ["active"] = true,
+                                                        ["label"] = "Defense Cap",
+                                                    },
                                                 },
                                         },
                                 },
@@ -742,9 +848,12 @@ function TopFit:GetPresets()
                                         },
                                         caps = {
                                                 ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                    {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = false,
                                                         ["active"] = true,
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
                                                 },
                                         },
                                 },

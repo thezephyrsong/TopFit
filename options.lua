@@ -110,10 +110,13 @@ function TopFit:AddSet(preset)
         for key, value in pairs(preset.weights) do
             weights[key] = value
         end
-        for key, value in pairs(preset.caps) do
+        for key, capList in pairs(preset.caps) do
             caps[key] = {}
-            for key2, value2 in pairs(value) do
-                caps[key][key2] = value2
+            for i, capEntry in ipairs(capList) do
+                caps[key][i] = {}
+                for key2, value2 in pairs(capEntry) do
+                    caps[key][i][key2] = value2
+                end
             end
         end
     else

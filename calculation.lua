@@ -99,7 +99,82 @@ function TopFit:CalculateRecommendations()
         TopFit.playerForceTwoHanded = true
     end
     
+    -- rating granted directly by talents (see talentbonuses.lua) -- gear never needs to cover
+    -- this part of a cap, since it's already present regardless of what's equipped
+    TopFit.talentBonusStats = TopFit:GetTalentRatingBonuses()
+    
     TopFit:InitSemiRecursiveCalculations()
+end
+
+-- Sums the rating bonuses granted by talents configured in talentbonuses.lua for the player's
+-- current class and talent ranks. Returns a table of ITEM_MOD_* token -> rating amount, matching
+-- the shape of itemTable.totalBonus so it can be added alongside gear-derived stats.
+function TopFit:GetTalentRatingBonuses()
+    local bonuses = {}
+    local playerClass = select(2, UnitClass("player"))
+    local entries = TopFit.talentRatingBonuses and TopFit.talentRatingBonuses[playerClass]
+    if not entries then
+        return bonuses
+    end
+    
+    for _, entry in ipairs(entries) do
+        local rank = select(5, GetTalentInfo(entry.tab, entry.index)) or 0
+        if rank > 0 then
+            local amount = 0
+            if entry.perPoint then
+                amount = entry.perPoint * rank
+            elseif entry.percentPerPoint then
+                local ratingPerPercent = (entry.percentType == "spell") and 8 or 10
+                amount = entry.percentPerPoint * rank * ratingPerPercent
+            end
+            if amount ~= 0 then
+                bonuses[entry.stat] = (bonuses[entry.stat] or 0) + amount
+            end
+        end
+    end
+    
+    return bonuses
+end
+
+-- Used by CalculateItemScore's hard/soft scoring split: a stat is excluded from normal weighted
+-- scoring if ANY of its active caps is hard (not soft) -- e.g. Hit Rating with a hard Spell Hit cap
+-- and a soft Dual Wield Hit cap is still excluded from scoring, since the hard entry means "don't
+-- chase this stat past its threshold" regardless of the other, softer entry.
+function TopFit:HasActiveHardCap(capList)
+    if not capList then
+        return false
+    end
+    for _, capEntry in ipairs(capList) do
+        if capEntry.active and not capEntry.soft then
+            return true
+        end
+    end
+    return false
+end
+
+-- caps[stat] is a list of independent cap entries (see the migration in core.lua's OnInitialize) --
+-- a stat can have several thresholds active at once, e.g. Hit Rating carrying a hard Spell Hit cap
+-- alongside a soft Dual Wield Hit cap. This just answers "does this stat have any active cap at
+-- all", for call sites that only need that yes/no (the actual threshold values are handled
+-- separately, per-entry, in IsCapsReached/IsCapsUnreachable/SaveCurrentCombination).
+function TopFit:IsStatCapped(capList)
+    if not capList then
+        return false
+    end
+    for _, capEntry in ipairs(capList) do
+        if capEntry.active then
+            return true
+        end
+    end
+    return false
+end
+
+-- Returns how much rating gear still needs to provide for a cap, after subtracting whatever
+-- talents already grant for that stat. Every place that compares gear totals against a cap's
+-- "value" should go through this rather than reading preferences.value directly.
+function TopFit:GetEffectiveCapValue(stat, nominalValue)
+    local talentBonus = (TopFit.talentBonusStats and TopFit.talentBonusStats[stat]) or 0
+    return tonumber(nominalValue) - talentBonus
 end
 
 function TopFit:InitSemiRecursiveCalculations()
@@ -119,8 +194,8 @@ function TopFit:InitSemiRecursiveCalculations()
     TopFit.maxRestStat = {}
     TopFit.currentCapValues = {}
     -- create maximum values for each cap and item slot
-    for statCode, preferences in pairs(TopFit.Utopia) do
-        if preferences.active then
+    for statCode, capList in pairs(TopFit.Utopia) do
+        if TopFit:IsStatCapped(capList) then
             TopFit.capHeuristics[statCode] = {}
             TopFit.maxRestStat[statCode] = {}
             for _, slotID in pairs(TopFit.slots) do
@@ -217,8 +292,8 @@ function TopFit:ReduceItemList()
                     if not (self.db.profile.sets[TopFit.setCode].forced[slotID]) then
                         -- check caps
                         local hasCap = false
-                        for statCode, preferences in pairs(TopFit.Utopia) do
-                            if preferences.active then
+                        for statCode, capList in pairs(TopFit.Utopia) do
+                            if TopFit:IsStatCapped(capList) then
                                 local itemTable = TopFit:GetCachedItem(itemList[i].itemLink)
                                 if itemTable and (itemTable.totalBonus[statCode] or -1) > 0 then
                                     hasCap = true
@@ -307,8 +382,8 @@ function TopFit:ReduceItemList()
                                 
                                 -- score is greater, see if caps are also better
                                 local allStats = true
-                                for statCode, preferences in pairs(TopFit.Utopia) do
-                                    if preferences.active then
+                                for statCode, capList in pairs(TopFit.Utopia) do
+                                    if TopFit:IsStatCapped(capList) then
                                         if (itemTable.totalBonus[statCode] or 0) > (compareTable.totalBonus[statCode] or 0) then
                                             allStats = false
                                             break
@@ -468,8 +543,8 @@ function TopFit:IsCapsReached(currentSlot)
     local i
     for i = 1, currentSlot do
         if TopFit.slotCounters[i] ~= nil and TopFit.slotCounters[i] > 0 then
-            for stat, preferences in pairs(TopFit.Utopia) do
-                if preferences.active then
+            for stat, capList in pairs(TopFit.Utopia) do
+                if TopFit:IsStatCapped(capList) then
                     local itemTable = TopFit:GetCachedItem(TopFit.itemListBySlot[i][TopFit.slotCounters[i]].itemLink)
                     if itemTable then
                         currentValues[stat] = (currentValues[stat] or 0) + (itemTable.totalBonus[stat] or 0)
@@ -479,9 +554,13 @@ function TopFit:IsCapsReached(currentSlot)
         end
     end
     
-    for stat, preferences in pairs(TopFit.Utopia) do
-        if preferences.active and (currentValues[stat] or 0) < preferences.value then
-            return false
+    -- a stat can carry several independent caps (e.g. Hit Rating: Spell Hit + Dual Wield Hit) --
+    -- every active entry has to be satisfied, not just one of them
+    for stat, capList in pairs(TopFit.Utopia) do
+        for _, preferences in ipairs(capList) do
+            if preferences.active and (currentValues[stat] or 0) < TopFit:GetEffectiveCapValue(stat, preferences.value) then
+                return false
+            end
         end
     end
     return true
@@ -491,8 +570,8 @@ function TopFit:IsCapsUnreachable(currentSlot)
     local currentValues = {}
     local restValues = {}
     local i
-    for stat, preferences in pairs(TopFit.Utopia) do
-        if preferences.active then
+    for stat, capList in pairs(TopFit.Utopia) do
+        if TopFit:IsStatCapped(capList) then
             for i = 1, currentSlot do
                 if TopFit.slotCounters[i] ~= nil and TopFit.slotCounters[i] > 0 then
                     local itemTable = TopFit:GetCachedItem(TopFit.itemListBySlot[i][TopFit.slotCounters[i]].itemLink)
@@ -506,9 +585,11 @@ function TopFit:IsCapsUnreachable(currentSlot)
                 restValues[stat] = (restValues[stat] or 0) + (TopFit.capHeuristics[stat][i] or 0)
             end
             
-            if (currentValues[stat] or 0) + (restValues[stat] or 0) < preferences.value then
-                TopFit:Debug("|cffff0000Caps unreachable - "..stat.." reached "..(currentValues[stat] or 0).." + "..(restValues[stat] or 0).." / "..preferences.value)
-                return true
+            for _, preferences in ipairs(capList) do
+                if preferences.active and (currentValues[stat] or 0) + (restValues[stat] or 0) < TopFit:GetEffectiveCapValue(stat, preferences.value) then
+                    TopFit:Debug("|cffff0000Caps unreachable - "..stat.." reached "..(currentValues[stat] or 0).." + "..(restValues[stat] or 0).." / "..preferences.value)
+                    return true
+                end
             end
         end
     end
@@ -701,9 +782,11 @@ function TopFit:SaveCurrentCombination()
     
     -- check if it's better than old best
     local satisfied = true
-    for stat, preferences in pairs(TopFit.Utopia) do
-        if preferences.active and ((not cIC.totalStats[stat]) or (cIC.totalStats[stat] < tonumber(preferences["value"]))) then
-            satisfied = false
+    for stat, capList in pairs(TopFit.Utopia) do
+        for _, preferences in ipairs(capList) do
+            if preferences.active and ((cIC.totalStats[stat] or 0) < TopFit:GetEffectiveCapValue(stat, preferences["value"])) then
+                satisfied = false
+            end
         end
     end
     
