@@ -47,10 +47,14 @@ TopFit.talentRatingBonuses = TopFit.talentRatingBonuses or {}
 -- Populated from Triumvirate's own talent-calculator data (source: "triumvirate-dbc"), which lists
 -- each talent's spell ID and grid (row, column) position per tab. The (tab, index) values below were
 -- derived by numbering each tab's non-empty grid cells in row-major order (top-to-bottom,
--- left-to-right), which is how the WoW 3.3.5a client assigns GetTalentInfo() indices -- but that
--- derivation itself hasn't been checked against a live client. Verify one entry in-game (e.g.
--- /topfit talentdebug once available, or a manual GetTalentInfo(2, 19) print) before trusting this
--- for anything you're relying on.
+-- left-to-right), which is how the WoW 3.3.5a client assigns GetTalentInfo() indices.
+--
+-- Both entries below are now FIELD-VERIFIED: cross-checked against Zaenith's actual SimC export
+-- talent string (tab 2 slot 16 = Unleashed Rage rank 3, slot 19 = Dual Wield Specialization rank 3
+-- -- exactly as expected), not just derived from the calculator's grid layout. This is the only
+-- class in this file with that level of confirmation; everything else still needs the same check
+-- (via /topfit talentdebug, which now cross-references these entries directly against your live
+-- talents).
 --
 -- Shaman tab order confirmed against the existing dual-wield detection in calculation.lua
 -- (GetTalentInfo(2, 20) there): 1 = Elemental, 2 = Enhancement, 3 = Restoration.

@@ -79,6 +79,33 @@ function TopFit:DebugTalentCounts()
 		end
 	end
 	TopFit:Print("Total talent slots across all tabs = " .. total)
+	
+	-- cross-check whatever's configured in talentbonuses.lua for this class against what's
+	-- actually sitting at those (tab, index) coordinates right now -- this is what would have
+	-- caught, in one command, that Enhancement's Unleashed Rage/Dual Wield Specialization indices
+	-- were correct, instead of needing a SimC export round-trip to confirm it by hand.
+	local playerClass = select(2, UnitClass("player"))
+	local entries = TopFit.talentRatingBonuses and TopFit.talentRatingBonuses[playerClass]
+	if entries and #entries > 0 then
+		TopFit:Print("--- talentbonuses.lua entries for " .. playerClass .. " ---")
+		for _, entry in ipairs(entries) do
+			local name, _, _, _, currentRank, maxRank = GetTalentInfo(entry.tab, entry.index)
+			local amount = 0
+			if currentRank and currentRank > 0 then
+				if entry.perPoint then
+					amount = entry.perPoint * currentRank
+				elseif entry.percentPerPoint then
+					local ratingPerPercent = (entry.percentType == "spell") and 8 or 10
+					amount = entry.percentPerPoint * currentRank * ratingPerPercent
+				end
+			end
+			TopFit:Print(("  tab %d index %d -> %s (rank %d/%d) | %s: %.2f rating"):format(
+				entry.tab, entry.index, tostring(name), currentRank or 0, maxRank or 0,
+				_G[entry.stat] or entry.stat, amount))
+		end
+	else
+		TopFit:Print("(no talentbonuses.lua entries configured for " .. tostring(playerClass) .. ")")
+	end
 end
 
 local RACE_TO_SIMC = {
