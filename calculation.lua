@@ -113,7 +113,19 @@ function TopFit:GetTalentRatingBonuses()
     local bonuses = {}
     local playerClass = select(2, UnitClass("player"))
     local entries = TopFit.talentRatingBonuses and TopFit.talentRatingBonuses[playerClass]
-    if not entries then
+    if not entries or #entries == 0 then
+        return bonuses
+    end
+    
+    -- Blizzard doesn't load talent data client-side until the Talent panel has been opened at
+    -- least once this session -- GetNumTalentTabs() returns 0 until then, which would otherwise
+    -- make every talent-granted rating bonus silently compute as 0 with no indication why, right
+    -- when caps are being checked against gear. Warn once per session instead of failing silently.
+    if not GetNumTalentTabs or not GetNumTalentTabs() or GetNumTalentTabs() == 0 then
+        if not TopFit.warnedAboutMissingTalentData then
+            TopFit:Print("Talent-granted rating bonuses (Hit/Crit/Expertise/etc. from talents) can't be read yet -- open your Talent panel (default key: N) once this session so gear recommendations account for them correctly.")
+            TopFit.warnedAboutMissingTalentData = true
+        end
         return bonuses
     end
     

@@ -38,10 +38,19 @@ local CLASS_TO_WOWARMORY_CID = {
 	DRUID       = 11,
 }
 
--- builds the wowarmory-style "tal=" digit string from your CURRENT live talent allocation
+-- builds the wowarmory-style "tal=" digit string from your CURRENT live talent allocation.
+-- Blizzard doesn't load talent data client-side until the Talent panel has been opened at least
+-- once per session -- GetNumTalentTabs()/GetTalentInfo() just return 0/nil until then, which is
+-- almost certainly why "talents=" was showing up empty. Returns nil + a reason string instead of
+-- silently producing an empty string, so the caller can tell the difference between "no talent
+-- data available yet" and "character genuinely has 0 points spent".
 local function GetWowarmoryTalentString()
+	local numTabs = GetNumTalentTabs()
+	if not numTabs or numTabs == 0 then
+		return nil, "no_talent_data"
+	end
 	local digits = {}
-	for tab = 1, GetNumTalentTabs() do
+	for tab = 1, numTabs do
 		for i = 1, GetNumTalents(tab) do
 			local currentRank = select(5, GetTalentInfo(tab, i)) or 0
 			tinsert(digits, tostring(currentRank))
@@ -53,6 +62,10 @@ end
 -- diagnostic talent tracking
 function TopFit:DebugTalentCounts()
 	local numTabs = GetNumTalentTabs()
+	if not numTabs or numTabs == 0 then
+		TopFit:Print("No talent data available -- open your Talent panel (default key: N) once this session, then run this again.")
+		return
+	end
 	TopFit:Print("GetNumTalentTabs() = " .. tostring(numTabs))
 	local total = 0
 	for tab = 1, numTabs do
@@ -396,8 +409,10 @@ function TopFit:GenerateSimcExportString()
 	end
 
 	local cid = CLASS_TO_WOWARMORY_CID[classToken]
-	local talString = GetWowarmoryTalentString()
-	if cid and talString and talString ~= "" then
+	local talString, talError = GetWowarmoryTalentString()
+	if talError == "no_talent_data" then
+		TopFit:Print("Could not read talent data for the export -- open your Talent panel (default key: N) once this session, then try exporting again.")
+	elseif cid and talString and talString ~= "" then
 		tinsert(lines, "talents=http://www.wowarmory.com/talent-calc.xml?cid=" .. cid .. "&tal=" .. talString)
 	end
 
