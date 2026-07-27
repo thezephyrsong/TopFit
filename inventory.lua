@@ -198,7 +198,8 @@ function TopFit:GetItemInfoTable(item)
                 for _, sTable in pairs(TopFit.statList) do
                     for _, statCode in pairs(sTable) do
                         if (string.find(socketBonus, _G[statCode])) then
-                            local bonusValue = tonumber(string.gsub(socketBonus, _G[statCode], "")) or 0
+                            local rawValue = string.gsub(socketBonus, _G[statCode], "")
+                            local bonusValue = tonumber(rawValue) or 0
                             socketBonusInfo = { stat = statCode, value = bonusValue }
                         end
                     end
