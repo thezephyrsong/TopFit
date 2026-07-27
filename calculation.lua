@@ -164,6 +164,71 @@ function TopFit:HasActiveHardCap(capList)
     return false
 end
 
+-- Finds the highest-scoring gem (against the given weights/caps) that could be socketed into a
+-- socket accepting any of the given colors. A gem matches if ANY of its listed colors overlaps
+-- the allowed set -- this is the same rule the game itself uses for both physical fit and socket
+-- bonus matching, since hybrid gems (e.g. Orange = {RED, YELLOW}) and Prismatic gems (all three)
+-- already list every color they can satisfy in gem_ids.lua.
+function TopFit:GetBestGemScore(allowedColors, weights, caps)
+    local bestScore = 0
+    for gemID, gemData in pairs(TopFit.gemIDs) do
+        local fits = false
+        for _, gemColor in ipairs(gemData.colors) do
+            for _, allowed in ipairs(allowedColors) do
+                if gemColor == allowed then
+                    fits = true
+                    break
+                end
+            end
+            if fits then break end
+        end
+        if fits then
+            local score = 0
+            for stat, value in pairs(gemData.stats) do
+                local statValue = weights[stat]
+                if statValue and ((not caps) or (not caps[stat]) or (not TopFit:HasActiveHardCap(caps[stat]))) then
+                    score = score + statValue * value
+                end
+            end
+            if score > bestScore then
+                bestScore = score
+            end
+        end
+    end
+    return bestScore
+end
+
+-- Computes the extra score an item should get credit for based on its EMPTY sockets, since gear
+-- with unfilled sockets is otherwise scored as if those sockets contribute nothing -- even though
+-- in practice you'd gem them immediately. Sums the best available gem per empty socket, then adds
+-- the item's socket bonus on top if there is one: filling every empty socket with ANY gem that
+-- fits it automatically satisfies that socket's share of the bonus (a socket can't physically
+-- accept a non-matching gem to begin with, hybrids/prismatic included), so once every socket ends
+-- up filled the bonus is guaranteed, not just possible. socketBonusInfo is only ever populated
+-- when the item's sockets were ALL empty to begin with (see inventory.lua) -- for items with a mix
+-- of filled and empty sockets, bonus credit is skipped since an already-filled socket's required
+-- color can't be reliably read back out of the tooltip.
+function TopFit:GetPotentialGemScore(itemTable, weights, caps)
+    if not itemTable.emptySocketColors or #itemTable.emptySocketColors == 0 then
+        return 0
+    end
+    
+    local total = 0
+    for _, color in ipairs(itemTable.emptySocketColors) do
+        total = total + TopFit:GetBestGemScore({color}, weights, caps)
+    end
+    
+    if itemTable.socketBonusInfo then
+        local bonusStat = itemTable.socketBonusInfo.stat
+        local bonusValue = itemTable.socketBonusInfo.value
+        if weights[bonusStat] and ((not caps) or (not caps[bonusStat]) or (not TopFit:HasActiveHardCap(caps[bonusStat]))) then
+            total = total + weights[bonusStat] * bonusValue
+        end
+    end
+    
+    return total
+end
+
 -- caps[stat] is a list of independent cap entries (see the migration in core.lua's OnInitialize) --
 -- a stat can have several thresholds active at once, e.g. Hit Rating carrying a hard Spell Hit cap
 -- alongside a soft Dual Wield Hit cap. This just answers "does this stat have any active cap at

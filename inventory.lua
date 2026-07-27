@@ -97,6 +97,7 @@ function TopFit:GetItemInfoTable(item)
         -- gems
         local gemBonus = {}
         local gems = {}
+        local filledSocketColors = {}
         for i = 1, 3 do
             local _, gem = GetItemGem(item, i) -- name, itemlink
             if gem then
@@ -106,6 +107,7 @@ function TopFit:GetItemInfoTable(item)
                 gemID = tonumber(gemID)
                 if (TopFit.gemIDs[gemID]) then
                     -- collect stats
+                    filledSocketColors[i] = TopFit.gemIDs[gemID].colors
                     
                     for stat, value in pairs(TopFit.gemIDs[gemID].stats) do
                         if (gemBonus[stat]) then
@@ -120,10 +122,23 @@ function TopFit:GetItemInfoTable(item)
                 end
             end
         end
-            
-        if #gems > 0 then       
-            -- try to find socket bonus by scanning item tooltip (though I hoped to avoid that entirely)
-            --TODO: this will have to be rewritten to be calculated on the fly at some point. meta gem requirements will not always work this way
+        
+        -- Empty sockets and the socket bonus text/value. Scanned unconditionally now (previously
+        -- gated behind "at least one gem already socketed", which meant a completely ungemmed item
+        -- never got its socket bonus parsed at all). Empty socket colors are read via Blizzard's
+        -- own EMPTY_SOCKET_* global strings, the same style of locale-safe matching already used
+        -- for ITEM_SOCKET_BONUS just below -- this hasn't been checked against a live client, so
+        -- treat it as the standard approach rather than a confirmed one.
+        --
+        -- Socket-bonus-aware gem valuation (see GetPotentialGemScore in calculation.lua) only
+        -- applies when EVERY socket on the item is empty. For items with a mix of filled/empty
+        -- sockets, an already-filled socket's REQUIRED color can't be reliably read back out of
+        -- the tooltip the same way (it shows the gem's name instead of a bare color label once
+        -- filled), so those items fall back to independent best-gem-per-empty-socket with no
+        -- bonus consideration -- a known, deliberate scope limit, not an oversight.
+        local emptySocketColors = {}
+        local socketBonusInfo = nil
+        do
             TopFit.scanTooltip:SetOwner(UIParent, 'ANCHOR_NONE')
             TopFit.scanTooltip:SetHyperlink(itemLink)
             local numLines = TopFit.scanTooltip:NumLines()
@@ -131,34 +146,43 @@ function TopFit:GetItemInfoTable(item)
             local socketBonusString = _G["ITEM_SOCKET_BONUS"] -- "Socket Bonus: %s" in enUS client, for example
             socketBonusString = string.gsub(socketBonusString, "%%s", "(.*)")
             
-            local socketBonusIsActive = false
+            local socketColorPatterns = {
+                RED = _G["EMPTY_SOCKET_RED"],
+                YELLOW = _G["EMPTY_SOCKET_YELLOW"],
+                BLUE = _G["EMPTY_SOCKET_BLUE"],
+                META = _G["EMPTY_SOCKET_META"],
+                PRISMATIC = _G["EMPTY_SOCKET_PRISMATIC"],
+            }
+            
             local socketBonus = nil
+            local socketBonusIsActive = false
             for i = 1, numLines do
                 local leftLine = getglobal("TFScanTooltip".."TextLeft"..i)
                 local leftLineText = leftLine:GetText()
                 
-                if string.find(leftLineText, socketBonusString) then
-                    -- This line is the socket bonus.
+                if leftLineText and string.find(leftLineText, socketBonusString) then
                     if leftLine.GetTextColor then
-                        socketBonusIsActive = (leftLine:GetTextColor() == 0) -- green's red component is 0, but grey's red component is .5      
+                        socketBonusIsActive = (leftLine:GetTextColor() == 0) -- green's red component is 0, but grey's red component is .5
                     else
-                        socketBonusIsActive = true -- we can't get the text color, so we assume the bonus is active
+                        socketBonusIsActive = true
                     end
-                    
                     socketBonus = string.gsub(leftLineText, "^"..socketBonusString.."$", "%1")
-                    break
+                elseif leftLineText then
+                    for color, pattern in pairs(socketColorPatterns) do
+                        if pattern and leftLineText == pattern then
+                            tinsert(emptySocketColors, color)
+                        end
+                    end
                 end
             end
             
             if (socketBonusIsActive) then
-                -- go through our stats to find the bonus
+                -- currently-active bonus: add its stats directly to gemBonus, same as before
                 for _, sTable in pairs(TopFit.statList) do
                     for _, statCode in pairs(sTable) do
-                        if (string.find(socketBonus, _G[statCode])) then -- simple short stat codes like "Intellect", "Hit Rating"
+                        if (string.find(socketBonus, _G[statCode])) then
                             local bonusValue = string.gsub(socketBonus, _G[statCode], "")
-                            
                             bonusValue = (tonumber(bonusValue) or 0)
-                            
                             if (gemBonus[statCode]) then
                                 gemBonus[statCode] = gemBonus[statCode] + bonusValue
                             else
@@ -167,9 +191,28 @@ function TopFit:GetItemInfoTable(item)
                         end
                     end
                 end
+            elseif socketBonus and #emptySocketColors > 0 then
+                -- bonus exists but isn't active yet (sockets not all filled/matched) -- record its
+                -- stat/value so GetPotentialGemScore can credit it IF the empty sockets end up
+                -- filled with matching gems
+                for _, sTable in pairs(TopFit.statList) do
+                    for _, statCode in pairs(sTable) do
+                        if (string.find(socketBonus, _G[statCode])) then
+                            local bonusValue = tonumber(string.gsub(socketBonus, _G[statCode], "")) or 0
+                            socketBonusInfo = { stat = statCode, value = bonusValue }
+                        end
+                    end
+                end
             end
             
             TopFit.scanTooltip:Hide()
+        end
+        
+        -- only attempt bonus-aware valuation when every socket is empty (see comment above) --
+        -- otherwise still record the empty socket colors for independent best-gem valuation, but
+        -- drop the bonus info since we can't confirm the filled sockets don't already break it
+        if #filledSocketColors > 0 then
+            socketBonusInfo = nil
         end
         
         -- enchantment
@@ -253,6 +296,8 @@ function TopFit:GetItemInfoTable(item)
             ["gems"] = gems,
             ["enchantBonus"] = enchantBonus,
             ["gemBonus"] = gemBonus,
+            ["emptySocketColors"] = emptySocketColors,
+            ["socketBonusInfo"] = socketBonusInfo,
             ["equipLocationsByType"] = TopFit:GetEquipLocationsByInvType(itemEquipLoc),
             ["totalBonus"] = totalBonus,
             ["procInfo"] = procInfo,
@@ -305,6 +350,12 @@ function TopFit:CalculateItemScore(itemLink)
                 end
             end
         end
+        
+        -- credit empty sockets with the value of the best gem that could go in them (plus the
+        -- item's socket bonus, if filling them would unlock it) -- otherwise an ungemmed item
+        -- scores as if its sockets are worthless, when in practice they'd be filled immediately
+        local potentialGemScore = TopFit:GetPotentialGemScore(itemTable, set, caps)
+        itemScore = itemScore + potentialGemScore
         
         if not TopFit.scoresCache[itemLink] then
             TopFit.scoresCache[itemLink] = {}
