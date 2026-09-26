@@ -1,15 +1,23 @@
-
-local function tinsertonce(table, data)
+local function tinsertonce(tbl, data)
     local found = false
-    for _, v in pairs(table) do
+    for _, v in pairs(tbl) do
         if v == data then
             found = true
             break
         end
     end
     if not found then
-        tinsert(table, data)
+        tinsert(tbl, data)
     end
+end
+
+local function GetItemInfoSafe(item)
+    if not item then return nil end
+    local GetInfo = C_Item.GetItemInfo or GetItemInfo
+    if GetInfo then
+        return GetInfo(item)
+    end
+    return nil
 end
 
 -- tooltip functions for equipment buttons
@@ -44,8 +52,8 @@ function TopFit:CreateVirtualItemsPlugin()
                 end
                 local checksound = frame.includeVirtualItemsCheckButton:GetScript("OnClick")
                 frame.includeVirtualItemsCheckButton:SetScript("OnClick", function(self)
-                    checksound(self)
-                    if (TopFit.ProgressFrame.selectedSet) then
+                    if checksound then checksound(self) end
+                    if (TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet) then
                         TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].skipVirtualItems = not TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].skipVirtualItems
                     end
                 end)
@@ -96,8 +104,8 @@ function TopFit:CreateVirtualItemsPlugin()
                 end)
                 
                 frame.addItemTextBox:SetScript("OnEnterPressed", function (self)
-                    -- check if input is itemLink or itemID
-                    name, link = GetItemInfo(self:GetText())
+                    local text = self:GetText()
+                    local name, link = GetItemInfoSafe(text)
                     frame.addItemTextBox:SetText("")
                     
                     if not link then
@@ -110,18 +118,21 @@ function TopFit:CreateVirtualItemsPlugin()
                 
                 -- hook shift-clicks on items
                 hooksecurefunc("ChatEdit_InsertLink", function(text)
-                    if --[[IsShiftKeyDown() and]] frame.addItemTextBox:HasFocus() then
+                    if frame.addItemTextBox:HasFocus() then
                         frame.addItemTextBox:Insert(text)
                     end
                 end)
                 
                 -- item list
-                local backdrop = {bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+                local backdrop = {
+                    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
                     tile = true,
                     tileSize = 32,
-                    insets = { left = 0, right = -22, top = 0, bottom = 0 }}
+                    insets = { left = 0, right = -22, top = 0, bottom = 0 }
+                }
                 
-                frame.itemsFrame = CreateFrame("ScrollFrame", "$parent_ItemsFrame", frame, "UIPanelScrollFrameTemplate")
+                -- FIX: Inherit BackdropTemplate for Retail API compatibility
+                frame.itemsFrame = CreateFrame("ScrollFrame", "$parent_ItemsFrame", frame, "UIPanelScrollFrameTemplate, BackdropTemplate")
                 frame.itemsFrame:SetPoint("TOPLEFT", frame.addItemTextBox, "BOTTOMLEFT", 0, -25)
                 frame.itemsFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -25, 0)
                 frame.itemsFrame.content = CreateFrame("Frame", nil, frame.itemsFrame)
@@ -138,8 +149,10 @@ function TopFit:CreateVirtualItemsPlugin()
                 frame.itemsFrame.buttons = itemButtons
                 
                 function frame.itemsFrame:AddItem(link)
-                    if (TopFit.ProgressFrame.selectedSet) then
-                        if not TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems then TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems = {} end
+                    if (TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet) then
+                        if not TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems then
+                            TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems = {}
+                        end
                         tinsertonce(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems, link)
                     end
                     frame.itemsFrame:RefreshItems()
@@ -149,8 +162,8 @@ function TopFit:CreateVirtualItemsPlugin()
                     local i
                     local lastLine, totalWidth = 1, 0
                     local j = 1
-                    if (TopFit.ProgressFrame.selectedSet) then
-                        if (TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems) then
+                    if (TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet) then
+                        if (TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet] and TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems) then
                             for i = 1, #(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems) do
                                 j = i + 1
                                 if not frame.itemsFrame.buttons[i] then
@@ -166,11 +179,10 @@ function TopFit:CreateVirtualItemsPlugin()
                                     frame.itemsFrame.buttons[i]:SetScript("OnClick", function(self)
                                         -- remove item from list
                                         if (TopFit.ProgressFrame.selectedSet and TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems) then
-                                            -- find item and remove it
-                                            local i
-                                            for i = 1, #(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems) do
-                                                if (self.itemLink == TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems[i]) then
-                                                    tremove(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems, i)
+                                            local idx
+                                            for idx = 1, #(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems) do
+                                                if (self.itemLink == TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems[idx]) then
+                                                    tremove(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems, idx)
                                                 end
                                             end
                                             
@@ -179,7 +191,7 @@ function TopFit:CreateVirtualItemsPlugin()
                                     end)
                                 end
                                 frame.itemsFrame.buttons[i].itemLink = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems[i]
-                                local texture = select(10, GetItemInfo(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems[i]))
+                                local texture = select(10, GetItemInfoSafe(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].virtualItems[i]))
                                 if texture then
                                     frame.itemsFrame.buttons[i]:SetNormalTexture(texture)
                                 else
@@ -188,11 +200,9 @@ function TopFit:CreateVirtualItemsPlugin()
                                 frame.itemsFrame.buttons[i]:Show()
                                 
                                 if i == 1 then
-                                    -- anchor to top left of frame
                                     frame.itemsFrame.buttons[i]:SetPoint("TOPLEFT", frame.itemsFrame.content, "TOPLEFT")
                                     totalWidth = totalWidth + 32
                                 else
-                                    -- anchor to previous item, or beginning of next line
                                     if (totalWidth + 32) < frame.itemsFrame:GetWidth() then
                                         frame.itemsFrame.buttons[i]:SetPoint("TOPLEFT", frame.itemsFrame.buttons[i - 1], "TOPRIGHT")
                                         totalWidth = totalWidth + 32
@@ -214,17 +224,11 @@ function TopFit:CreateVirtualItemsPlugin()
                 frame.initialized = true
             end
             
-            
             frame.itemsFrame:RefreshItems()
         end
     end)
     
     TopFit.RegisterCallback("TopFit_vitualItems", "OnSetChanged", function(event, setId)
-        if (setId) then
-            -- enable inputs
-        else
-            -- no set selected, disable inputs
-        end
         if (frame.initialized) then
             frame.itemsFrame:RefreshItems()
         end

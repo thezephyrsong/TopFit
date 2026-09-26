@@ -1,985 +1,870 @@
-
 -- maps a class's English (non-localized) token to the armor material it's meant to wear.
 -- used by the "Force Armor Type" per-set option to keep e.g. a Paladin from being recommended
 -- a leather/cloth piece purely because it scores higher on raw weights than the available plate.
 local CLASS_ARMOR_TYPE = {
-    WARRIOR     = "Plate",
-    PALADIN     = "Plate",
-    DEATHKNIGHT = "Plate",
-    HUNTER      = "Mail",
-    SHAMAN      = "Mail",
-    ROGUE       = "Leather",
-    DRUID       = "Leather",
-    PRIEST      = "Cloth",
-    MAGE        = "Cloth",
-    WARLOCK     = "Cloth",
+	WARRIOR     = "Plate",
+	PALADIN     = "Plate",
+	DEATHKNIGHT = "Plate",
+	HUNTER      = "Mail",
+	SHAMAN      = "Mail",
+	EVOKER      = "Mail",
+	ROGUE       = "Leather",
+	DRUID       = "Leather",
+	DEMONHUNTER = "Leather",
+	MONK        = "Leather",
+	PRIEST      = "Cloth",
+	MAGE        = "Cloth",
+	WARLOCK     = "Cloth",
 }
 
 -- returns "Cloth"/"Leather"/"Mail"/"Plate" for the player's class, or nil if unknown
 function TopFit:GetClassArmorType()
-    local _, classToken = UnitClass("player")
-    return CLASS_ARMOR_TYPE[classToken]
+	local _, classToken = UnitClass("player")
+	return CLASS_ARMOR_TYPE[classToken]
 end
 
 function TopFit:StartCalculations()
-    -- generate table of set codes
-    TopFit.workSetList = {}
-    for setCode, _ in pairs(self.db.profile.sets) do
-        tinsert(TopFit.workSetList, setCode)
-    end
-    
-    TopFit:CalculateSets()
+	-- generate table of set codes
+	TopFit.workSetList = {}
+	for setCode, _ in pairs(self.db.profile.sets) do
+		tinsert(TopFit.workSetList, setCode)
+	end
+	
+	TopFit:CalculateSets()
 end
 
 function TopFit:AbortCalculations()
-    if TopFit.isBlocked then
-        TopFit.abortCalculation = true
-    end
+	if TopFit.isBlocked then
+		TopFit.abortCalculation = true
+	end
 end
 
 function TopFit:CalculateSets(silent)
-    if (not TopFit.isBlocked) then
-        if not silent then
-            HideUIPanel(InterfaceOptionsFrame)
-        end
-        TopFit.silentCalculation = silent
-        local setCode = tremove(TopFit.workSetList)
-        while not self.db.profile.sets[setCode] and #(TopFit.workSetList) > 0 do
-            setCode = tremove(TopFit.workSetList)
-        end
-        
-        if self.db.profile.sets[setCode] then
-            TopFit.setCode = setCode -- globally save the current set that is being calculated
-            
-            TopFit:Debug("Calculating items for "..setCode)
-            
-            -- set as working to prevent any further calls from "interfering"
-            TopFit.isBlocked = true
-            
-            TopFit.Utopia = TopFit.db.profile.sets[setCode].caps
-            TopFit.ignoreCapsForCalculation = false
-            
-            -- do the actual work
-            TopFit:collectItems()
-            TopFit:CalculateRecommendations()
-        end
-    end
+	if (not TopFit.isBlocked) then
+		if not silent and InterfaceOptionsFrame then
+			HideUIPanel(InterfaceOptionsFrame)
+		end
+		TopFit.silentCalculation = silent
+		local setCode = tremove(TopFit.workSetList)
+		while setCode and not self.db.profile.sets[setCode] and #(TopFit.workSetList) > 0 do
+			setCode = tremove(TopFit.workSetList)
+		end
+		
+		if setCode and self.db.profile.sets[setCode] then
+			TopFit.setCode = setCode -- globally save the current set that is being calculated
+			
+			TopFit:Debug("Calculating items for "..setCode)
+			
+			-- set as working to prevent any further calls from "interfering"
+			TopFit.isBlocked = true
+			
+			TopFit.Utopia = TopFit.db.profile.sets[setCode].caps or {}
+			TopFit.ignoreCapsForCalculation = false
+			
+			-- do the actual work
+			TopFit:collectItems()
+			TopFit:CalculateRecommendations()
+		end
+	end
 end
 
 --start calculation for setName
 function TopFit:CalculateRecommendations()
-    local setName = self.db.profile.sets[TopFit.setCode].name
-    TopFit.itemRecommendations = {}
-    TopFit.currentItemCombination = {}
-    TopFit.itemCombinations = {}
-    TopFit.currentSetName = setName
-    
-    -- determine if the player can dualwield
-    TopFit.playerCanDualWield = false
-    TopFit.playerCanTitansGrip = false
-    -- CONFIRMED 2026-09-17 (Dan): Enhancement Shaman has no dual-wield at all in Forever --
-    -- not baseline, not talent-gated, just absent (matches Forever's overall Vanilla-baseline
-    -- design: Shaman dual-wield was a TBC-era talent addition to begin with, so a Vanilla-
-    -- rooted baseline never having it is consistent, not a removal). Warriors get ordinary
-    -- 1H dual-wield same as Rogue/DK/Hunter, no talent needed -- just the baseline level-20
-    -- unlock below. Titan's Grip (2H dual-wield) does not exist as a mechanic at all, for any
-    -- class -- not class-gated, genuinely absent from the game, so it's left permanently
-    -- false with no path to true (see the simulateTitansGrip note below).
-    if (select(2, UnitClass("player")) == "ROGUE") or (select(2, UnitClass("player")) == "DEATHKNIGHT") or (((select(2, UnitClass("player")) == "WARRIOR") or (select(2, UnitClass("player")) == "HUNTER")) and (UnitLevel("player") > 20)) then
-        TopFit.playerCanDualWield = true
-    end
-    
-    if (TopFit.db.profile.sets[TopFit.setCode].simulateDualWield) then
-        TopFit.playerCanDualWield = true
-    end
-    -- Titan's Grip override intentionally NOT honored anymore -- the mechanic doesn't exist
-    -- in Forever at all, so forcing it on would make TopFit recommend gear setups that are
-    -- physically impossible to use in-game. The "Force Titan's Grip" checkbox itself is
-    -- hidden in plugins/stats.lua for the same reason; this is the belt-and-suspenders half.
-    -- if (TopFit.db.profile.sets[TopFit.setCode].simulateTitansGrip) then
-    --     TopFit.playerCanTitansGrip = true
-    -- end
-    
-    -- "Force Two-Handed": always recommend a 2H mainhand and leave the offhand empty,
-    -- overriding whatever the class/spec would otherwise allow (dual-wield, Titan's Grip, etc.)
-    TopFit.playerForceTwoHanded = false
-    if (TopFit.db.profile.sets[TopFit.setCode].forceTwoHanded) then
-        TopFit.playerForceTwoHanded = true
-    end
-    
-    -- rating granted directly by talents (see talentbonuses.lua) -- gear never needs to cover
-    -- this part of a cap, since it's already present regardless of what's equipped
-    TopFit.talentBonusStats = TopFit:GetTalentRatingBonuses()
-    
-    TopFit:InitSemiRecursiveCalculations()
+	local setName = self.db.profile.sets[TopFit.setCode].name
+	TopFit.itemRecommendations = {}
+	TopFit.currentItemCombination = {}
+	TopFit.itemCombinations = {}
+	TopFit.currentSetName = setName
+	
+	-- determine if the player can dualwield
+	TopFit.playerCanDualWield = false
+	TopFit.playerCanTitansGrip = false
+	
+	local playerClass = select(2, UnitClass("player"))
+	if playerClass == "ROGUE" or playerClass == "DEATHKNIGHT" or playerClass == "DEMONHUNTER" or playerClass == "MONK"
+		or ((playerClass == "WARRIOR" or playerClass == "HUNTER") and UnitLevel("player") > 20) then
+		TopFit.playerCanDualWield = true
+	end
+	
+	if (TopFit.db.profile.sets[TopFit.setCode].simulateDualWield) then
+		TopFit.playerCanDualWield = true
+	end
+	
+	-- "Force Two-Handed": always recommend a 2H mainhand and leave the offhand empty,
+	-- overriding whatever the class/spec would otherwise allow
+	TopFit.playerForceTwoHanded = false
+	if (TopFit.db.profile.sets[TopFit.setCode].forceTwoHanded) then
+		TopFit.playerForceTwoHanded = true
+	end
+	
+	-- rating granted directly by talents
+	TopFit.talentBonusStats = TopFit:GetTalentRatingBonuses()
+	
+	TopFit:InitSemiRecursiveCalculations()
 end
 
--- Sums the rating bonuses granted by talents configured in talentbonuses.lua for the player's
--- current class and talent ranks. Returns a table of ITEM_MOD_* token -> rating amount, matching
--- the shape of itemTable.totalBonus so it can be added alongside gear-derived stats.
+-- Sums the rating bonuses granted by talents configured in talentbonuses.lua
 function TopFit:GetTalentRatingBonuses()
-    local bonuses = {}
-    local playerClass = select(2, UnitClass("player"))
-    local entries = TopFit.talentRatingBonuses and TopFit.talentRatingBonuses[playerClass]
-    if not entries or #entries == 0 then
-        return bonuses
-    end
-    
-    -- Blizzard doesn't load talent data client-side until the Talent panel has been opened at
-    -- least once this session -- GetNumTalentTabs() returns 0 until then, which would otherwise
-    -- make every talent-granted rating bonus silently compute as 0 with no indication why, right
-    -- when caps are being checked against gear. Warn once per session instead of failing silently.
-    -- Also covers the case where the classic talent-tab API doesn't exist on this client at all
-    -- (see TopFit.hasClassicTalentAPI in core.lua) -- same safe "no data" outcome either way.
-    if TopFit:GetNumTalentTabsSafe() == 0 then
-        if not TopFit.warnedAboutMissingTalentData then
-            if TopFit.hasClassicTalentAPI then
-                TopFit:Print("Talent-granted rating bonuses (Hit/Crit/Expertise/etc. from talents) can't be read yet -- open your Talent panel (default key: N) once this session so gear recommendations account for them correctly.")
-            else
-                TopFit:Debug("Talent-granted rating bonuses skipped -- this client doesn't expose GetNumTalentTabs/GetTalentInfo (see REWRITE_PLAN_12_1_5.md section 6).")
-            end
-            TopFit.warnedAboutMissingTalentData = true
-        end
-        return bonuses
-    end
-    
-    for _, entry in ipairs(entries) do
-        local rank = TopFit:GetTalentRankSafe(entry.tab, entry.index)
-        if rank > 0 then
-            local amount = 0
-            if entry.perPoint then
-                amount = entry.perPoint * rank
-            elseif entry.percentPerPoint then
-                local ratingPerPercent = (entry.percentType == "spell") and 8 or 10
-                amount = entry.percentPerPoint * rank * ratingPerPercent
-            end
-            if amount ~= 0 then
-                bonuses[entry.stat] = (bonuses[entry.stat] or 0) + amount
-            end
-        end
-    end
-    
-    return bonuses
+	local bonuses = {}
+	local playerClass = select(2, UnitClass("player"))
+	local entries = TopFit.talentRatingBonuses and TopFit.talentRatingBonuses[playerClass]
+	if not entries or #entries == 0 then
+		return bonuses
+	end
+	
+	if TopFit:GetNumTalentTabsSafe() == 0 then
+		if not TopFit.warnedAboutMissingTalentData then
+			if TopFit.hasClassicTalentAPI then
+				TopFit:Print("Talent-granted rating bonuses can't be read yet -- open your Talent panel (default key: N) once this session so gear recommendations account for them correctly.")
+			else
+				TopFit:Debug("Talent-granted rating bonuses skipped -- this client doesn't expose GetNumTalentTabs/GetTalentInfo.")
+			end
+			TopFit.warnedAboutMissingTalentData = true
+		end
+		return bonuses
+	end
+	
+	for _, entry in ipairs(entries) do
+		local rank = TopFit:GetTalentRankSafe(entry.tab, entry.index)
+		if rank and rank > 0 then
+			local amount = 0
+			if entry.perPoint then
+				amount = entry.perPoint * rank
+			elseif entry.percentPerPoint then
+				local ratingPerPercent = (entry.percentType == "spell") and 8 or 10
+				amount = entry.percentPerPoint * rank * ratingPerPercent
+			end
+			if amount ~= 0 then
+				bonuses[entry.stat] = (bonuses[entry.stat] or 0) + amount
+			end
+		end
+	end
+	
+	return bonuses
 end
 
--- Used by CalculateItemScore's hard/soft scoring split: a stat is excluded from normal weighted
--- scoring if ANY of its active caps is hard (not soft) -- e.g. Hit Rating with a hard Spell Hit cap
--- and a soft Dual Wield Hit cap is still excluded from scoring, since the hard entry means "don't
--- chase this stat past its threshold" regardless of the other, softer entry.
 function TopFit:HasActiveHardCap(capList)
-    if not capList then
-        return false
-    end
-    for _, capEntry in ipairs(capList) do
-        if capEntry.active and not capEntry.soft then
-            return true
-        end
-    end
-    return false
+	if not capList then return false end
+	for _, capEntry in ipairs(capList) do
+		if capEntry.active and not capEntry.soft then
+			return true
+		end
+	end
+	return false
 end
 
--- Finds the highest-scoring gem (against the given weights/caps) that could be socketed into a
--- socket accepting any of the given colors. A gem matches if ANY of its listed colors overlaps
--- the allowed set -- this is the same rule the game itself uses for both physical fit and socket
--- bonus matching, since hybrid gems (e.g. Orange = {RED, YELLOW}) and Prismatic gems (all three)
--- already list every color they can satisfy in gem_ids.lua.
 function TopFit:GetBestGemScore(allowedColors, weights, caps)
-    local bestScore = 0
-    for gemID, gemData in pairs(TopFit.gemIDs) do
-        local fits = false
-        for _, gemColor in ipairs(gemData.colors) do
-            for _, allowed in ipairs(allowedColors) do
-                if gemColor == allowed then
-                    fits = true
-                    break
-                end
-            end
-            if fits then break end
-        end
-        if fits then
-            local score = 0
-            for stat, value in pairs(gemData.stats) do
-                local statValue = weights[stat]
-                if statValue and ((not caps) or (not caps[stat]) or (not TopFit:HasActiveHardCap(caps[stat]))) then
-                    score = score + statValue * value
-                end
-            end
-            if score > bestScore then
-                bestScore = score
-            end
-        end
-    end
-    return bestScore
+	local bestScore = 0
+	if not TopFit.gemIDs then return bestScore end
+	
+	for gemID, gemData in pairs(TopFit.gemIDs) do
+		local fits = false
+		for _, gemColor in ipairs(gemData.colors) do
+			for _, allowed in ipairs(allowedColors) do
+				if gemColor == allowed then
+					fits = true
+					break
+				end
+			end
+			if fits then break end
+		end
+		if fits then
+			local score = 0
+			for stat, value in pairs(gemData.stats) do
+				local statValue = weights[stat]
+				if statValue and ((not caps) or (not caps[stat]) or (not TopFit:HasActiveHardCap(caps[stat]))) then
+					score = score + statValue * value
+				end
+			end
+			if score > bestScore then
+				bestScore = score
+			end
+		end
+	end
+	return bestScore
 end
 
--- Computes the extra score an item should get credit for based on its EMPTY sockets, since gear
--- with unfilled sockets is otherwise scored as if those sockets contribute nothing -- even though
--- in practice you'd gem them immediately. Sums the best available gem per empty socket, then adds
--- the item's socket bonus on top if there is one: filling every empty socket with ANY gem that
--- fits it automatically satisfies that socket's share of the bonus (a socket can't physically
--- accept a non-matching gem to begin with, hybrids/prismatic included), so once every socket ends
--- up filled the bonus is guaranteed, not just possible. socketBonusInfo is only ever populated
--- when the item's sockets were ALL empty to begin with (see inventory.lua) -- for items with a mix
--- of filled and empty sockets, bonus credit is skipped since an already-filled socket's required
--- color can't be reliably read back out of the tooltip.
 function TopFit:GetPotentialGemScore(itemTable, weights, caps)
-    if not itemTable.emptySocketColors or #itemTable.emptySocketColors == 0 then
-        return 0
-    end
-    
-    local total = 0
-    for _, color in ipairs(itemTable.emptySocketColors) do
-        total = total + TopFit:GetBestGemScore({color}, weights, caps)
-    end
-    
-    if itemTable.socketBonusInfo then
-        local bonusStat = itemTable.socketBonusInfo.stat
-        local bonusValue = itemTable.socketBonusInfo.value
-        if weights[bonusStat] and ((not caps) or (not caps[bonusStat]) or (not TopFit:HasActiveHardCap(caps[bonusStat]))) then
-            total = total + weights[bonusStat] * bonusValue
-        end
-    end
-    
-    return total
+	if not itemTable or not itemTable.emptySocketColors or #itemTable.emptySocketColors == 0 then
+		return 0
+	end
+	
+	local total = 0
+	for _, color in ipairs(itemTable.emptySocketColors) do
+		total = total + TopFit:GetBestGemScore({color}, weights, caps)
+	end
+	
+	if itemTable.socketBonusInfo then
+		local bonusStat = itemTable.socketBonusInfo.stat
+		local bonusValue = itemTable.socketBonusInfo.value
+		if weights[bonusStat] and ((not caps) or (not caps[bonusStat]) or (not TopFit:HasActiveHardCap(caps[bonusStat]))) then
+			total = total + weights[bonusStat] * bonusValue
+		end
+	end
+	
+	return total
 end
 
--- caps[stat] is a list of independent cap entries (see the migration in core.lua's OnInitialize) --
--- a stat can have several thresholds active at once, e.g. Hit Rating carrying a hard Spell Hit cap
--- alongside a soft Dual Wield Hit cap. This just answers "does this stat have any active cap at
--- all", for call sites that only need that yes/no (the actual threshold values are handled
--- separately, per-entry, in IsCapsReached/IsCapsUnreachable/SaveCurrentCombination).
 function TopFit:IsStatCapped(capList)
-    if not capList then
-        return false
-    end
-    for _, capEntry in ipairs(capList) do
-        if capEntry.active then
-            return true
-        end
-    end
-    return false
+	if not capList then return false end
+	for _, capEntry in ipairs(capList) do
+		if capEntry.active then
+			return true
+		end
+	end
+	return false
 end
 
--- Returns how much rating gear still needs to provide for a cap, after subtracting whatever
--- talents already grant for that stat. Every place that compares gear totals against a cap's
--- "value" should go through this rather than reading preferences.value directly.
 function TopFit:GetEffectiveCapValue(stat, nominalValue)
-    local talentBonus = (TopFit.talentBonusStats and TopFit.talentBonusStats[stat]) or 0
-    return tonumber(nominalValue) - talentBonus
+	local talentBonus = (TopFit.talentBonusStats and TopFit.talentBonusStats[stat]) or 0
+	return tonumber(nominalValue or 0) - talentBonus
 end
 
 function TopFit:InitSemiRecursiveCalculations()
-    -- save equippable items
-    TopFit.itemListBySlot = TopFit:GetEquippableItems()
-    TopFit:ReduceItemList()
-    
-    TopFit.slotCounters = {}
-    TopFit.currentSlotCounter = 0
-    TopFit.operationsPerFrame = 500
-    TopFit.combinationCount = 0
-    TopFit.bestCombination = nil
-    TopFit.maxScore = nil
-    TopFit.firstCombination = true
-    
-    TopFit.capHeuristics = {}
-    TopFit.maxRestStat = {}
-    TopFit.currentCapValues = {}
-    -- create maximum values for each cap and item slot
-    for statCode, capList in pairs(TopFit.Utopia) do
-        if TopFit:IsStatCapped(capList) then
-            TopFit.capHeuristics[statCode] = {}
-            TopFit.maxRestStat[statCode] = {}
-            for _, slotID in pairs(TopFit.slots) do
-                if (TopFit.itemListBySlot[slotID]) then
-                    -- get maximum value contributed to cap in this slot
-                    local maxStat = nil
-                    for _, locationTable in pairs(TopFit.itemListBySlot[slotID]) do
-                        local itemTable = TopFit:GetCachedItem(locationTable.itemLink)
-                        if itemTable then
-                            local thisStat = itemTable.totalBonus[statCode] or 0
-                            
-                            if ((thisStat > 0) and ((maxStat == nil) or (thisStat > maxStat))) then
-                                maxStat = thisStat
-                            end
-                        end
-                    end
-                    
-                    TopFit.capHeuristics[statCode][slotID] = maxStat
-                end
-            end
-            
-            for i = 0, 20 do
-                TopFit.maxRestStat[statCode][i] = 0
-                if (TopFit.capHeuristics[statCode][i]) then
-                    for j = 0, i do
-                        TopFit.maxRestStat[statCode][j] = TopFit.maxRestStat[statCode][j] + TopFit.capHeuristics[statCode][i]
-                    end
-                end
-            end
-        end
-    end
-    
-    TopFit.calculationsFrame:SetScript("OnUpdate", TopFit.SemiRecursiveCalculation)
-    
-    -- show progress frame
-    if not TopFit.silentCalculation then
-        TopFit:CreateProgressFrame()
-    elseif not TopFit.ProgressFrame then
-        TopFit:CreateProgressFrame()
-        TopFit.ProgressFrame:Hide()
-    end
-    TopFit.ProgressFrame:SetSelectedSet(TopFit.setCode)
-    TopFit.ProgressFrame:SetSetName(TopFit.currentSetName)
-    TopFit.ProgressFrame:ResetProgress()
+	-- save equippable items
+	TopFit.itemListBySlot = TopFit:GetEquippableItems()
+	TopFit:ReduceItemList()
+	
+	TopFit.slotCounters = {}
+	TopFit.currentSlotCounter = 0
+	TopFit.operationsPerFrame = 500
+	TopFit.combinationCount = 0
+	TopFit.bestCombination = nil
+	TopFit.maxScore = nil
+	TopFit.firstCombination = true
+	
+	TopFit.capHeuristics = {}
+	TopFit.maxRestStat = {}
+	TopFit.currentCapValues = {}
+	
+	-- create maximum values for each cap and item slot
+	for statCode, capList in pairs(TopFit.Utopia) do
+		if TopFit:IsStatCapped(capList) then
+			TopFit.capHeuristics[statCode] = {}
+			TopFit.maxRestStat[statCode] = {}
+			for _, slotID in pairs(TopFit.slots) do
+				if (TopFit.itemListBySlot[slotID]) then
+					local maxStat = nil
+					for _, locationTable in pairs(TopFit.itemListBySlot[slotID]) do
+						local itemTable = TopFit:GetCachedItem(locationTable.itemLink)
+						if itemTable then
+							local thisStat = itemTable.totalBonus[statCode] or 0
+							if ((thisStat > 0) and ((maxStat == nil) or (thisStat > maxStat))) then
+								maxStat = thisStat
+							end
+						end
+					end
+					
+					TopFit.capHeuristics[statCode][slotID] = maxStat
+				end
+			end
+			
+			for i = 0, 20 do
+				TopFit.maxRestStat[statCode][i] = 0
+				if (TopFit.capHeuristics[statCode][i]) then
+					for j = 0, i do
+						TopFit.maxRestStat[statCode][j] = TopFit.maxRestStat[statCode][j] + TopFit.capHeuristics[statCode][i]
+					end
+				end
+			end
+		end
+	end
+	
+	TopFit.calculationsFrame:SetScript("OnUpdate", TopFit.SemiRecursiveCalculation)
+	
+	-- show progress frame
+	if not TopFit.silentCalculation then
+		TopFit:CreateProgressFrame()
+	elseif not TopFit.ProgressFrame then
+		TopFit:CreateProgressFrame()
+		TopFit.ProgressFrame:Hide()
+	end
+	if TopFit.ProgressFrame then
+		TopFit.ProgressFrame:SetSelectedSet(TopFit.setCode)
+		TopFit.ProgressFrame:SetSetName(TopFit.currentSetName)
+		TopFit.ProgressFrame:ResetProgress()
+	end
 end
 
 function TopFit:ReduceItemList()
-    -- remove all non-forced items from item list
-    for slotID, forceID in pairs(self.db.profile.sets[TopFit.setCode].forced) do
-        if TopFit.itemListBySlot[slotID] then
-            for i = #(TopFit.itemListBySlot[slotID]), 1, -1 do
-                local itemTable = TopFit:GetCachedItem(TopFit.itemListBySlot[slotID][i].itemLink)
-                if not itemTable or (itemTable.itemID ~= forceID) then
-                    tremove(TopFit.itemListBySlot[slotID], i)
-                    --TopFit.itemListBySlot[slotID][i].reason = TopFit.itemListBySlot[slotID][i].reason.."forced item in slot; "
-                end
-            end
-        end
-        
-        if (slotID == 17) then -- offhand
-            --TODO: check if forced item is a weapon and remove all weapons from mainhand if player cannot dualwield
-            -- always remove all 2H-weapons from mainhand
-        end
-    end
-    
-    -- "Force Two-Handed": drop every 1H/mainhand-only weapon from the mainhand candidate list
-    -- (leaving only 2H weapons) and clear the offhand candidate list entirely, so the
-    -- recursive search and best-in-slot logic can never assemble a 1H+offhand combo.
-    -- Slots with an explicitly forced item are left untouched, same as other reductions above.
-    if TopFit.playerForceTwoHanded then
-        if TopFit.itemListBySlot[16] and not self.db.profile.sets[TopFit.setCode].forced[16] then
-            for i = #(TopFit.itemListBySlot[16]), 1, -1 do
-                local itemTable = TopFit:GetCachedItem(TopFit.itemListBySlot[16][i].itemLink)
-                -- check itemEquipLoc directly rather than IsOnehandedWeapon(), which is talent-context-
-                -- dependent (it reports Titan's Grip-eligible 2H weapons as "one-handed"); here we want
-                -- every genuine 2H weapon kept regardless of Titan's Grip status.
-                if not itemTable or itemTable.itemEquipLoc ~= "INVTYPE_2HWEAPON" then
-                    tremove(TopFit.itemListBySlot[16], i)
-                end
-            end
-        end
-        if TopFit.itemListBySlot[17] and not self.db.profile.sets[TopFit.setCode].forced[17] then
-            for i = #(TopFit.itemListBySlot[17]), 1, -1 do
-                tremove(TopFit.itemListBySlot[17], i)
-            end
-        end
-    end
-    
-    -- remove all items with score <= 0 that are neither forced nor contribute to caps
-    for slotID, itemList in pairs(TopFit.itemListBySlot) do
-        if #itemList >= 1 then
-            for i = #itemList, 1, -1 do
-                if (TopFit:GetItemScore(itemList[i].itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) <= 0) then
-                    if not (self.db.profile.sets[TopFit.setCode].forced[slotID]) then
-                        -- check caps
-                        local hasCap = false
-                        for statCode, capList in pairs(TopFit.Utopia) do
-                            if TopFit:IsStatCapped(capList) then
-                                local itemTable = TopFit:GetCachedItem(itemList[i].itemLink)
-                                if itemTable and (itemTable.totalBonus[statCode] or -1) > 0 then
-                                    hasCap = true
-                                    break
-                                end
-                            end
-                        end
-                        
-                        if not hasCap then
-                            tremove(itemList, i)
-                            --itemList[i].reason = itemList[i].reason.."score <= 0, no cap contribution and not forced; "
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    -- remove BoE items
-    for slotID, itemList in pairs(TopFit.itemListBySlot) do
-        if #itemList > 0 then
-            for i = #itemList, 1, -1 do
-                if itemList[i].isBoE then
-                    tremove(itemList, i)
-                    --itemList[i].reason = itemList[i].reason.."BoE item; "
-                end
-            end
-        end
-    end
+	-- remove all non-forced items from item list
+	local forcedTable = (self.db and self.db.profile and self.db.profile.sets[TopFit.setCode] and self.db.profile.sets[TopFit.setCode].forced) or {}
+	for slotID, forceID in pairs(forcedTable) do
+		if TopFit.itemListBySlot[slotID] then
+			for i = #(TopFit.itemListBySlot[slotID]), 1, -1 do
+				local itemTable = TopFit:GetCachedItem(TopFit.itemListBySlot[slotID][i].itemLink)
+				if not itemTable or (itemTable.itemID ~= forceID) then
+					tremove(TopFit.itemListBySlot[slotID], i)
+				end
+			end
+		end
+	end
+	
+	-- "Force Two-Handed" filter
+	if TopFit.playerForceTwoHanded then
+		if TopFit.itemListBySlot[16] and not forcedTable[16] then
+			for i = #(TopFit.itemListBySlot[16]), 1, -1 do
+				local itemTable = TopFit:GetCachedItem(TopFit.itemListBySlot[16][i].itemLink)
+				if not itemTable or itemTable.itemEquipLoc ~= "INVTYPE_2HWEAPON" then
+					tremove(TopFit.itemListBySlot[16], i)
+				end
+			end
+		end
+		if TopFit.itemListBySlot[17] and not forcedTable[17] then
+			for i = #(TopFit.itemListBySlot[17]), 1, -1 do
+				tremove(TopFit.itemListBySlot[17], i)
+			end
+		end
+	end
+	
+	-- remove all items with score <= 0 that are neither forced nor contribute to caps
+	for slotID, itemList in pairs(TopFit.itemListBySlot) do
+		if #itemList >= 1 then
+			for i = #itemList, 1, -1 do
+				if (TopFit:GetItemScore(itemList[i].itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) <= 0) then
+					if not forcedTable[slotID] then
+						local hasCap = false
+						for statCode, capList in pairs(TopFit.Utopia) do
+							if TopFit:IsStatCapped(capList) then
+								local itemTable = TopFit:GetCachedItem(itemList[i].itemLink)
+								if itemTable and (itemTable.totalBonus[statCode] or -1) > 0 then
+									hasCap = true
+									break
+								end
+							end
+						end
+						
+						if not hasCap then
+							tremove(itemList, i)
+						end
+					end
+				end
+			end
+		end
+	end
+	
+	-- remove BoE items
+	for slotID, itemList in pairs(TopFit.itemListBySlot) do
+		if #itemList > 0 then
+			for i = #itemList, 1, -1 do
+				if itemList[i].isBoE then
+					tremove(itemList, i)
+				end
+			end
+		end
+	end
 
-    -- remove items of the wrong armor material, if this set has "Force Armor Type" enabled
-    if self.db.profile.sets[TopFit.setCode].forceArmorType then
-        local classArmorType = TopFit:GetClassArmorType()
-        if classArmorType then
-            for slotID, itemList in pairs(TopFit.itemListBySlot) do
-                -- skip slots with a forced item -- the player explicitly chose it, leave it alone
-                if #itemList > 0 and not self.db.profile.sets[TopFit.setCode].forced[slotID] then
-                    for i = #itemList, 1, -1 do
-                        local itemTable = TopFit:GetCachedItem(itemList[i].itemLink)
-                        local subType = itemTable and itemTable.itemSubType
-                        -- only Cloth/Leather/Mail/Plate are material-locked; rings, necks, trinkets,
-                        -- cloaks, weapons, and shields all report a different itemSubType and are
-                        -- left untouched by this filter
-                        if subType == "Cloth" or subType == "Leather" or subType == "Mail" or subType == "Plate" then
-                            if subType ~= classArmorType then
-                                tremove(itemList, i)
-                                --itemList[i].reason = itemList[i].reason.."wrong armor type; "
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
+	-- remove items of the wrong armor material, if "Force Armor Type" is enabled
+	if self.db.profile.sets[TopFit.setCode].forceArmorType then
+		local classArmorType = TopFit:GetClassArmorType()
+		if classArmorType then
+			for slotID, itemList in pairs(TopFit.itemListBySlot) do
+				if #itemList > 0 and not forcedTable[slotID] then
+					for i = #itemList, 1, -1 do
+						local itemTable = TopFit:GetCachedItem(itemList[i].itemLink)
+						local subType = itemTable and itemTable.itemSubType
+						if subType == "Cloth" or subType == "Leather" or subType == "Mail" or subType == "Plate" then
+							if subType ~= classArmorType then
+								tremove(itemList, i)
+							end
+						end
+					end
+				end
+			end
+		end
+	end
 
-    -- reduce item list: remove items with < cap and < score
-    for slotID, itemList in pairs(TopFit.itemListBySlot) do
-        if #itemList > 1 then
-            for i = #itemList, 1, -1 do
-                local itemTable = TopFit:GetCachedItem(itemList[i].itemLink)
-                if not itemTable then
-                    tremove(itemList, i)
-                else
-                    -- try to see if an item exists which is definitely better
-                    local betterItemExists = 0
-                    local numBetterItemsNeeded = 1
-                    
-                    -- For items that can be used in 2 slots, we also need at least 2 better items to declare an item useless
-                    if (slotID == 17) -- offhand
-                        or (slotID == 12) -- ring 2
-                        or (slotID == 14) -- trinket 2
-                        then
-                        
-                        numBetterItemsNeeded = 2
-                    end
-                    
-                    for j = 1, #itemList do
-                        if i ~= j then
-                            local compareTable = TopFit:GetCachedItem(itemList[j].itemLink)
-                            if compareTable and
-                                (TopFit:GetItemScore(itemTable.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) < TopFit:GetItemScore(compareTable.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation)) and
-                                (itemTable.itemEquipLoc == compareTable.itemEquipLoc) then -- especially important for weapons, we do not want to compare 2h and 1h weapons
-                                
-                                --TopFit:Debug("score: "..TopFit:GetItemScore(itemTable.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation).."; compareScore: "..TopFit:GetItemScore(compareTable.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation)..
-                                --    " when comparing "..itemTable.itemLink.." with "..compareTable.itemLink)
-                                
-                                -- score is greater, see if caps are also better
-                                local allStats = true
-                                for statCode, capList in pairs(TopFit.Utopia) do
-                                    if TopFit:IsStatCapped(capList) then
-                                        if (itemTable.totalBonus[statCode] or 0) > (compareTable.totalBonus[statCode] or 0) then
-                                            allStats = false
-                                            break
-                                        end
-                                    end
-                                end
-                                
-                                if allStats then
-                                    betterItemExists = betterItemExists + 1
-                                    if (betterItemExists >= numBetterItemsNeeded) then
-                                        break
-                                    end
-                                end
-                            end
-                        end
-                    end
-                    
-                    if betterItemExists >= numBetterItemsNeeded then
-                        -- remove this item
-                        --TopFit:Debug(itemTable.itemLink.." removed because "..betterItemExists.." better items found.")
-                        tremove(itemList, i)
-                        --itemList[i].reason = itemList[i].reason..betterItemExists.." better items found (setCode: "..(TopFit.setCode or "nil").."; relevantScore: "..(TopFit.ignoreCapsForCalculation or "nil").."); "
-                    end
-                end
-            end
-        end
-    end
+	-- reduce item list: remove items strictly worse in both score and caps
+	for slotID, itemList in pairs(TopFit.itemListBySlot) do
+		if #itemList > 1 then
+			for i = #itemList, 1, -1 do
+				local itemTable = TopFit:GetCachedItem(itemList[i].itemLink)
+				if not itemTable then
+					tremove(itemList, i)
+				else
+					local betterItemExists = 0
+					local numBetterItemsNeeded = 1
+					
+					if (slotID == 17) or (slotID == 12) or (slotID == 14) then
+						numBetterItemsNeeded = 2
+					end
+					
+					for j = 1, #itemList do
+						if i ~= j then
+							local compareTable = TopFit:GetCachedItem(itemList[j].itemLink)
+							if compareTable and
+								(TopFit:GetItemScore(itemTable.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) < TopFit:GetItemScore(compareTable.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation)) and
+								(itemTable.itemEquipLoc == compareTable.itemEquipLoc) then
+								
+								local allStats = true
+								for statCode, capList in pairs(TopFit.Utopia) do
+									if TopFit:IsStatCapped(capList) then
+										if (itemTable.totalBonus[statCode] or 0) > (compareTable.totalBonus[statCode] or 0) then
+											allStats = false
+											break
+										end
+									end
+								end
+								
+								if allStats then
+									betterItemExists = betterItemExists + 1
+									if (betterItemExists >= numBetterItemsNeeded) then
+										break
+									end
+								end
+							end
+						end
+					end
+					
+					if betterItemExists >= numBetterItemsNeeded then
+						tremove(itemList, i)
+					end
+				end
+			end
+		end
+	end
 end
 
 function TopFit:SemiRecursiveCalculation()
-    local operation
-    local done = false
-    for operation = 1, TopFit.operationsPerFrame do
-        if (not done) and (not TopFit.abortCalculation) then
-            -- set counters to next combination
-            
-            -- check all nil counters from the end
-            local currentSlot = 19
-            local increased = false
-            while (not increased) and (currentSlot > 0) do
-                while (TopFit.slotCounters[currentSlot] == nil or TopFit.slotCounters[currentSlot] == #(TopFit.itemListBySlot[currentSlot])) and (currentSlot > 0) do
-                    TopFit.slotCounters[currentSlot] = nil -- reset to "no item"
-                    currentSlot = currentSlot - 1
-                end
-                
-                if (currentSlot > 0) then
-                    -- increase combination, starting at currentSlot
-                    TopFit.slotCounters[currentSlot] = TopFit.slotCounters[currentSlot] + 1
-                    if (not TopFit:IsDuplicateItem(currentSlot)) and (TopFit:IsOffhandValid(currentSlot)) then
-                        increased = true
-                    end
-                else
-                    if TopFit.firstCombination then
-                        TopFit.firstCombination = false
-                    else
-                        -- we're back here, and so we're done
-                        done = true
-                        TopFit.calculationsFrame:SetScript("OnUpdate", nil)
-                        operation = TopFit.operationsPerFrame
-                        
-                        -- save a default set of only best-in-slot items
-                        TopFit:SaveCurrentCombination()
-                        
-                        -- find best combination that satisfies ALL caps
-                        if (TopFit.bestCombination) then
-                            -- caps are reached, save and equip best combination
-                            --local itemsAlreadyChosen = {}
-                            for slotID, locationTable in pairs(TopFit.bestCombination.items) do
-                                TopFit.itemRecommendations[slotID] = {
-                                    locationTable = locationTable,
-                                }
-                                --tinsert(itemsAlreadyChosen, itemTable)
-                            end
-                            
-                            TopFit:EquipRecommendedItems()
-                        else
-                            -- caps could not all be reached, calculate without caps instead
-                            if not TopFit.silentCalculation then
-                                TopFit:Print("Caps could not be reached, calculating again without caps.")
-                            end
-                            TopFit.Utopia = {}
-                            TopFit.ignoreCapsForCalculation = true
-                            TopFit:CalculateRecommendations(TopFit.currentSetName)
-                            return
-                        end
-                    end
-                end
-            end
-            
-            if not done then
-                -- fill all further slots with first choices again - until caps are reached or unreachable
-                while (not TopFit:IsCapsReached(currentSlot)) and (not TopFit:IsCapsUnreachable(currentSlot)) and (currentSlot < 19) do
-                    currentSlot = currentSlot + 1
-                    if #(TopFit.itemListBySlot[currentSlot]) > 0 then
-                        TopFit.slotCounters[currentSlot] = 1
-                        while TopFit:IsDuplicateItem(currentSlot) or (not TopFit:IsOffhandValid(currentSlot)) do
-                            TopFit.slotCounters[currentSlot] = TopFit.slotCounters[currentSlot] + 1
-                        end
-                        if TopFit.slotCounters[currentSlot] > #(TopFit.itemListBySlot[currentSlot]) then
-                            TopFit.slotCounters[currentSlot] = 0
-                        end
-                    else
-                        TopFit.slotCounters[currentSlot] = 0
-                    end
-                end
-                
-                if TopFit:IsCapsReached(currentSlot) then
-                    -- valid combination, save
-                    TopFit:SaveCurrentCombination()
-                end
-            end
-        end
-    end
-    
-    -- update progress
-    if not done then
-        local progress = 0
-        local impact = 1
-        local slot
-        for slot = 1, 20 do
-            -- check if slot has items for calculation
-            if TopFit.itemListBySlot[slot] then
-                -- calculate current progress towards finish
-                local numItemsInSlot = #(TopFit.itemListBySlot[slot]) or 1
-                local selectedItem = (TopFit.slotCounters[slot] == 0) and (#(TopFit.itemListBySlot[slot]) or 1) or (TopFit.slotCounters[slot] or 1)
-                if numItemsInSlot == 0 then numItemsInSlot = 1 end
-                if selectedItem == 0 then selectedItem = 1 end
-                
-                impact = impact / numItemsInSlot
-                progress = progress + impact * (selectedItem - 1)
-            end
-        end
-        
-        TopFit.ProgressFrame:SetProgress(progress)
-    else
-        TopFit.ProgressFrame:SetProgress(1) -- done
-    end
-    
-    -- update icons and statistics
-    if TopFit.bestCombination then
-        TopFit.ProgressFrame:SetCurrentCombination(TopFit.bestCombination)
-    end
-    
-    if TopFit.abortCalculation then
-        TopFit.calculationsFrame:SetScript("OnUpdate", nil)
-        --TopFit:Print("Calculation aborted.")
-        TopFit.abortCalculation = nil
-        TopFit.isBlocked = false
-        TopFit.ProgressFrame:StoppedCalculation()
-    end
-    
-    TopFit:Debug("Current combination count: "..TopFit.combinationCount)
+	local operation
+	local done = false
+	for operation = 1, TopFit.operationsPerFrame do
+		if (not done) and (not TopFit.abortCalculation) then
+			local currentSlot = 19
+			local increased = false
+			while (not increased) and (currentSlot > 0) do
+				while (TopFit.slotCounters[currentSlot] == nil or TopFit.slotCounters[currentSlot] == #(TopFit.itemListBySlot[currentSlot] or {})) and (currentSlot > 0) do
+					TopFit.slotCounters[currentSlot] = nil
+					currentSlot = currentSlot - 1
+				end
+				
+				if (currentSlot > 0) then
+					TopFit.slotCounters[currentSlot] = TopFit.slotCounters[currentSlot] + 1
+					if (not TopFit:IsDuplicateItem(currentSlot)) and (TopFit:IsOffhandValid(currentSlot)) then
+						increased = true
+					end
+				else
+					if TopFit.firstCombination then
+						TopFit.firstCombination = false
+					else
+						done = true
+						TopFit.calculationsFrame:SetScript("OnUpdate", nil)
+						operation = TopFit.operationsPerFrame
+						
+						TopFit:SaveCurrentCombination()
+						
+						if (TopFit.bestCombination) then
+							for slotID, locationTable in pairs(TopFit.bestCombination.items) do
+								TopFit.itemRecommendations[slotID] = {
+									locationTable = locationTable,
+								}
+							end
+							TopFit:EquipRecommendedItems()
+						else
+							if not TopFit.silentCalculation then
+								TopFit:Print("Caps could not be reached, calculating again without caps.")
+							end
+							TopFit.Utopia = {}
+							TopFit.ignoreCapsForCalculation = true
+							TopFit:CalculateRecommendations(TopFit.currentSetName)
+							return
+						end
+					end
+				end
+			end
+			
+			if not done then
+				while (not TopFit:IsCapsReached(currentSlot)) and (not TopFit:IsCapsUnreachable(currentSlot)) and (currentSlot < 19) do
+					currentSlot = currentSlot + 1
+					if #(TopFit.itemListBySlot[currentSlot] or {}) > 0 then
+						TopFit.slotCounters[currentSlot] = 1
+						while TopFit:IsDuplicateItem(currentSlot) or (not TopFit:IsOffhandValid(currentSlot)) do
+							TopFit.slotCounters[currentSlot] = TopFit.slotCounters[currentSlot] + 1
+						end
+						if TopFit.slotCounters[currentSlot] > #(TopFit.itemListBySlot[currentSlot]) then
+							TopFit.slotCounters[currentSlot] = 0
+						end
+					else
+						TopFit.slotCounters[currentSlot] = 0
+					end
+				end
+				
+				if TopFit:IsCapsReached(currentSlot) then
+					TopFit:SaveCurrentCombination()
+				end
+			end
+		end
+	end
+	
+	-- update progress
+	if not done then
+		local progress = 0
+		local impact = 1
+		local slot
+		for slot = 1, 20 do
+			if TopFit.itemListBySlot[slot] then
+				local numItemsInSlot = #(TopFit.itemListBySlot[slot]) or 1
+				local selectedItem = (TopFit.slotCounters[slot] == 0) and (#(TopFit.itemListBySlot[slot]) or 1) or (TopFit.slotCounters[slot] or 1)
+				if numItemsInSlot == 0 then numItemsInSlot = 1 end
+				if selectedItem == 0 then selectedItem = 1 end
+				
+				impact = impact / numItemsInSlot
+				progress = progress + impact * (selectedItem - 1)
+			end
+		end
+		
+		if TopFit.ProgressFrame then
+			TopFit.ProgressFrame:SetProgress(progress)
+		end
+	else
+		if TopFit.ProgressFrame then
+			TopFit.ProgressFrame:SetProgress(1)
+		end
+	end
+	
+	if TopFit.bestCombination and TopFit.ProgressFrame then
+		TopFit.ProgressFrame:SetCurrentCombination(TopFit.bestCombination)
+	end
+	
+	if TopFit.abortCalculation then
+		TopFit.calculationsFrame:SetScript("OnUpdate", nil)
+		TopFit.abortCalculation = nil
+		TopFit.isBlocked = false
+		if TopFit.ProgressFrame then
+			TopFit.ProgressFrame:StoppedCalculation()
+		end
+	end
+	
+	TopFit:Debug("Current combination count: "..TopFit.combinationCount)
 end
 
 function TopFit:IsCapsReached(currentSlot)
-    local currentValues = {}
-    local i
-    for i = 1, currentSlot do
-        if TopFit.slotCounters[i] ~= nil and TopFit.slotCounters[i] > 0 then
-            for stat, capList in pairs(TopFit.Utopia) do
-                if TopFit:IsStatCapped(capList) then
-                    local itemTable = TopFit:GetCachedItem(TopFit.itemListBySlot[i][TopFit.slotCounters[i]].itemLink)
-                    if itemTable then
-                        currentValues[stat] = (currentValues[stat] or 0) + (itemTable.totalBonus[stat] or 0)
-                    end
-                end
-            end
-        end
-    end
-    
-    -- a stat can carry several independent caps (e.g. Hit Rating: Spell Hit + Dual Wield Hit) --
-    -- every active entry has to be satisfied, not just one of them
-    for stat, capList in pairs(TopFit.Utopia) do
-        for _, preferences in ipairs(capList) do
-            if preferences.active and (currentValues[stat] or 0) < TopFit:GetEffectiveCapValue(stat, preferences.value) then
-                return false
-            end
-        end
-    end
-    return true
+	local currentValues = {}
+	for i = 1, currentSlot do
+		if TopFit.slotCounters[i] ~= nil and TopFit.slotCounters[i] > 0 and TopFit.itemListBySlot[i] then
+			for stat, capList in pairs(TopFit.Utopia) do
+				if TopFit:IsStatCapped(capList) then
+					local itemEntry = TopFit.itemListBySlot[i][TopFit.slotCounters[i]]
+					local itemTable = itemEntry and TopFit:GetCachedItem(itemEntry.itemLink)
+					if itemTable then
+						currentValues[stat] = (currentValues[stat] or 0) + (itemTable.totalBonus[stat] or 0)
+					end
+				end
+			end
+		end
+	end
+	
+	for stat, capList in pairs(TopFit.Utopia) do
+		for _, preferences in ipairs(capList) do
+			if preferences.active and (currentValues[stat] or 0) < TopFit:GetEffectiveCapValue(stat, preferences.value) then
+				return false
+			end
+		end
+	end
+	return true
 end
 
 function TopFit:IsCapsUnreachable(currentSlot)
-    local currentValues = {}
-    local restValues = {}
-    local i
-    for stat, capList in pairs(TopFit.Utopia) do
-        if TopFit:IsStatCapped(capList) then
-            for i = 1, currentSlot do
-                if TopFit.slotCounters[i] ~= nil and TopFit.slotCounters[i] > 0 then
-                    local itemTable = TopFit:GetCachedItem(TopFit.itemListBySlot[i][TopFit.slotCounters[i]].itemLink)
-                    if itemTable then
-                        currentValues[stat] = (currentValues[stat] or 0) + (itemTable.totalBonus[stat] or 0)
-                    end
-                end
-            end
-            
-            for i = currentSlot + 1, 19 do
-                restValues[stat] = (restValues[stat] or 0) + (TopFit.capHeuristics[stat][i] or 0)
-            end
-            
-            for _, preferences in ipairs(capList) do
-                if preferences.active and (currentValues[stat] or 0) + (restValues[stat] or 0) < TopFit:GetEffectiveCapValue(stat, preferences.value) then
-                    TopFit:Debug("|cffff0000Caps unreachable - "..stat.." reached "..(currentValues[stat] or 0).." + "..(restValues[stat] or 0).." / "..preferences.value)
-                    return true
-                end
-            end
-        end
-    end
-    return false
+	local currentValues = {}
+	local restValues = {}
+	for stat, capList in pairs(TopFit.Utopia) do
+		if TopFit:IsStatCapped(capList) then
+			for i = 1, currentSlot do
+				if TopFit.slotCounters[i] ~= nil and TopFit.slotCounters[i] > 0 and TopFit.itemListBySlot[i] then
+					local itemEntry = TopFit.itemListBySlot[i][TopFit.slotCounters[i]]
+					local itemTable = itemEntry and TopFit:GetCachedItem(itemEntry.itemLink)
+					if itemTable then
+						currentValues[stat] = (currentValues[stat] or 0) + (itemTable.totalBonus[stat] or 0)
+					end
+				end
+			end
+			
+			for i = currentSlot + 1, 19 do
+				restValues[stat] = (restValues[stat] or 0) + (TopFit.capHeuristics and TopFit.capHeuristics[stat] and TopFit.capHeuristics[stat][i] or 0)
+			end
+			
+			for _, preferences in ipairs(capList) do
+				if preferences.active and (currentValues[stat] or 0) + (restValues[stat] or 0) < TopFit:GetEffectiveCapValue(stat, preferences.value) then
+					TopFit:Debug("|cffff0000Caps unreachable - "..stat.." reached "..(currentValues[stat] or 0).." + "..(restValues[stat] or 0).." / "..preferences.value)
+					return true
+				end
+			end
+		end
+	end
+	return false
 end
 
 function TopFit:IsDuplicateItem(currentSlot)
-    -- check if the item is already equipped in another slot
-    local i
-    for i = 1, currentSlot - 1 do
-        if TopFit.slotCounters[i] and TopFit.slotCounters[i] > 0 then
-            local lTable1 = TopFit.itemListBySlot[i][TopFit.slotCounters[i]]
-            local lTable2 = TopFit.itemListBySlot[currentSlot][TopFit.slotCounters[currentSlot]]
-            if lTable1 and lTable2 and lTable1.itemLink == lTable2.itemLink and lTable1.bag == lTable2.bag and lTable1.slot == lTable2.slot then
-                return true
-            end
-        end
-    end
-    return false
+	for i = 1, currentSlot - 1 do
+		if TopFit.slotCounters[i] and TopFit.slotCounters[i] > 0 and TopFit.itemListBySlot[i] then
+			local lTable1 = TopFit.itemListBySlot[i][TopFit.slotCounters[i]]
+			local lTable2 = TopFit.itemListBySlot[currentSlot] and TopFit.itemListBySlot[currentSlot][TopFit.slotCounters[currentSlot]]
+			if lTable1 and lTable2 and lTable1.itemLink == lTable2.itemLink and lTable1.bag == lTable2.bag and lTable1.slot == lTable2.slot then
+				return true
+			end
+		end
+	end
+	return false
 end
 
 function TopFit:IsOffhandValid(currentSlot)
-    if currentSlot == 17 then -- offhand slot
-        if (TopFit.slotCounters[17] ~= nil) and (TopFit.slotCounters[17] > 0) and (TopFit.slotCounters[17] <= #(TopFit.itemListBySlot[17])) then -- offhand is set to something
-            if (TopFit.slotCounters[16] == nil or TopFit.slotCounters[16] == 0) or -- no Mainhand is forced
-                (TopFit:IsOnehandedWeapon(TopFit.itemListBySlot[16][TopFit.slotCounters[16]].itemLink)) then -- Mainhand is not a Two-Handed Weapon
-                
-                local itemTable = TopFit:GetCachedItem(TopFit.itemListBySlot[17][TopFit.slotCounters[17]].itemLink)
-                if not itemTable then return false end
-                
-                if (not TopFit.playerCanDualWield) then
-                    if (string.find(itemTable.itemEquipLoc, "WEAPON")) then
-                        -- no weapon in offhand if you cannot dualwield
-                        return false
-                    end
-                else -- player can dualwield
-                    if (not TopFit:IsOnehandedWeapon(itemTable.itemID)) then
-                        -- no 2h-weapon in offhand
-                        return false
-                    end
-                end
-            else
-                -- a 2H-Mainhand is set, there can be no offhand!
-                return false
-            end
-        end
-    end
-    return true
+	if currentSlot == 17 then -- offhand slot
+		if (TopFit.slotCounters[17] ~= nil) and (TopFit.slotCounters[17] > 0) and (TopFit.slotCounters[17] <= #(TopFit.itemListBySlot[17] or {})) then
+			if (TopFit.slotCounters[16] == nil or TopFit.slotCounters[16] == 0) or
+				(TopFit:IsOnehandedWeapon(TopFit.itemListBySlot[16][TopFit.slotCounters[16]].itemLink)) then
+				
+				local itemTable = TopFit:GetCachedItem(TopFit.itemListBySlot[17][TopFit.slotCounters[17]].itemLink)
+				if not itemTable then return false end
+				
+				if (not TopFit.playerCanDualWield) then
+					if itemTable.itemEquipLoc and string.find(itemTable.itemEquipLoc, "WEAPON") then
+						return false
+					end
+				else -- player can dualwield
+					if (not TopFit:IsOnehandedWeapon(itemTable.itemLink or itemTable.itemID)) then
+						return false
+					end
+				end
+			else
+				-- 2H Mainhand equipped, no offhand allowed
+				return false
+			end
+		end
+	end
+	return true
 end
 
 function TopFit:SaveCurrentCombination()
-    TopFit.combinationCount = TopFit.combinationCount + 1
-    
-    local cIC = {
-        items = {},
-        totalScore = 0,
-        totalStats = {},
-    }
-    
-    local itemsAlreadyChosen = {}
-    
-    local i
-    for i = 1, 20 do
-        local itemTable, locationTable = nil, nil
-        local stat, slotTable
-        
-        if TopFit.slotCounters[i] ~= nil and TopFit.slotCounters[i] > 0 then
-            locationTable = TopFit.itemListBySlot[i][TopFit.slotCounters[i]]
-            itemTable = TopFit:GetCachedItem(locationTable.itemLink)
-        else
-            -- choose highest valued item for otherwise empty slots, if possible
-            locationTable = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i)
-            if locationTable then
-                itemTable = TopFit:GetCachedItem(locationTable.itemLink)
-            end
-            
-            if (itemTable) then
-                -- special cases for main an offhand (to account for dualwielding and Titan's Grip)
-                if (i == 16) then
-                    -- check if offhand is forced
-                    if TopFit.slotCounters[17] then
-                        -- use 1H-weapon in Mainhand (or a titan's grip 2H, if applicable)
-                        locationTable = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i, TopFit.setCode, function(locationTable) return TopFit:IsOnehandedWeapon(locationTable.itemLink) end)
-                        if locationTable then
-                            itemTable = TopFit:GetCachedItem(locationTable.itemLink)
-                        end
-                    else
-                        -- choose best main- and offhand combo
-                        if not TopFit:IsOnehandedWeapon(itemTable.itemID) then
-                            -- see if a combination of main and offhand would have a better score
-                            local bestMainScore, bestOffScore = 0, 0
-                            local bestOff = nil
-                            local bestMain = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i, TopFit.setCode, function(locationTable) return TopFit:IsOnehandedWeapon(locationTable.itemLink) end)
-                            if bestMain ~= nil then
-                                bestMainScore = (TopFit:GetItemScore(bestMain.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) or 0)
-                            end
-                            if (TopFit.playerCanDualWield) then
-                                -- any non-two-handed offhand is fine
-                                bestOff = TopFit:CalculateBestInSlot(TopFit:JoinTables(itemsAlreadyChosen, {bestMain}), false, i + 1, TopFit.setCode, function(locationTable) return TopFit:IsOnehandedWeapon(locationTable.itemLink) end)
-                            else
-                                -- offhand may not be a weapon (only shield, other offhand...)
-                                bestOff = TopFit:CalculateBestInSlot(TopFit:JoinTables(itemsAlreadyChosen, {bestMain}), false, i + 1, TopFit.setCode, function(locationTable) local itemTable = TopFit:GetCachedItem(locationTable.itemLink); if not itemTable or string.find(itemTable.itemEquipLoc, "WEAPON") then return false else return true end end)
-                            end
-                            if bestOff ~= nil then
-                                bestOffScore = (TopFit:GetItemScore(bestOff.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) or 0)
-                            end
-                            
-                            -- alternatively, calculate offhand first, then mainhand
-                            local bestMainScore2, bestOffScore2 = 0, 0
-                            local bestMain2 = nil
-                            local bestOff2 = nil
-                            if (TopFit.playerCanDualWield) then
-                                -- any non-two-handed offhand is fine
-                                bestOff2 = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i + 1, TopFit.setCode, function(locationTable) return TopFit:IsOnehandedWeapon(locationTable.itemLink) end)
-                            else
-                                -- offhand may not be a weapon (only shield, other offhand...)
-                                bestOff2 = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i + 1, TopFit.setCode, function(locationTable) local itemTable = TopFit:GetCachedItem(locationTable.itemLink); if not itemTable or string.find(itemTable.itemEquipLoc, "WEAPON") then return false else return true end end)
-                            end
-                            if bestOff2 ~= nil then
-                                bestOffScore2 = (TopFit:GetItemScore(bestOff2.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) or 0)
-                            end
-                            
-                            bestMain2 = TopFit:CalculateBestInSlot(TopFit:JoinTables(itemsAlreadyChosen, {bestOff2}), false, i, TopFit.setCode, function(locationTable) return TopFit:IsOnehandedWeapon(locationTable.itemLink) end)
-                            if bestMain2 ~= nil then
-                                bestMainScore2 = (TopFit:GetItemScore(bestMain2.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) or 0)
-                            end
-                            
-                            local maxScore = (TopFit:GetItemScore(itemTable.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) or 0)
-                            if (maxScore < (bestMainScore + bestOffScore)) then
-                                -- main- + offhand is better, use the one-handed mainhand
-                                locationTable = bestMain
-                                if locationTable then
-                                    itemTable = TopFit:GetCachedItem(locationTable.itemLink)
-                                end
-                                maxScore = bestMainScore + bestOffScore
-                                --TopFit:Debug("Choosing Mainhand "..itemTable.itemLink)
-                            end
-                            if (maxScore < (bestMainScore2 + bestOffScore2)) then
-                                -- main- + offhand is better, use the one-handed mainhand
-                                locationTable = bestMain2
-                                if locationTable then
-                                    itemTable = TopFit:GetCachedItem(locationTable.itemLink)
-                                end
-                                --TopFit:Debug("Choosing Mainhand "..itemTable.itemLink)
-                            end
-                        end -- if mainhand would not be twohanded anyway, it can just be used
-                    end
-                elseif (i == 17) then
-                    -- check if mainhand is empty or one-handed
-                    if (not cIC.items[i - 1]) or (TopFit:IsOnehandedWeapon(cIC.items[i - 1].itemLink)) then
-                        -- check if player can dual wield
-                        if TopFit.playerCanDualWield then
-                            -- only use 1H-weapons in Offhand
-                            locationTable = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i, TopFit.setCode, function(locationTable) return TopFit:IsOnehandedWeapon(locationTable.itemLink) end)
-                            if locationTable then
-                                itemTable = TopFit:GetCachedItem(locationTable.itemLink)
-                            end
-                        else
-                            -- player cannot dualwield, only use offhands which are not weapons
-                            locationTable = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i, TopFit.setCode, function(locationTable) local itemTable = TopFit:GetCachedItem(locationTable.itemLink); if not itemTable or string.find(itemTable.itemEquipLoc, "WEAPON") then return false else return true end end)
-                            if locationTable then
-                                itemTable = TopFit:GetCachedItem(locationTable.itemLink)
-                            end
-                        end
-                    else
-                        -- Two-handed mainhand means we leave offhand empty
-                        locationTable = nil
-                        itemTable = nil
-                    end
-                end
-            end
-        end
-        
-        if locationTable and itemTable then -- slot will be filled
-            tinsert(itemsAlreadyChosen, locationTable)
-            cIC.items[i] = locationTable
-            cIC.totalScore = cIC.totalScore + (TopFit:GetItemScore(itemTable.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) or 0)
-            
-            -- add total stats
-            local stat, value
-            for stat, value in pairs(itemTable.totalBonus) do
-                if (cIC.totalStats[stat]) then
-                    cIC.totalStats[stat] = cIC.totalStats[stat] + value
-                else
-                    cIC.totalStats[stat] = value
-                end
-            end
-        end
-    end
-    
-    -- check if it's better than old best
-    local satisfied = true
-    for stat, capList in pairs(TopFit.Utopia) do
-        for _, preferences in ipairs(capList) do
-            if preferences.active and ((cIC.totalStats[stat] or 0) < TopFit:GetEffectiveCapValue(stat, preferences["value"])) then
-                satisfied = false
-            end
-        end
-    end
-    
-    if ((satisfied) and ((TopFit.maxScore == nil) or (TopFit.maxScore < cIC.totalScore))) then
-        TopFit.maxScore = cIC.totalScore
-        TopFit.bestCombination = cIC
-        
-        TopFit.debugSlotCounters = {} -- save slot counters for best combination
-        for i = 1, 20 do
-            TopFit.debugSlotCounters[i] = TopFit.slotCounters[i]
-        end
-    end
+	TopFit.combinationCount = TopFit.combinationCount + 1
+	
+	local cIC = {
+		items = {},
+		totalScore = 0,
+		totalStats = {},
+	}
+	
+	local itemsAlreadyChosen = {}
+	
+	for i = 1, 20 do
+		local itemTable, locationTable = nil, nil
+		
+		if TopFit.slotCounters[i] ~= nil and TopFit.slotCounters[i] > 0 and TopFit.itemListBySlot[i] then
+			locationTable = TopFit.itemListBySlot[i][TopFit.slotCounters[i]]
+			itemTable = locationTable and TopFit:GetCachedItem(locationTable.itemLink)
+		else
+			locationTable = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i)
+			if locationTable then
+				itemTable = TopFit:GetCachedItem(locationTable.itemLink)
+			end
+			
+			if (itemTable) then
+				if (i == 16) then
+					if TopFit.slotCounters[17] then
+						locationTable = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i, TopFit.setCode, function(lTable) return TopFit:IsOnehandedWeapon(lTable.itemLink) end)
+						if locationTable then
+							itemTable = TopFit:GetCachedItem(locationTable.itemLink)
+						end
+					else
+						if not TopFit:IsOnehandedWeapon(itemTable.itemLink or itemTable.itemID) then
+							local bestMainScore, bestOffScore = 0, 0
+							local bestOff = nil
+							local bestMain = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i, TopFit.setCode, function(lTable) return TopFit:IsOnehandedWeapon(lTable.itemLink) end)
+							if bestMain ~= nil then
+								bestMainScore = (TopFit:GetItemScore(bestMain.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) or 0)
+							end
+							if (TopFit.playerCanDualWield) then
+								bestOff = TopFit:CalculateBestInSlot(TopFit:JoinTables(itemsAlreadyChosen, {bestMain}), false, i + 1, TopFit.setCode, function(lTable) return TopFit:IsOnehandedWeapon(lTable.itemLink) end)
+							else
+								bestOff = TopFit:CalculateBestInSlot(TopFit:JoinTables(itemsAlreadyChosen, {bestMain}), false, i + 1, TopFit.setCode, function(lTable) local it = TopFit:GetCachedItem(lTable.itemLink); if not it or (it.itemEquipLoc and string.find(it.itemEquipLoc, "WEAPON")) then return false else return true end end)
+							end
+							if bestOff ~= nil then
+								bestOffScore = (TopFit:GetItemScore(bestOff.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) or 0)
+							end
+							
+							local bestMainScore2, bestOffScore2 = 0, 0
+							local bestMain2 = nil
+							local bestOff2 = nil
+							if (TopFit.playerCanDualWield) then
+								bestOff2 = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i + 1, TopFit.setCode, function(lTable) return TopFit:IsOnehandedWeapon(lTable.itemLink) end)
+							else
+								bestOff2 = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i + 1, TopFit.setCode, function(lTable) local it = TopFit:GetCachedItem(lTable.itemLink); if not it or (it.itemEquipLoc and string.find(it.itemEquipLoc, "WEAPON")) then return false else return true end end)
+							end
+							if bestOff2 ~= nil then
+								bestOffScore2 = (TopFit:GetItemScore(bestOff2.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) or 0)
+							end
+							
+							bestMain2 = TopFit:CalculateBestInSlot(TopFit:JoinTables(itemsAlreadyChosen, {bestOff2}), false, i, TopFit.setCode, function(lTable) return TopFit:IsOnehandedWeapon(lTable.itemLink) end)
+							if bestMain2 ~= nil then
+								bestMainScore2 = (TopFit:GetItemScore(bestMain2.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) or 0)
+							end
+							
+							local maxScore = (TopFit:GetItemScore(itemTable.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) or 0)
+							if (maxScore < (bestMainScore + bestOffScore)) then
+								locationTable = bestMain
+								if locationTable then
+									itemTable = TopFit:GetCachedItem(locationTable.itemLink)
+								end
+								maxScore = bestMainScore + bestOffScore
+							end
+							if (maxScore < (bestMainScore2 + bestOffScore2)) then
+								locationTable = bestMain2
+								if locationTable then
+									itemTable = TopFit:GetCachedItem(locationTable.itemLink)
+								end
+							end
+						end
+					end
+				elseif (i == 17) then
+					if (not cIC.items[i - 1]) or (TopFit:IsOnehandedWeapon(cIC.items[i - 1].itemLink)) then
+						if TopFit.playerCanDualWield then
+							locationTable = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i, TopFit.setCode, function(lTable) return TopFit:IsOnehandedWeapon(lTable.itemLink) end)
+							if locationTable then
+								itemTable = TopFit:GetCachedItem(locationTable.itemLink)
+							end
+						else
+							locationTable = TopFit:CalculateBestInSlot(itemsAlreadyChosen, false, i, TopFit.setCode, function(lTable) local it = TopFit:GetCachedItem(lTable.itemLink); if not it or (it.itemEquipLoc and string.find(it.itemEquipLoc, "WEAPON")) then return false else return true end end)
+							if locationTable then
+								itemTable = TopFit:GetCachedItem(locationTable.itemLink)
+							end
+						end
+					else
+						locationTable = nil
+						itemTable = nil
+					end
+				end
+			end
+		end
+		
+		if locationTable and itemTable then
+			tinsert(itemsAlreadyChosen, locationTable)
+			cIC.items[i] = locationTable
+			cIC.totalScore = cIC.totalScore + (TopFit:GetItemScore(itemTable.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) or 0)
+			
+			for stat, value in pairs(itemTable.totalBonus) do
+				cIC.totalStats[stat] = (cIC.totalStats[stat] or 0) + value
+			end
+		end
+	end
+	
+	local satisfied = true
+	for stat, capList in pairs(TopFit.Utopia) do
+		for _, preferences in ipairs(capList) do
+			if preferences.active and ((cIC.totalStats[stat] or 0) < TopFit:GetEffectiveCapValue(stat, preferences["value"])) then
+				satisfied = false
+			end
+		end
+	end
+	
+	if ((satisfied) and ((TopFit.maxScore == nil) or (TopFit.maxScore < cIC.totalScore))) then
+		TopFit.maxScore = cIC.totalScore
+		TopFit.bestCombination = cIC
+		
+		TopFit.debugSlotCounters = {}
+		for i = 1, 20 do
+			TopFit.debugSlotCounters[i] = TopFit.slotCounters[i]
+		end
+	end
 end
 
--- now with assertion as optional parameter
 function TopFit:CalculateBestInSlot(itemsAlreadyChosen, insert, sID, setCode, assertion)
-    if not setCode then setCode = TopFit.setCode end
+	if not setCode then setCode = TopFit.setCode end
 
-    -- get best item(s) for each equipment slot
-    local bis = {}
-    local itemListBySlot = TopFit.itemListBySlot or TopFit:GetEquippableItems()
-    for slotID, itemsTable in pairs(itemListBySlot) do
-        if ((not sID) or (sID == slotID)) then -- use single slot if sID is set, or all slots
-            bis[slotID] = {}
-            local maxScore = nil
-            
-            -- iterate all items of given location
-            for _, locationTable in pairs(itemsTable) do
-                local itemTable = TopFit:GetCachedItem(locationTable.itemLink)
-                
-                if (itemTable and ((maxScore == nil) or (maxScore < TopFit:GetItemScore(itemTable.itemLink, setCode, TopFit.ignoreCapsForCalculation))) -- score
-                    and (itemTable.itemMinLevel <= TopFit.characterLevel or locationTable.isVirtual)) -- character level
-                    and (not assertion or assertion(locationTable)) then -- optional assertion is true
-                    -- also check if item has been chosen already (so we don't get the same ring / trinket twice)
-                    local found = false
-                    if (itemsAlreadyChosen) then
-                        for _, lTable in pairs(itemsAlreadyChosen) do
-                            if ((not lTable.bag and not lTable.slot) or ((lTable.bag == locationTable.bag) and (lTable.slot == locationTable.slot))) and (lTable.itemLink == locationTable.itemLink) then
-                                found = true
-                            end
-                        end
-                    end
-                    
-                    if not found then
-                        bis[slotID].locationTable = locationTable
-                        maxScore = TopFit:GetItemScore(itemTable.itemLink, setCode, TopFit.ignoreCapsForCalculation)
-                    end
-                end
-            end
-            
-            if (not bis[slotID].locationTable) then
-                -- remove dummy table if no item has been found
-                bis[slotID] = nil
-            else
-                -- mark this item as used
-                if (itemsAlreadyChosen and insert) then
-                    tinsert(itemsAlreadyChosen, bis[slotID].locationTable)
-                end
-            end
-        end
-    end
-    
-    if (not sID) then
-        return bis
-    else
-        -- return only the slot item's table (if it exists)
-        if (bis[sID]) then
-            return bis[sID].locationTable
-        else
-            return nil
-        end
-    end
+	local bis = {}
+	local itemListBySlot = TopFit.itemListBySlot or TopFit:GetEquippableItems()
+	for slotID, itemsTable in pairs(itemListBySlot) do
+		if ((not sID) or (sID == slotID)) then
+			bis[slotID] = {}
+			local maxScore = nil
+			
+			for _, locationTable in pairs(itemsTable) do
+				local itemTable = TopFit:GetCachedItem(locationTable.itemLink)
+				
+				if (itemTable and ((maxScore == nil) or (maxScore < TopFit:GetItemScore(itemTable.itemLink, setCode, TopFit.ignoreCapsForCalculation)))
+					and (itemTable.itemMinLevel <= TopFit.characterLevel or locationTable.isVirtual))
+					and (not assertion or assertion(locationTable)) then
+					
+					local found = false
+					if (itemsAlreadyChosen) then
+						for _, lTable in pairs(itemsAlreadyChosen) do
+							if ((not lTable.bag and not lTable.slot) or ((lTable.bag == locationTable.bag) and (lTable.slot == locationTable.slot))) and (lTable.itemLink == locationTable.itemLink) then
+								found = true
+							end
+						end
+					end
+					
+					if not found then
+						bis[slotID].locationTable = locationTable
+						maxScore = TopFit:GetItemScore(itemTable.itemLink, setCode, TopFit.ignoreCapsForCalculation)
+					end
+				end
+			end
+			
+			if (not bis[slotID].locationTable) then
+				bis[slotID] = nil
+			else
+				if (itemsAlreadyChosen and insert) then
+					tinsert(itemsAlreadyChosen, bis[slotID].locationTable)
+				end
+			end
+		end
+	end
+	
+	if (not sID) then
+		return bis
+	else
+		if (bis[sID]) then
+			return bis[sID].locationTable
+		else
+			return nil
+		end
+	end
 end
 
-function TopFit:IsOnehandedWeapon(itemID)
-    _, _, _, _, _, class, subclass, _, equipSlot, _, _ = GetItemInfo(itemID)
-    if not equipSlot then
-        -- item data not cached yet on this call -- see inventory.lua's
-        -- GetItemInfoTable for why this can legitimately happen on 12.1.5.
-        -- Request it and queue a retry; callers should treat a nil return from
-        -- this function as "unknown, try again" rather than "not two-handed".
-        local id = tonumber(itemID) or tonumber(tostring(itemID):match("item:(%d+)"))
-        if id then
-            C_Item.RequestLoadItemDataByID(id)
-            TopFit.pendingItemInfoRequests[id] = true
-        end
-        return nil
-    end
-    if equipSlot and string.find(equipSlot, "2HWEAPON") then
-        if (TopFit.playerCanTitansGrip) then
-            local polearms = select(7, GetAuctionItemSubClasses(1))
-            local staves = select(10, GetAuctionItemSubClasses(1))
-            local fishingPoles = select(17, GetAuctionItemSubClasses(1))
-            if (subclass == polearms) or -- Polearms
-                (subclass == staves) or -- Staves
-                (subclass == fishingPoles) then -- Fishing Poles
-                
-                return false
-            end
-        else
-            return false
-        end
-    end
-    return true
+function TopFit:IsOnehandedWeapon(item)
+	if not item then return true end
+
+	local equipSlot, itemSubType
+	if TopFit and TopFit.GetCachedItem then
+		local itemTable = TopFit:GetCachedItem(item)
+		if itemTable then
+			equipSlot = itemTable.itemEquipLoc
+			itemSubType = itemTable.itemSubType
+		end
+	end
+
+	if not equipSlot then
+		local GetInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+		if GetInfo then
+			local _, _, _, _, _, _, subType, _, loc = GetInfo(item)
+			equipSlot = loc
+			itemSubType = subType
+		end
+	end
+
+	if not equipSlot then
+		local id = tonumber(item) or tonumber(tostring(item):match("item:(%d+)"))
+		if id and C_Item and C_Item.RequestLoadItemDataByID then
+			C_Item.RequestLoadItemDataByID(id)
+			if TopFit.pendingItemInfoRequests then
+				TopFit.pendingItemInfoRequests[id] = true
+			end
+		end
+		return true
+	end
+
+	if equipSlot == "INVTYPE_2HWEAPON" or equipSlot == "INVTYPE_RANGED" or equipSlot == "INVTYPE_RANGEDRIGHT" then
+		if TopFit.playerCanTitansGrip and equipSlot == "INVTYPE_2HWEAPON" then
+			if itemSubType then
+				local sub = itemSubType:lower()
+				if sub:find("polearm") or sub:find("staff") or sub:find("staves") or sub:find("fishing") then
+					return false
+				end
+			end
+			return true
+		else
+			return false
+		end
+	end
+
+	return true
 end

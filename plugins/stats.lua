@@ -4,11 +4,25 @@
 -- Wield Hit cap alongside its primary Spell Hit cap, can be viewed/edited with /topfit caps. This
 -- keeps the existing row layout untouched rather than risking new overlapping widgets for a
 -- multi-slot editor that can't be visually verified here.
+
+local backdrop = {
+    bgFile = "Interface\\Buttons\\WHITE8X8",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = false,
+    tileSize = 0,
+    edgeSize = 12,
+    insets = { left = 2, right = 2, top = 2, bottom = 2 },
+}
+
 local function GetOrCreatePrimaryCap(stat)
-    local caps = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps
-    caps[stat] = caps[stat] or {}
-    caps[stat][1] = caps[stat][1] or { active = false, soft = false, value = 0 }
-    return caps[stat][1]
+    if not TopFit.ProgressFrame or not TopFit.ProgressFrame.selectedSet then return nil end
+    local set = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet]
+    if not set then return nil end
+    
+    set.caps = set.caps or {}
+    set.caps[stat] = set.caps[stat] or {}
+    set.caps[stat][1] = set.caps[stat][1] or { active = false, soft = false, value = 0 }
+    return set.caps[stat][1]
 end
 
 function TopFit:CreateStatsPlugin()
@@ -30,25 +44,13 @@ function TopFit:CreateStatsPlugin()
     end
     local checksound = statsFrame.includeInTooltipCheckButton:GetScript("OnClick")
     statsFrame.includeInTooltipCheckButton:SetScript("OnClick", function(self)
-        checksound(self)
-        if (TopFit.ProgressFrame.selectedSet) then
+        if checksound then checksound(self) end
+        if (TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet) then
             TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].excludeFromTooltip = not TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].excludeFromTooltip
         end
     end)
     
-    -- REMOVED 2026-09-17 (Dan confirmed): this block used to offer Shaman a "Force dual-
-    -- wield" override and Warrior a "Force Titan's Grip" override -- both existed because,
-    -- in WotLK, those were the one talent-gated case per mechanic (every other dual-wield-
-    -- capable class was unconditionally so by the relevant level, no override needed). In
-    -- Forever, Shaman dual-wield isn't gated, it's simply absent for the class entirely, and
-    -- Titan's Grip doesn't exist as a mechanic for anyone. An override toggle for a mechanic
-    -- that can't exist would let someone check a box and get gear recommendations that are
-    -- physically impossible to use in-game, so removed rather than left dead. See
-    -- calculation.lua's playerCanDualWield/playerCanTitansGrip setup for the matching change.
-    
     -- option to force a two-handed weapon (empty offhand), overriding dual-wield/Titan's Grip.
-    -- Available for any class -- useful whenever you want to theorycraft/compare a 2H build,
-    -- e.g. Enhancement Shaman 2H vs dual-wield, or Fury Warrior 2H vs Titan's Grip.
     do
         local anchorTo = statsFrame.simulateDualWieldCheckButton or statsFrame.simulateTitansGripCheckButton or statsFrame.includeInTooltipCheckButton
         statsFrame.forceTwoHandedCheckButton = LibStub("tekKonfig-Checkbox").new(statsFrame, nil, "Force two-handed", "TOPLEFT", anchorTo, "BOTTOMLEFT", 0, -6)
@@ -56,13 +58,13 @@ function TopFit:CreateStatsPlugin()
         if TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet then
             statsFrame.forceTwoHandedCheckButton:SetChecked(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].forceTwoHanded)
         end
-        local checksound = statsFrame.forceTwoHandedCheckButton:GetScript("OnClick")
+        local checksound2 = statsFrame.forceTwoHandedCheckButton:GetScript("OnClick")
         statsFrame.forceTwoHandedCheckButton:SetScript("OnClick", function(self)
-            checksound(self)
-            if (TopFit.ProgressFrame.selectedSet) then
+            if checksound2 then checksound2(self) end
+            if (TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet) then
                 local set = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet]
                 set.forceTwoHanded = not set.forceTwoHanded
-                -- mutually exclusive with Force dual-wield / Force Titan's Grip
+                
                 if set.forceTwoHanded then
                     if set.simulateDualWield then
                         set.simulateDualWield = false
@@ -83,59 +85,64 @@ function TopFit:CreateStatsPlugin()
     
     statsFrame.optionsButton:SetScript("OnClick", function(...)
         TopFit:OpenOptionsPanel()
-        TopFit.ProgressFrame:Hide()
+        if TopFit.ProgressFrame then
+            TopFit.ProgressFrame:Hide()
+        end
     end)
     statsFrame.optionsButton.tipText = "Open TopFit's options"
-    statsFrame.optionsButton:SetScript("OnEnter", ShowTooltip)
-    statsFrame.optionsButton:SetScript("OnLeave", HideTooltip)
+    statsFrame.optionsButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.tipText or "Open TopFit's options")
+        GameTooltip:Show()
+    end)
+    statsFrame.optionsButton:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
     
     statsFrame.statDropDown = CreateFrame("Frame", "TopFit_ProgressFrame_statDropDown", statsFrame, "UIDropDownMenuTemplate")
-    --statsFrame.statDropDown:SetPoint("TOPLEFT", statsFrame, "TOPLEFT", 20, -20)
+    
     UIDropDownMenu_Initialize(statsFrame.statDropDown, function(self, level)
         level = level or 1
-        local info = UIDropDownMenu_CreateInfo()
         if (level == 1) then
             TopFit:collectItems()
-            local info = UIDropDownMenu_CreateInfo();
-            info.hasArrow = false; -- no submenu
-            info.notCheckable = true;
-            info.text = "Add stat...";
-            info.isTitle = true;
-            UIDropDownMenu_AddButton(info, level);
+            local info = UIDropDownMenu_CreateInfo()
+            info.hasArrow = false
+            info.notCheckable = true
+            info.text = "Add stat..."
+            info.isTitle = true
+            UIDropDownMenu_AddButton(info, level)
             
             for categoryName, statTable in pairs(TopFit.statList) do
-                local info = UIDropDownMenu_CreateInfo();
-                info.hasArrow = true;
-                info.notCheckable = true;
-                info.text = categoryName;
-                info.isTitle = false;
+                local info = UIDropDownMenu_CreateInfo()
+                info.hasArrow = true
+                info.notCheckable = true
+                info.text = categoryName
+                info.isTitle = false
                 info.value = categoryName
-                UIDropDownMenu_AddButton(info, level);
+                UIDropDownMenu_AddButton(info, level)
             end
             
             -- submenu for set pieces
-            local info = UIDropDownMenu_CreateInfo();
-            info.hasArrow = true;
-            info.notCheckable = true;
-            info.text = "Set Piece";
-            info.isTitle = false;
+            local info = UIDropDownMenu_CreateInfo()
+            info.hasArrow = true
+            info.notCheckable = true
+            info.text = "Set Piece"
+            info.isTitle = false
             info.value = "setpieces"
-            UIDropDownMenu_AddButton(info, level);
+            UIDropDownMenu_AddButton(info, level)
         elseif level == 2 then
             local parentValue = UIDROPDOWNMENU_MENU_VALUE
             
             if parentValue == "setpieces" then
-                -- check all items' set names
                 local setnames = {}
                 for _, itemList in pairs(TopFit:GetEquippableItems()) do
                     for _, locationTable in pairs(itemList) do
                         local itemTable = TopFit:GetCachedItem(locationTable.itemLink)
-                        if itemTable then
+                        if itemTable and itemTable.itemBonus then
                             for stat, _ in pairs(itemTable.itemBonus) do
                                 if (string.find(stat, "SET: ")) then
                                     local setname = string.gsub(stat, "SET: (.*)", "%1")
                                     
-                                    -- check if set was added already
                                     local found = false
                                     for _, setname2 in pairs(setnames) do
                                         if setname == setname2 then found = true break end
@@ -149,44 +156,42 @@ function TopFit:CreateStatsPlugin()
                 end
                 
                 table.sort(setnames)
-                local i
                 for i = 1, #setnames do
-                    local info = UIDropDownMenu_CreateInfo();
-                    info.hasArrow = false;
-                    info.notCheckable = true;
-                    info.text = setnames[i];
-                    info.isTitle = false;
-                    info.isChecked = false;
+                    local info = UIDropDownMenu_CreateInfo()
+                    info.hasArrow = false
+                    info.notCheckable = true
+                    info.text = setnames[i]
+                    info.isTitle = false
+                    info.isChecked = false
                     info.value = setnames[i]
                     info.func = function(...)
                         TopFit:Debug("Adding stat: "..info.value)
-                        if (TopFit.ProgressFrame.selectedSet) then
+                        if (TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet) then
                             TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights["SET: "..setnames[i]] = 0
                         end
                         statsFrame:UpdateSetStats()
                         TopFit:CalculateScores()
                     end
-                    UIDropDownMenu_AddButton(info, level);
+                    UIDropDownMenu_AddButton(info, level)
                 end
-            else
-                -- normal values
+            elseif parentValue and TopFit.statList[parentValue] then
                 for key, value in pairs(TopFit.statList[parentValue]) do
-                    local info = UIDropDownMenu_CreateInfo();
-                    info.hasArrow = false;
-                    info.notCheckable = true;
-                    info.text = _G[value];
-                    info.isTitle = false;
-                    info.isChecked = false;
+                    local info = UIDropDownMenu_CreateInfo()
+                    info.hasArrow = false
+                    info.notCheckable = true
+                    info.text = _G[value] or value
+                    info.isTitle = false
+                    info.isChecked = false
                     info.value = value
                     info.func = function(...)
                         TopFit:Debug("Adding stat: "..value)
-                        if (TopFit.ProgressFrame.selectedSet) then
+                        if (TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet) then
                             TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights[value] = 0
                         end
                         statsFrame:UpdateSetStats()
                         TopFit:CalculateScores()
                     end
-                    UIDropDownMenu_AddButton(info, level);
+                    UIDropDownMenu_AddButton(info, level)
                 end
             end
         end
@@ -194,9 +199,6 @@ function TopFit:CreateStatsPlugin()
     UIDropDownMenu_JustifyText(statsFrame.statDropDown, "LEFT")
     
     statsFrame.addStatButton = CreateFrame("Button", "TopFit_ProgressFrame_expandButton", statsFrame, "UIPanelButtonTemplate")
-    -- anchored to the bottom of the Force two-handed checkbox (always the last row in the
-    -- stack) rather than a fixed pixel offset from the panel, so it never overlaps the
-    -- checkboxes above it regardless of how many are shown for the current class.
     statsFrame.addStatButton:SetPoint("TOPLEFT", statsFrame.forceTwoHandedCheckButton, "BOTTOMLEFT", -10, -15)
     statsFrame.addStatButton:SetText("Add stat...")
     statsFrame.addStatButton:SetHeight(22)
@@ -207,19 +209,21 @@ function TopFit:CreateStatsPlugin()
         ToggleDropDownMenu(1, nil, statsFrame.statDropDown, self, -20, 0)
     end)
     
-    statsFrame.editStatScrollFrame = CreateFrame("ScrollFrame", "TopFit_EditStatScrollFrame", statsFrame, "UIPanelScrollFrameTemplate")
+    -- FIX: Inherit BackdropTemplate for modern WoW API
+    statsFrame.editStatScrollFrame = CreateFrame("ScrollFrame", "TopFit_EditStatScrollFrame", statsFrame, "UIPanelScrollFrameTemplate, BackdropTemplate")
     statsFrame.editStatScrollFrame:SetPoint("TOPLEFT", statsFrame.addStatButton, "BOTTOMLEFT", 0, -25)
     statsFrame.editStatScrollFrame:SetPoint("BOTTOMRIGHT", statsFrame, "BOTTOMRIGHT", -25, 5)
     statsFrame.editStatScrollFrame:SetHeight(statsFrame.editStatScrollFrame:GetHeight())
     statsFrame.editStatScrollFrame:SetWidth(statsFrame.editStatScrollFrame:GetWidth())
+    
     local editStatScrollFrameContent = CreateFrame("Frame", nil, statsFrame.editStatScrollFrame)
     editStatScrollFrameContent:SetAllPoints()
     editStatScrollFrameContent:SetHeight(10)
     editStatScrollFrameContent:SetWidth(235)
     statsFrame.editStatScrollFrame:SetScrollChild(editStatScrollFrameContent)
     statsFrame.editStatScrollFrame:SetBackdrop(backdrop)
-    statsFrame.editStatScrollFrame:SetBackdropBorderColor(0.4, 0.4, 0.4)
-    statsFrame.editStatScrollFrame:SetBackdropColor(0.1, 0.1, 0.1)
+    statsFrame.editStatScrollFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+    statsFrame.editStatScrollFrame:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
     
     -- containers for stat list
     statsFrame.menuHeaders = {}
@@ -246,16 +250,20 @@ function TopFit:CreateStatsPlugin()
         local capTypeButtons = statsFrame.capTypeButtons
         
         local sortableStatWeightTable = {}
-        if TopFit.ProgressFrame.selectedSet then
-            -- little fix: set values for active caps to 0 if they are nil, so they are always shown
-            for stat, capList in pairs(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps) do
-                if TopFit:IsStatCapped(capList) and TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights[stat] == nil then
-                    TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights[stat] = 0
+        if TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet then
+            local selectedSet = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet]
+            if selectedSet and selectedSet.caps then
+                for stat, capList in pairs(selectedSet.caps) do
+                    if TopFit:IsStatCapped(capList) and selectedSet.weights[stat] == nil then
+                        selectedSet.weights[stat] = 0
+                    end
                 end
             end
             
-            for stat, value in pairs(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights) do
-                table.insert(sortableStatWeightTable, {stat, value})
+            if selectedSet and selectedSet.weights then
+                for stat, value in pairs(selectedSet.weights) do
+                    table.insert(sortableStatWeightTable, {stat, value})
+                end
             end
         end
         
@@ -269,16 +277,13 @@ function TopFit:CreateStatsPlugin()
                 return nameA < nameB
             elseif order == "NameDesc" then
                 return nameA > nameB
-                
             elseif order == "ValueAsc" then
                 return a[2] < b[2]
             elseif order == "ValueDesc" then
                 return a[2] > b[2]
-                
             elseif order == "CapAsc" then
-                -- capped stats first, then ordered by name
-                local a_capped = TopFit:IsStatCapped(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[a[1]])
-                local b_capped = TopFit:IsStatCapped(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[b[1]])
+                local a_capped = TopFit.ProgressFrame.selectedSet and TopFit:IsStatCapped(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[a[1]])
+                local b_capped = TopFit.ProgressFrame.selectedSet and TopFit:IsStatCapped(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[b[1]])
                 if a_capped and b_capped then
                     return nameA < nameB
                 elseif a_capped then
@@ -289,9 +294,8 @@ function TopFit:CreateStatsPlugin()
                     return nameA < nameB
                 end
             elseif order == "CapDesc" then
-                -- capped stats last, then ordered by name
-                local a_capped = TopFit:IsStatCapped(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[a[1]])
-                local b_capped = TopFit:IsStatCapped(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[b[1]])
+                local a_capped = TopFit.ProgressFrame.selectedSet and TopFit:IsStatCapped(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[a[1]])
+                local b_capped = TopFit.ProgressFrame.selectedSet and TopFit:IsStatCapped(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[b[1]])
                 if a_capped and b_capped then
                     return nameA < nameB
                 elseif a_capped then
@@ -308,7 +312,7 @@ function TopFit:CreateStatsPlugin()
         
         -- headers
         local headerTitles = {{"Name", 165}, {"Value", 40}, {"Cap", 35}}
-        if not menuHeaders[1] then
+        if not menuHeaders[1] and TopFit.ProgressFrame and TopFit.ProgressFrame.CreateHeaderButton then
             local prefix = "TopFit_ProgressFrame_MenuHeader_"
             for i = 1, #headerTitles do
                 menuHeaders[i] = TopFit.ProgressFrame:CreateHeaderButton(statsFrame, prefix .. headerTitles[i][1])
@@ -370,7 +374,6 @@ function TopFit:CreateStatsPlugin()
                 statButtons[i].i = i
                 statButtons[i]:SetPoint("TOPLEFT", statTexts[i], "TOPLEFT")
                 statButtons[i]:SetPoint("BOTTOMRIGHT", valueTexts[i], "BOTTOMRIGHT")
-                --statButtons[i]:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
                 statButtons[i]:SetHighlightTexture("Interface\\Buttons\\UI-ListBox-Highlight")
                 statButtons[i]:SetAlpha(0.5)
                 statButtons[i]:SetScript("OnClick", function(self)
@@ -380,7 +383,6 @@ function TopFit:CreateStatsPlugin()
                 capButtons[i].i = i
                 capButtons[i]:SetPoint("TOPLEFT", capTexts[i], "TOPLEFT")
                 capButtons[i]:SetPoint("BOTTOMRIGHT", capValueTexts[i], "BOTTOMRIGHT")
-                --statButtons[i]:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
                 capButtons[i]:SetHighlightTexture("Interface\\Buttons\\UI-ListBox-Highlight")
                 capButtons[i]:SetAlpha(0.5)
                 capButtons[i]:SetScript("OnClick", function(self)
@@ -390,26 +392,28 @@ function TopFit:CreateStatsPlugin()
                 capTypeButtons[i].i = i
                 capTypeButtons[i]:SetPoint("TOPLEFT", capTypeTexts[i], "TOPLEFT")
                 capTypeButtons[i]:SetPoint("BOTTOMRIGHT", capTypeTexts[i], "BOTTOMRIGHT")
-                --statButtons[i]:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
                 capTypeButtons[i]:SetHighlightTexture("Interface\\Buttons\\UI-ListBox-Highlight")
                 capTypeButtons[i]:SetAlpha(0.5)
                 capTypeButtons[i]:SetScript("OnClick", function(self)
-                    local stat = statsFrame.editStatButtons[self.i].myStat
-                    local primaryCap = GetOrCreatePrimaryCap(stat)
-                    primaryCap.soft = not primaryCap.soft
-                    statsFrame:UpdateSetStats()
+                    local myStat = statsFrame.editStatButtons[self.i].myStat
+                    local primaryCap = GetOrCreatePrimaryCap(myStat)
+                    if primaryCap then
+                        primaryCap.soft = not primaryCap.soft
+                        statsFrame:UpdateSetStats()
+                    end
                 end)
                 
                 capBoxes[i].i = i
                 capBoxes[i]:SetHeight(12); capBoxes[i]:SetWidth(12)
                 capBoxes[i]:SetPoint("LEFT", valueTexts[i], "RIGHT")
                 capBoxes[i]:SetScript("OnClick", function(self)
-                    local stat = statsFrame.editStatButtons[self.i].myStat
-                    local primaryCap = GetOrCreatePrimaryCap(stat)
-                    primaryCap.active = not primaryCap.active
-                    
-                    statsFrame:UpdateSetStats()
-                    TopFit:CalculateScores()
+                    local myStat = statsFrame.editStatButtons[self.i].myStat
+                    local primaryCap = GetOrCreatePrimaryCap(myStat)
+                    if primaryCap then
+                        primaryCap.active = not primaryCap.active
+                        statsFrame:UpdateSetStats()
+                        TopFit:CalculateScores()
+                    end
                 end)
             end
             statButtons[i]:Show()
@@ -417,13 +421,11 @@ function TopFit:CreateStatsPlugin()
             valueTexts[i]:Show()
             statTexts[i]:SetText(_G[stat] or string.gsub(stat, "SET: ", "Set: "))
             valueTexts[i]:SetText(value)
-            local capList = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat]
+            
+            local capList = TopFit.ProgressFrame.selectedSet and TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].caps[stat]
             local primaryCap = capList and capList[1]
             if primaryCap and primaryCap.active then
                 capBoxes[i]:SetChecked(true)
-                -- if this stat has additional active cap entries beyond the primary one (e.g. a
-                -- secondary Dual Wield Hit cap alongside a primary Spell Hit cap), show a count --
-                -- edit them with /topfit caps, since this row only edits the primary entry
                 local extraActive = 0
                 if capList then
                     for idx = 2, #capList do
@@ -468,7 +470,6 @@ function TopFit:CreateStatsPlugin()
     
     function statsFrame:ShowStatEditTextBox(statID, isCap)
         if not statsFrame.statEditTextBox then
-            -- create box
             statsFrame.statEditTextBox = CreateFrame("EditBox", "TopFit_ProgressFrame_statEditTextBox", editStatScrollFrameContent)
             statsFrame.statEditTextBox:SetWidth(50)
             statsFrame.statEditTextBox:SetHeight(11)
@@ -476,7 +477,6 @@ function TopFit:CreateStatsPlugin()
             statsFrame.statEditTextBox:SetFontObject("GameFontHighlightSmall")
             statsFrame.statEditTextBox:SetJustifyH("RIGHT")
             
-            -- background textures
             local left = statsFrame.statEditTextBox:CreateTexture(nil, "BACKGROUND")
             left:SetWidth(8) left:SetHeight(20)
             left:SetPoint("LEFT", -5, 0)
@@ -494,23 +494,22 @@ function TopFit:CreateStatsPlugin()
             center:SetTexture("Interface\\Common\\Common-Input-Border")
             center:SetTexCoord(0.0625, 0.9375, 0, 0.625)
             
-            -- scripts
             statsFrame.statEditTextBox:SetScript("OnEscapePressed", function (self)
                 statsFrame:HideStatEditTextBox()
                 statsFrame:UpdateSetStats()
             end)
             
             statsFrame.statEditTextBox:SetScript("OnEnterPressed", function (self)
-                -- save new stat value if it is numeric
-                local value = tonumber(statsFrame.statEditTextBox:GetText())
-                local stat = statsFrame.editStatButtons[statsFrame.statEditTextBox.statID].myStat
-                local isCap = statsFrame.statEditTextBox.isCap
-                if value and stat then -- otherwise, the text was probably not a number
-                    if not isCap then
-                        if value == 0 then value = nil end
-                        TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights[stat] = value
+                local val = tonumber(statsFrame.statEditTextBox:GetText())
+                local myStat = statsFrame.editStatButtons[statsFrame.statEditTextBox.statID].myStat
+                local capFlag = statsFrame.statEditTextBox.isCap
+                if val and myStat and TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet then
+                    if not capFlag then
+                        if val == 0 then val = nil end
+                        TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights[myStat] = val
                     else
-                        GetOrCreatePrimaryCap(stat).value = value
+                        local pCap = GetOrCreatePrimaryCap(myStat)
+                        if pCap then pCap.value = val end
                     end
                 else
                     TopFit:Debug("invalid input")
@@ -522,11 +521,15 @@ function TopFit:CreateStatsPlugin()
         end
         if not isCap then
             statsFrame.statEditTextBox:SetPoint("RIGHT", statsFrame.editStatValueTexts[statID], "RIGHT")
-            statsFrame.statEditTextBox:SetText(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights[statsFrame.editStatButtons[statID].myStat])
+            local myStat = statsFrame.editStatButtons[statID].myStat
+            local val = TopFit.ProgressFrame.selectedSet and TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].weights[myStat]
+            statsFrame.statEditTextBox:SetText(val or "")
             statsFrame.editStatValueTexts[statID]:Hide()
         else
             statsFrame.statEditTextBox:SetPoint("RIGHT", statsFrame.statCapValueTexts[statID], "RIGHT")
-            statsFrame.statEditTextBox:SetText(GetOrCreatePrimaryCap(statsFrame.editStatButtons[statID].myStat).value)
+            local myStat = statsFrame.editStatButtons[statID].myStat
+            local pCap = GetOrCreatePrimaryCap(myStat)
+            statsFrame.statEditTextBox:SetText(pCap and pCap.value or "")
             statsFrame.statCapValueTexts[statID]:Hide()
         end
         statsFrame.statEditTextBox:Show()
@@ -552,24 +555,22 @@ function TopFit:CreateStatsPlugin()
     
     TopFit.RegisterCallback("TopFit_stats", "OnSetChanged", function(event, setId)
         if (setId) then
-            -- enable inputs
             statsFrame.addStatButton:Enable()
             statsFrame.includeInTooltipCheckButton:Enable()
             statsFrame.includeInTooltipCheckButton:SetChecked(not TopFit.db.profile.sets[setId].excludeFromTooltip)
             if (statsFrame.simulateDualWieldCheckButton) then
                 statsFrame.simulateDualWieldCheckButton:Enable()
-                statsFrame.simulateDualWieldCheckButton:SetChecked(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].simulateDualWield)
+                statsFrame.simulateDualWieldCheckButton:SetChecked(TopFit.db.profile.sets[setId].simulateDualWield)
             end
             if (statsFrame.simulateTitansGripCheckButton) then
                 statsFrame.simulateTitansGripCheckButton:Enable()
-                statsFrame.simulateTitansGripCheckButton:SetChecked(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].simulateTitansGrip)
+                statsFrame.simulateTitansGripCheckButton:SetChecked(TopFit.db.profile.sets[setId].simulateTitansGrip)
             end
             if (statsFrame.forceTwoHandedCheckButton) then
                 statsFrame.forceTwoHandedCheckButton:Enable()
-                statsFrame.forceTwoHandedCheckButton:SetChecked(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].forceTwoHanded)
+                statsFrame.forceTwoHandedCheckButton:SetChecked(TopFit.db.profile.sets[setId].forceTwoHanded)
             end
         else
-            -- no set selected, disable inputs
             statsFrame.addStatButton:Disable()
             statsFrame.includeInTooltipCheckButton:Disable()
             if (statsFrame.simulateDualWieldCheckButton) then

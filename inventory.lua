@@ -6,16 +6,39 @@ TopFit.scoresCache - scores, indexed by itemLink and setCode
 
 ]]--
 
-local function tinsertonce(table, data)
+-- Ensure TopFit.slots is initialized
+TopFit.slots = TopFit.slots or {
+    HeadSlot = 1,
+    NeckSlot = 2,
+    ShoulderSlot = 3,
+    ShirtSlot = 4,
+    ChestSlot = 5,
+    WaistSlot = 6,
+    LegsSlot = 7,
+    FeetSlot = 8,
+    WristSlot = 9,
+    HandsSlot = 10,
+    Finger0Slot = 11,
+    Finger1Slot = 12,
+    Trinket0Slot = 13,
+    Trinket1Slot = 14,
+    BackSlot = 15,
+    MainHandSlot = 16,
+    SecondaryHandSlot = 17,
+    RangedSlot = 18,
+    TabardSlot = 19,
+}
+
+local function tinsertonce(tbl, data)
     local found = false
-    for _, v in pairs(table) do
+    for _, v in pairs(tbl) do
         if v == data then
             found = true
             break
         end
     end
     if not found then
-        tinsert(table, data)
+        tinsert(tbl, data)
     end
 end
 
@@ -23,28 +46,34 @@ end
 function TopFit:collectItems(bag)
     TopFit.characterLevel = UnitLevel("player")
     
-    if bag and bag >= 0 and bag <= 4 then
+    local maxBags = (NUM_BAG_SLOTS or 4) + (NUM_REAGENT_BAG_SLOTS or 0)
+    if bag and bag >= 0 and bag <= maxBags then
         -- only check a specific bag (used on BAG_UPDATE)
-        for slot = 1, C_Container.GetContainerNumSlots(bag) do
+        local numSlots = C_Container.GetContainerNumSlots(bag) or 0
+        for slot = 1, numSlots do
             local item = C_Container.GetContainerItemLink(bag, slot)
-            
-            TopFit:UpdateCache(item)
+            if item then
+                TopFit:UpdateCache(item)
+            end
         end
     else
-        -- check bags
-        for bag = 0, 4 do
-            for slot = 1, C_Container.GetContainerNumSlots(bag) do
-                local item = C_Container.GetContainerItemLink(bag, slot)
-                
-                TopFit:UpdateCache(item)
+        -- check all bags
+        for bagID = 0, maxBags do
+            local numSlots = C_Container.GetContainerNumSlots(bagID) or 0
+            for slot = 1, numSlots do
+                local item = C_Container.GetContainerItemLink(bagID, slot)
+                if item then
+                    TopFit:UpdateCache(item)
+                end
             end
         end
         
         -- check equipped items
         for _, invSlot in pairs(TopFit.slots) do
             local item = GetInventoryItemLink("player", invSlot)
-            
-            TopFit:UpdateCache(item)
+            if item then
+                TopFit:UpdateCache(item)
+            end
         end
     end
 end
@@ -52,86 +81,64 @@ end
 -- collect item information if necessary
 function TopFit:UpdateCache(item)
     if item and (not TopFit.itemsCache[item]) then
-        -- check if it's equipment
-        if C_Item.IsEquippableItem(item) then
-            local itemTable = TopFit:GetItemInfoTable(item)
+        local isEquippable = (C_Item and C_Item.IsEquippableItem and C_Item.IsEquippableItem(item))
+            or (IsEquippableItem and IsEquippableItem(item))
             
+        if isEquippable then
+            local itemTable = TopFit:GetItemInfoTable(item)
             if itemTable then
-                -- save in cache
                 TopFit.itemsCache[item] = itemTable
-                
-                -- calculate set scores
                 TopFit:CalculateItemScore(item)
             end
         end
     end
 end
 
--- 12.1.5's GetItemInfo can legitimately return nil on the first call for an item
--- that isn't cached yet (unlike 3.3.5a's synchronous behavior, which this addon was
--- originally written against). This tracks which itemIDs we're waiting on, so the
--- GET_ITEM_INFO_RECEIVED handler in core.lua knows what to rescan once data arrives.
--- Deliberately NOT a fallback/compat shim -- this is the correct, only way to handle
--- item data on this client, not a bridge to older behavior.
 TopFit.pendingItemInfoRequests = TopFit.pendingItemInfoRequests or {}
 
--- re-runs GetItemInfoTable for an item once its async data has loaded, and refreshes
--- anything cached under its old (incomplete) result. Called from core.lua's
--- GET_ITEM_INFO_RECEIVED handler.
+-- re-runs GetItemInfoTable for an item once its async data has loaded
 function TopFit:RescanPendingItem(itemID)
     if not itemID then return end
-    -- clear any cache entries keyed off this itemID with unresolved data, then let the
-    -- normal collection pass (next BAG_UPDATE, or an explicit rescan) pick it back up
+    local strID = tostring(itemID)
     if TopFit.itemsCache then
-        for cacheKey in pairs(TopFit.itemsCache) do
-            if cacheKey:match("^" .. itemID .. ":") then
-                TopFit.itemsCache[cacheKey] = nil
+        for link in pairs(TopFit.itemsCache) do
+            if link:find("item:" .. strID .. ":") or link:find("item:" .. strID .. "|") then
+                TopFit.itemsCache[link] = nil
             end
         end
     end
     TopFit:collectItems()
 end
 
--- find out all we need to know about an item. and maybe even more
--- this does not return information which might change, only things you can get from the item link
+-- find out all we need to know about an item
 function TopFit:GetItemInfoTable(item)
-    local itemName, itemLink, itemQuality, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount, itemEquipLoc, itemTexture = GetItemInfo(item)
+    local GetInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    local itemName, itemLink, itemQuality, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount, itemEquipLoc, itemTexture = GetInfo(item)
     if not itemLink then
-        -- not cached yet -- request the data and remember to retry once it arrives,
-        -- rather than silently dropping this item from scoring until the next reload
         local itemID = tonumber(item) or tonumber(tostring(item):match("item:(%d+)"))
-        if itemID then
+        if itemID and C_Item and C_Item.RequestLoadItemDataByID then
             C_Item.RequestLoadItemDataByID(itemID)
             TopFit.pendingItemInfoRequests[itemID] = true
         end
         return nil
     end
 
-    -- Extract IDs for unique cache key
-    local itemID = string.match(itemLink, "item:(%d+)")
-    local enchantID = string.match(itemLink, "item:%d+:(%d+)") or "0"
-    local g1, g2, g3, g4 = string.match(itemLink, "item:%d+:%d+:(%d+):(%d+):(%d+):(%d+)")
-    local cacheKey = string.format("%s:%s:%s:%s:%s:%s", itemID or "0", enchantID, g1 or "0", g2 or "0", g3 or "0", g4 or "0")
+    -- Universal Item Link Cache Key (Matches full link specifiers across Retail & Classic)
+    local cacheKey = string.match(itemLink, "item:([%d:-]+)") or tostring(item)
 
-    -- 1. SavedVariables Cache Lookup
-    TopFit.db = TopFit.db or {}
-    TopFit.db.global = TopFit.db.global or {}
-    TopFit.db.global.itemCache = TopFit.db.global.itemCache or {}
-
-    if TopFit.db.global.itemCache[cacheKey] then
-        return TopFit.db.global.itemCache[cacheKey]
+    -- SavedVariables Cache Lookup
+    if TopFit.db and TopFit.db.global and TopFit.db.global.itemCache then
+        if TopFit.db.global.itemCache[cacheKey] then
+            return TopFit.db.global.itemCache[cacheKey]
+        end
     end
 
-    itemID = tonumber(itemID)
-    enchantID = tonumber(enchantID)
+    local itemID = tonumber(string.match(itemLink, "item:(%d+)")) or 0
 
-    -- 2. Base Item Stats (from API)
-    local itemBonus = GetItemStats(itemLink) or {}
+    -- Base Item Stats
+    local GetStats = (C_Item and C_Item.GetItemStats) or GetItemStats
+    local itemBonus = (GetStats and GetStats(itemLink)) or {}
 
-    -- 2b. Permanent flat/percent "Equip:" stats not covered by GetItemStats() at all on
-    -- WoW: Forever's pre-rating itemization model (hit/crit %, dodge-parry reduction %,
-    -- flat weapon skill, flat defense, flat spell healing/damage) -- see procparser.lua.
-    -- Merged in as TOPFIT_* keys alongside the normal ITEM_MOD_* keys from GetItemStats().
     if TopFit.ScanItemPermanentPercentStats then
         local permanentStats = TopFit:ScanItemPermanentPercentStats(itemLink)
         for statKey, amount in pairs(permanentStats) do
@@ -149,9 +156,8 @@ function TopFit:GetItemInfoTable(item)
     -- Helper to parse stat lines safely
     local function ParseStatLine(lineText, targetTable)
         if not lineText or lineText == "" then return end
-        local cleanLine = string.gsub(lineText, "%(.-%)", "") -- Strip parenthesized rating calculations
+        local cleanLine = string.gsub(lineText, "%(.-%)", "")
 
-        -- Handle "+X All Stats" (Enchanted / Nightmare Tear, Prismatic Sphere)
         local allStatsVal = string.match(cleanLine, "%+?(%d+)%s+[Aa]ll%s+[Ss]tats")
         if allStatsVal then
             local val = tonumber(allStatsVal) or 0
@@ -162,8 +168,7 @@ function TopFit:GetItemInfoTable(item)
             targetTable["ITEM_MOD_SPIRIT_SHORT"] = (targetTable["ITEM_MOD_SPIRIT_SHORT"] or 0) + val
         end
 
-        -- Handle standard stats
-        for _, sTable in pairs(TopFit.statList) do
+        for _, sTable in pairs(TopFit.statList or {}) do
             for _, statCode in pairs(sTable) do
                 local statName = _G[statCode]
                 if statName and statName ~= "" and string.find(cleanLine, statName) then
@@ -177,7 +182,6 @@ function TopFit:GetItemInfoTable(item)
             end
         end
 
-        -- Check Meta Gem % Critical Damage
         if string.find(cleanLine, "Critical Damage") then
             local critDmgVal = tonumber(string.match(cleanLine, "(%d+)%%")) or 0
             if critDmgVal > 0 then
@@ -186,7 +190,7 @@ function TopFit:GetItemInfoTable(item)
         end
     end
 
-    -- 3. SCAN SOCKETED GEMS IN ISOLATION (Only inspects the gem's own tooltip link)
+    -- Scan socketed gems
     local gemBonus = {}
     local gems = {}
     local filledSocketColors = {}
@@ -205,10 +209,8 @@ function TopFit:GetItemInfoTable(item)
                 local leftLine = _G["TFScanTooltipTextLeft" .. lineIdx]
                 local lineText = leftLine and leftLine:GetText()
                 if lineText and lineText ~= "" then
-                    -- Parse stats directly off the gem's isolated tooltip ONLY
                     ParseStatLine(lineText, gemBonus)
 
-                    -- Detect gem socket color
                     if string.find(lineText, "Red") or string.find(lineText, "Rubidium") then
                         gemColor = "RED"
                     elseif string.find(lineText, "Yellow") or string.find(lineText, "Amber") then
@@ -225,7 +227,7 @@ function TopFit:GetItemInfoTable(item)
         end
     end
 
-    -- 4. SCAN MAIN ITEM TOOLTIP (Only for Active Socket Bonus, Empty Sockets & Enchants)
+    -- Scan item tooltip
     local enchantBonus = {}
     local emptySocketColors = {}
     local socketBonusInfo = nil
@@ -255,14 +257,13 @@ function TopFit:GetItemInfoTable(item)
                 r, g, b = leftLine:GetTextColor()
             end
 
-            -- A. Active Socket Bonus
             if string.find(lineText, socketBonusString) then
-                local isActive = (r < 0.1) -- Green text indicates active bonus
+                local isActive = (r < 0.1)
                 local bonusText = string.gsub(lineText, "^" .. socketBonusString .. "$", "%1")
                 if isActive then
                     ParseStatLine(bonusText, gemBonus)
                 elseif #emptySocketColors > 0 then
-                    for _, sTable in pairs(TopFit.statList) do
+                    for _, sTable in pairs(TopFit.statList or {}) do
                         for _, statCode in pairs(sTable) do
                             if _G[statCode] and string.find(bonusText, _G[statCode]) then
                                 local pat1 = "%+?(%d+)%s*" .. _G[statCode]
@@ -275,8 +276,6 @@ function TopFit:GetItemInfoTable(item)
                         end
                     end
                 end
-
-            -- B. Empty Sockets
             else
                 for color, pattern in pairs(socketColorPatterns) do
                     if pattern and lineText == pattern then
@@ -285,7 +284,6 @@ function TopFit:GetItemInfoTable(item)
                     end
                 end
 
-                -- C. Active Enchants (Green text, excluding Equip, Use, Set, and Socket Bonus)
                 if r < 0.1 and g > 0.9 and b < 0.1 then
                     if not string.find(lineText, "Equip:") and not string.find(lineText, "Use:") and not string.find(lineText, "Set:") and not string.find(lineText, "Socket Bonus") then
                         ParseStatLine(lineText, enchantBonus)
@@ -300,16 +298,19 @@ function TopFit:GetItemInfoTable(item)
         socketBonusInfo = nil
     end
 
-    -- 5. Set Name Scanning
+    -- Set Name Scanning
     TopFit.scanTooltip:SetOwner(UIParent, "ANCHOR_NONE")
     TopFit.scanTooltip:SetHyperlink(itemLink)
     local setName = nil
     for i = 1, TopFit.scanTooltip:NumLines() do
         local leftLine = _G["TFScanTooltipTextLeft" .. i]
         local leftLineText = leftLine and leftLine:GetText()
-        if leftLineText and string.find(leftLineText, "(.*)%s%([0-9]+/[0-9+]%)") then
-            setName = select(3, string.find(leftLineText, "(.*)%s%([0-9]+/[0-9+]%)"))
-            break
+        if leftLineText then
+            local matchName = string.match(leftLineText, "^(.-)%s*%((%d+)/%d+%)")
+            if matchName then
+                setName = matchName
+                break
+            end
         end
     end
     TopFit.scanTooltip:Hide()
@@ -318,7 +319,7 @@ function TopFit:GetItemInfoTable(item)
         itemBonus["SET: " .. setName] = 1
     end
 
-    -- 6. Mana Regen Consolidation
+    -- Mana Regen Consolidation
     itemBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] = ((itemBonus["ITEM_MOD_POWER_REGEN0_SHORT"] or 0) + (itemBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] or 0))
     itemBonus["ITEM_MOD_POWER_REGEN0_SHORT"] = nil
     if itemBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] == 0 then itemBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] = nil end
@@ -331,7 +332,7 @@ function TopFit:GetItemInfoTable(item)
     enchantBonus["ITEM_MOD_POWER_REGEN0_SHORT"] = nil
     if enchantBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] == 0 then enchantBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] = nil end
 
-    -- 7. Total Bonus Aggregation
+    -- Total Bonus Aggregation
     local totalBonus = {}
     for _, bonusTable in pairs({ itemBonus, gemBonus, enchantBonus }) do
         for stat, value in pairs(bonusTable) do
@@ -369,62 +370,52 @@ function TopFit:GetItemInfoTable(item)
         ["hasUnscoredProc"] = hasUnscoredProc,
     }
 
-    TopFit.db.global.itemCache[cacheKey] = result
+    -- Save to Global Persistent Cache
+    if TopFit.db and TopFit.db.global then
+        TopFit.db.global.itemCache = TopFit.db.global.itemCache or {}
+        TopFit.db.global.itemCache[cacheKey] = result
+    end
 
     return result
 end
--- calculate an item's score relative to a given set
+
 function TopFit:CalculateItemScore(itemLink)
-    local itemTable = TopFit:GetCachedItem(itemLink)
-    if not itemTable then return end
+    local itemTable = TopFit.itemsCache[itemLink] or TopFit:GetCachedItem(itemLink)
+    if not itemTable or not TopFit.db or not TopFit.db.profile or not TopFit.db.profile.sets then return end
     
+    TopFit.scoresCache[itemLink] = TopFit.scoresCache[itemLink] or {}
+
     for setCode, setTable in pairs(TopFit.db.profile.sets) do
-        local set = setTable.weights
+        local set = setTable.weights or {}
         local caps = setTable.caps
         
-        -- calculate item score
         local itemScore = 0
         local capsModifier = 0
-        -- iterate given weights
         for stat, statValue in pairs(set) do
             if itemTable.totalBonus[stat] then
-                -- check for hard cap on this stat
                 if ((not caps) or (not caps[stat]) or (not TopFit:HasActiveHardCap(caps[stat]))) then
                     itemScore = itemScore + statValue * itemTable.totalBonus[stat]
                 else
-                    -- part of hard cap, score calculated extra
                     capsModifier = capsModifier + statValue * itemTable.totalBonus[stat]
                 end
             end
         end
         
-        -- also calculate raw item score
         local rawScore = 0
         local rawModifier = 0
-        -- iterate given weights
         for stat, statValue in pairs(set) do
             if itemTable.itemBonus[stat] then
-                -- check for hard cap on this stat
                 if ((not caps) or (not caps[stat]) or (not TopFit:HasActiveHardCap(caps[stat]))) then
                     rawScore = rawScore + statValue * itemTable.itemBonus[stat]
                 else
-                    -- part of hard cap, score calculated extra
                     rawModifier = rawModifier + statValue * itemTable.totalBonus[stat]
                 end
             end
         end
         
-        -- credit empty sockets with the value of the best gem that could go in them (plus the
-        -- item's socket bonus, if filling them would unlock it) -- otherwise an ungemmed item
-        -- scores as if its sockets are worthless, when in practice they'd be filled immediately
-        local potentialGemScore = TopFit:GetPotentialGemScore(itemTable, set, caps)
+        local potentialGemScore = TopFit.GetPotentialGemScore and TopFit:GetPotentialGemScore(itemTable, set, caps) or 0
         itemScore = itemScore + potentialGemScore
         
-        if not TopFit.scoresCache[itemLink] then
-            TopFit.scoresCache[itemLink] = {}
-        end
-        
-        --TODO: could be rewritten slightly to save some tables
         TopFit.scoresCache[itemLink][setCode] = {
             itemScore = itemScore,
             itemScoreWithoutCaps = itemScore + capsModifier,
@@ -434,18 +425,14 @@ function TopFit:CalculateItemScore(itemLink)
     end
 end
 
--- calculate item scores
 function TopFit:CalculateScores()
-    -- iterate all cached items and recalculate their scores
     for itemLink, _ in pairs(TopFit.itemsCache) do
         TopFit:CalculateItemScore(itemLink)
     end
 end
 
--- used by tooltip to decide which item slots to compare to
 function TopFit:GetEquipLocationsByInvType(itemEquipLoc)
     if itemEquipLoc == "INVTYPE_2HWEAPON" then
-        --TODO: check weapon type
         return {16}
     elseif itemEquipLoc == "INVTYPE_BODY" then
         return {4}
@@ -486,154 +473,161 @@ function TopFit:GetEquipLocationsByInvType(itemEquipLoc)
     elseif itemEquipLoc == "INVTYPE_WRIST" then
         return {9}
     end
-    -- default / invalid location
     return {}
 end
 
-
-
--- returns all equippable items, limited by slot, if given
+-- Direct Equippable Items Collector (Maps to both numeric slot IDs and string slot names)
 function TopFit:GetEquippableItems(requestedSlotID)
     local itemListBySlot = {}
-    local availableSlots = {}
 
-    -- find available item ids for each slot
-    for slotName, slotID in pairs(TopFit.slots) do
-        itemListBySlot[slotID] = {}
-        slotAvailableItems = GetInventoryItemsForSlot(slotID)
-        if (slotAvailableItems) then
-            for availableLocation, availableItemID in pairs(slotAvailableItems) do
-                if (not availableSlots[availableItemID]) then
-                    availableSlots[availableItemID] = { slotID }
-                else
-                    tinsertonce(availableSlots[availableItemID], slotID)
-                end
-            end
-        end
-        
-        -- special handling for plate heirlooms
-        if (TopFit.heirloomInfo.isPlateWearer and (slotID == 3 or slotID == 5) and UnitLevel("player") < 40) then
-            for i = 1, #(TopFit.heirloomInfo.plateHeirlooms[slotID]) do
-                if (not availableSlots[TopFit.heirloomInfo.plateHeirlooms[slotID][i]]) then
-                    availableSlots[TopFit.heirloomInfo.plateHeirlooms[slotID][i]] = { slotID }
-                else
-                    tinsertonce(availableSlots[TopFit.heirloomInfo.plateHeirlooms[slotID][i]], slotID)
-                end
-            end
-        end
-        
-        -- special handling for mail heirlooms
-        if (TopFit.heirloomInfo.isMailWearer and (slotID == 3 or slotID == 5) and UnitLevel("player") < 40) then
-            for i = 1, #(TopFit.heirloomInfo.mailHeirlooms[slotID]) do
-                if (not availableSlots[TopFit.heirloomInfo.mailHeirlooms[slotID][i]]) then
-                    availableSlots[TopFit.heirloomInfo.mailHeirlooms[slotID][i]] = { slotID }
-                else
-                    tinsertonce(availableSlots[TopFit.heirloomInfo.mailHeirlooms[slotID][i]], slotID)
-                end
-            end
-        end
+    -- Initialize empty lists for both numeric IDs and string names
+    for slotName, slotID in pairs(TopFit.slots or {}) do
+        itemListBySlot[slotID] = itemListBySlot[slotID] or {}
+        itemListBySlot[slotName] = itemListBySlot[slotID]
     end
-    
-    -- check player's bags
-    for bag = 0, 4 do
-        for slot = 1, C_Container.GetContainerNumSlots(bag) do
-            local itemLink = C_Container.GetContainerItemLink(bag, slot)
-            if itemLink then
-                local itemID = string.gsub(itemLink, ".*|Hitem:([0-9]*):.*", "%1")
-                itemID = tonumber(itemID)
-                
-                if (availableSlots[itemID]) then
-                    -- check if item is BoE
-                    local isBoE = false
+
+    local processedKeys = {}
+
+    local function AddItemToSlots(itemLink, bag, slot)
+        if not itemLink then return end
+        local key = itemLink .. ":" .. (bag or "nil") .. ":" .. (slot or "nil")
+        if processedKeys[key] then return end
+        processedKeys[key] = true
+
+        local itemTable = TopFit:GetCachedItem(itemLink)
+        local equipLoc = itemTable and itemTable.itemEquipLoc
+        if not equipLoc then
+            local GetInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+            equipLoc = select(9, GetInfo(itemLink))
+        end
+
+        if equipLoc and equipLoc ~= "" then
+            local targetSlots = TopFit:GetEquipLocationsByInvType(equipLoc)
+            if targetSlots and #targetSlots > 0 then
+                local isBoE = false
+                if bag and slot then
                     TopFit.scanTooltip:SetOwner(UIParent, 'ANCHOR_NONE')
                     TopFit.scanTooltip:SetBagItem(bag, slot)
-                    local numLines = TopFit.scanTooltip:NumLines()
-                    for i = 1, numLines do
-                        local leftLine = getglobal("TFScanTooltip".."TextLeft"..i)
-                        local leftLineText = leftLine:GetText()
-                        
-                        if string.find(leftLineText, _G["ITEM_BIND_ON_EQUIP"]) then
+                    for i = 1, TopFit.scanTooltip:NumLines() do
+                        local leftLine = _G["TFScanTooltipTextLeft" .. i]
+                        local leftLineText = leftLine and leftLine:GetText()
+                        if leftLineText and string.find(leftLineText, _G["ITEM_BIND_ON_EQUIP"] or "Bind on Equip") then
                             isBoE = true
                             break
                         end
                     end
-                    
-                    for _, slotID in pairs(availableSlots[itemID]) do
-                        tinsert(itemListBySlot[slotID], {
-                            itemLink = itemLink,
-                            isBoE = isBoE,
-                            bag = bag,
-                            slot = slot
-                        })
-                    end
+                    TopFit.scanTooltip:Hide()
                 end
-            end
-        end
-    end
-    
-    -- check player's inventory
-    for _, invSlot in pairs(TopFit.slots) do
-        local itemLink = GetInventoryItemLink("player", invSlot)
-        if itemLink then
-            local itemID = string.gsub(itemLink, ".*|Hitem:([0-9]*):.*", "%1")
-            itemID = tonumber(itemID)
-            
-            if (availableSlots[itemID]) then
-                for _, slotID in pairs(availableSlots[itemID]) do
+
+                for _, slotID in ipairs(targetSlots) do
+                    itemListBySlot[slotID] = itemListBySlot[slotID] or {}
                     tinsert(itemListBySlot[slotID], {
                         itemLink = itemLink,
-                        isBoE = false, -- it is already equipped
-                        slot = invSlot
+                        isBoE = isBoE,
+                        bag = bag,
+                        slot = slot,
                     })
                 end
             end
         end
     end
-    
-    -- add virtual items
-    if (TopFit.setCode and TopFit.db.profile.sets[TopFit.setCode].virtualItems and not TopFit.db.profile.sets[TopFit.setCode].skipVirtualItems) then
-        for _, itemLink in pairs(TopFit.db.profile.sets[TopFit.setCode].virtualItems) do
-            local item = TopFit:GetCachedItem(itemLink)
-            local equipSlots = TopFit:GetEquipLocationsByInvType(item.itemEquipLoc)
-            for _, slotID in pairs(equipSlots) do
-                tinsert(itemListBySlot[slotID], {
-                    itemLink = itemLink,
-                    isBoE = false, -- if it's in virtual items, we want to include it
-                    isVirtual = true
-                })
+
+    -- 1. Scan Equipped Items
+    for _, invSlot in pairs(TopFit.slots or {}) do
+        local itemLink = GetInventoryItemLink("player", invSlot)
+        if itemLink then
+            AddItemToSlots(itemLink, nil, invSlot)
+        end
+    end
+
+    -- 2. Scan Bags
+    local maxBags = (NUM_BAG_SLOTS or 4) + (NUM_REAGENT_BAG_SLOTS or 0)
+    for bag = 0, maxBags do
+        local numSlots = C_Container.GetContainerNumSlots(bag) or 0
+        for slot = 1, numSlots do
+            local itemLink = C_Container.GetContainerItemLink(bag, slot)
+            if itemLink then
+                AddItemToSlots(itemLink, bag, slot)
             end
         end
     end
-    
-    if (requestedSlotID) then
-        return itemListBySlot[requestedSlotID]
+
+    -- 3. Add Virtual Items
+    if (TopFit.setCode and TopFit.db and TopFit.db.profile and TopFit.db.profile.sets[TopFit.setCode] and TopFit.db.profile.sets[TopFit.setCode].virtualItems and not TopFit.db.profile.sets[TopFit.setCode].skipVirtualItems) then
+        for _, itemLink in pairs(TopFit.db.profile.sets[TopFit.setCode].virtualItems) do
+            local item = TopFit:GetCachedItem(itemLink)
+            if item then
+                local equipSlots = TopFit:GetEquipLocationsByInvType(item.itemEquipLoc)
+                for _, slotID in pairs(equipSlots) do
+                    itemListBySlot[slotID] = itemListBySlot[slotID] or {}
+                    tinsert(itemListBySlot[slotID], {
+                        itemLink = itemLink,
+                        isBoE = false,
+                        isVirtual = true
+                    })
+                end
+            end
+        end
+    end
+
+    if requestedSlotID then
+        return itemListBySlot[requestedSlotID] or {}
     else
         return itemListBySlot
     end
 end
 
+-- Safely retrieves scores, automatically calculating on-demand if missing
 function TopFit:GetItemScore(itemLink, setCode, dontUseCaps, useRawItem)
-    if not TopFit.scoresCache[itemLink] or not TopFit.scoresCache[itemLink][setCode] then return 0 end
+    if not itemLink or not setCode then return 0 end
+
+    -- On-demand calculation if score entry doesn't exist yet for this setCode
+    if not TopFit.scoresCache[itemLink] or not TopFit.scoresCache[itemLink][setCode] then
+        TopFit:CalculateItemScore(itemLink)
+    end
+
+    local scoreEntry = TopFit.scoresCache[itemLink] and TopFit.scoresCache[itemLink][setCode]
+    if not scoreEntry then return 0 end
     
     if dontUseCaps then
-        if useRawItem then
-            return TopFit.scoresCache[itemLink][setCode].rawScoreWithoutCaps
-        else
-            return TopFit.scoresCache[itemLink][setCode].itemScoreWithoutCaps
-        end
+        return useRawItem and scoreEntry.rawScoreWithoutCaps or scoreEntry.itemScoreWithoutCaps
     else
-        if useRawItem then
-            return TopFit.scoresCache[itemLink][setCode].rawScore
-        else
-            return TopFit.scoresCache[itemLink][setCode].itemScore
-        end
+        return useRawItem and scoreEntry.rawScore or scoreEntry.itemScore
     end
 end
 
--- gets an item's info from the cache
+-- Multi-tier cache resolution to handle variations in WoW itemLink strings
 function TopFit:GetCachedItem(itemLink)
     if not itemLink then return nil end
+
+    -- 1. Direct exact link match in runtime memory
+    if TopFit.itemsCache[itemLink] then
+        return TopFit.itemsCache[itemLink]
+    end
+
+    -- 2. Attempt cache update for this link
     TopFit:UpdateCache(itemLink)
-    
-    return TopFit.itemsCache[itemLink]
+    if TopFit.itemsCache[itemLink] then
+        return TopFit.itemsCache[itemLink]
+    end
+
+    -- 3. Soft Match Fallback: Match by extracted itemID / specifier if link format differs
+    local itemIDSpec = string.match(itemLink, "item:([%d:-]+)") or string.match(itemLink, "item:(%d+)")
+    if itemIDSpec then
+        for cachedLink, itemTable in pairs(TopFit.itemsCache) do
+            if cachedLink:find("item:" .. itemIDSpec, 1, true) or (itemTable.itemID and tostring(itemTable.itemID) == itemIDSpec) then
+                TopFit.itemsCache[itemLink] = itemTable
+                return itemTable
+            end
+        end
+
+        -- Check global persistent SavedVariables cache
+        if TopFit.db and TopFit.db.global and TopFit.db.global.itemCache and TopFit.db.global.itemCache[itemIDSpec] then
+            local itemTable = TopFit.db.global.itemCache[itemIDSpec]
+            TopFit.itemsCache[itemLink] = itemTable
+            return itemTable
+        end
+    end
+
+    return nil
 end

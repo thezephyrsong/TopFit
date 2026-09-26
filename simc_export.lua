@@ -11,6 +11,30 @@
 	example profiles. Those stats are simply dropped; there is nowhere in the format for them to go.
 ]]
 
+local function GetItemInfoSafe(item)
+	if not item then return nil end
+	local GetInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+	if GetInfo then
+		return GetInfo(item)
+	end
+	return nil
+end
+
+local function GetSpellBookItemNameSafe(slotIndex, spellBank)
+	if type(slotIndex) ~= "number" then return nil end
+	local bank = spellBank
+	if not bank or bank == "spell" or bank == BOOKTYPE_SPELL then
+		bank = (Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player) or "spell"
+	end
+
+	if C_SpellBook and C_SpellBook.GetSpellBookItemName then
+		return C_SpellBook.GetSpellBookItemName(slotIndex, bank)
+	elseif GetSpellBookItemName then
+		return GetSpellBookItemName(slotIndex, bank)
+	end
+	return nil
+end
+
 local CLASS_TO_SIMC = {
 	WARRIOR     = "warrior",
 	PALADIN     = "paladin",
@@ -22,6 +46,9 @@ local CLASS_TO_SIMC = {
 	MAGE        = "mage",
 	WARLOCK     = "warlock",
 	DRUID       = "druid",
+	DEMONHUNTER = "demon_hunter",
+	MONK        = "monk",
+	EVOKER      = "evoker",
 }
 
 -- Blizzard's old wowarmory.com talent-calc "cid" (class id) numbering.
@@ -39,11 +66,6 @@ local CLASS_TO_WOWARMORY_CID = {
 }
 
 -- builds the wowarmory-style "tal=" digit string from your CURRENT live talent allocation.
--- Blizzard doesn't load talent data client-side until the Talent panel has been opened at least
--- once per session -- GetNumTalentTabs()/GetTalentInfo() just return 0/nil until then, which is
--- almost certainly why "talents=" was showing up empty. Returns nil + a reason string instead of
--- silently producing an empty string, so the caller can tell the difference between "no talent
--- data available yet" and "character genuinely has 0 points spent".
 local function GetWowarmoryTalentString()
 	local numTabs = TopFit:GetNumTalentTabsSafe()
 	if numTabs == 0 then
@@ -61,119 +83,106 @@ end
 
 -- diagnostic talent tracking
 function TopFit:DebugTalentCounts()
-	local numTabs = TopFit:GetNumTalentTabsSafe()
-	if numTabs == 0 then
-		if TopFit.hasClassicTalentAPI then
-			TopFit:Print("No talent data available -- open your Talent panel (default key: N) once this session, then run this again.")
-		else
-			TopFit:Print("This client doesn't expose GetNumTalentTabs/GetTalentInfo at all (TopFit.hasClassicTalentAPI is false) -- see REWRITE_PLAN_12_1_5.md section 6/beta-day-one checklist.")
-		end
-		return
-	end
-	TopFit:Print("GetNumTalentTabs() = " .. tostring(numTabs))
-	local total = 0
-	for tab = 1, numTabs do
-		local tabName = TopFit:GetTalentTabNameSafe(tab)
-		local numTalents = TopFit:GetNumTalentsSafe(tab)
-		total = total + numTalents
-		TopFit:Print(("Tab %d (%s): GetNumTalents() = %d"):format(tab, tostring(tabName), numTalents))
-		for i = 1, numTalents do
-			local currentRank, name, maxRank = TopFit:GetTalentRankSafe(tab, i)
-			TopFit:Print(("  [%d] %s -- rank %d/%d"):format(i, tostring(name), currentRank, maxRank or 0))
-		end
-	end
-	TopFit:Print("Total talent slots across all tabs = " .. total)
-	
-	-- cross-check whatever's configured in talentbonuses.lua for this class against what's
-	-- actually sitting at those (tab, index) coordinates right now -- this is what would have
-	-- caught, in one command, that Enhancement's Unleashed Rage/Dual Wield Specialization indices
-	-- were correct, instead of needing a SimC export round-trip to confirm it by hand.
-	local playerClass = select(2, UnitClass("player"))
-	local entries = TopFit.talentRatingBonuses and TopFit.talentRatingBonuses[playerClass]
-	if entries and #entries > 0 then
-		TopFit:Print("--- talentbonuses.lua entries for " .. playerClass .. " ---")
-		for _, entry in ipairs(entries) do
-			local currentRank, name, maxRank = TopFit:GetTalentRankSafe(entry.tab, entry.index)
-			local amount = 0
-			if currentRank and currentRank > 0 then
-				if entry.perPoint then
-					amount = entry.perPoint * currentRank
-				elseif entry.percentPerPoint then
-					local ratingPerPercent = (entry.percentType == "spell") and 8 or 10
-					amount = entry.percentPerPoint * currentRank * ratingPerPercent
-				end
-			end
-			TopFit:Print(("  tab %d index %d -> %s (rank %d/%d) | %s: %.2f rating"):format(
-				entry.tab, entry.index, tostring(name), currentRank or 0, maxRank or 0,
-				_G[entry.stat] or entry.stat, amount))
-		end
-	else
-		TopFit:Print("(no talentbonuses.lua entries configured for " .. tostring(playerClass) .. ")")
-	end
+    if C_ClassTalents and C_ClassTalents.GetActiveConfigID then
+        local ranksBySpellID, ranksByName = TopFit:GetRetailTalentRanks()
+        local count = 0
+        TopFit:Print("--- Retail C_ClassTalents / C_Traits Active Nodes ---")
+        for spellID, rank in pairs(ranksBySpellID) do
+            local spellInfo = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
+            local name = spellInfo and spellInfo.name or ("Spell #" .. spellID)
+            TopFit:Print(("  %s (ID: %d) -- rank %d"):format(name, spellID, rank))
+            count = count + 1
+        end
+        TopFit:Print("Total active talent nodes found = " .. count)
+        return
+    end
+
+    local numTabs = TopFit:GetNumTalentTabsSafe()
+    if numTabs == 0 then
+        TopFit:Print("No classic talent data available.")
+        return
+    end
+    TopFit:Print("GetNumTalentTabs() = " .. tostring(numTabs))
 end
 
 local RACE_TO_SIMC = {
-	Human    = "human",
-	Dwarf    = "dwarf",
-	NightElf = "night_elf",
-	Gnome    = "gnome",
-	Draenei  = "draenei",
-	Orc      = "orc",
-	Undead   = "undead",
-	Scourge  = "undead",
-	Tauren   = "tauren",
-	Troll    = "troll",
-	BloodElf = "blood_elf",
+	Human       = "human",
+	Dwarf       = "dwarf",
+	NightElf    = "night_elf",
+	Gnome       = "gnome",
+	Draenei     = "draenei",
+	Orc         = "orc",
+	Undead      = "undead",
+	Scourge     = "undead",
+	Tauren      = "tauren",
+	Troll       = "troll",
+	BloodElf    = "blood_elf",
+	Goblin      = "goblin",
+	Pandaren    = "pandaren",
+	Nightborne  = "nightborne",
+	HighmountainTauren = "highmountain_tauren",
+	VoidElf     = "void_elf",
+	LightforgedDraenei = "lightforged_draenei",
+	ZandalariTroll     = "zandalari_troll",
+	KulTiran    = "kul_tiran",
+	DarkIronDwarf      = "dark_iron_dwarf",
+	Vulpera     = "vulpera",
+	Mechagnome  = "mechagnome",
+	Dracthyr    = "dracthyr",
+	Earthen     = "earthen",
 }
 
--- Detects race based on known racial spells in the player's spellbook
+-- Detects race based on UnitRace or known racial spells in the player's spellbook
 local function GetExportRace()
-    local RACIAL_TO_SIMC = {
-        ["Blood Fury"] = "orc",
-        ["Berserking"] = "troll",
-        ["War Stomp"] = "tauren",
-        ["Will of the Forsaken"] = "undead",
-        ["Arcane Torrent"] = "blood_elf",
-        ["Gift of the Naaru"] = "draenei",
-        ["Every Man for Himself"] = "human",
-        ["Stoneform"] = "dwarf",
-        ["Escape Artist"] = "gnome",
-        ["Shadowmeld"] = "night_elf",
-    }
+	local _, raceToken = UnitRace("player")
+	if raceToken and RACE_TO_SIMC[raceToken] then
+		return RACE_TO_SIMC[raceToken]
+	end
 
-    -- Scan player spellbook for active racial abilities
-    local i = 1
-    while true do
-        local spellName = GetSpellBookItemName(i, BOOKTYPE_SPELL)
-        if not spellName then break end
-        if RACIAL_TO_SIMC[spellName] then
-            return RACIAL_TO_SIMC[spellName]
-        end
-        i = i + 1
-    end
+	local RACIAL_TO_SIMC = {
+		["Blood Fury"] = "orc",
+		["Berserking"] = "troll",
+		["War Stomp"] = "tauren",
+		["Will of the Forsaken"] = "undead",
+		["Arcane Torrent"] = "blood_elf",
+		["Gift of the Naaru"] = "draenei",
+		["Every Man for Himself"] = "human",
+		["Stoneform"] = "dwarf",
+		["Escape Artist"] = "gnome",
+		["Shadowmeld"] = "night_elf",
+	}
 
-    -- Fallback to native client unit race if no custom racial is detected
-    local _, raceToken = UnitRace("player")
-    return RACE_TO_SIMC[raceToken] or "orc"
+	local spellBank = (Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player) or "spell"
+	local i = 1
+	while i <= 500 do
+		local spellName = GetSpellBookItemNameSafe(i, spellBank)
+		if not spellName then break end
+		if RACIAL_TO_SIMC[spellName] then
+			return RACIAL_TO_SIMC[spellName]
+		end
+		i = i + 1
+	end
+
+	return (raceToken and raceToken:lower()) or "orc"
 end
 
 -- maps internal ITEM_MOD_* keys to this SimC build's short stat tokens
 local STAT_TO_SIMC = {
-	ITEM_MOD_STRENGTH_SHORT                 = "str",
-	ITEM_MOD_AGILITY_SHORT                  = "agi",
-	ITEM_MOD_STAMINA_SHORT                  = "sta",
-	ITEM_MOD_INTELLECT_SHORT                = "int",
-	ITEM_MOD_SPIRIT_SHORT                   = "spi",
-	ITEM_MOD_ATTACK_POWER_SHORT             = "ap",
-	ITEM_MOD_RANGED_ATTACK_POWER_SHORT      = "ap",
-	ITEM_MOD_CRIT_RATING_SHORT              = "crit",
-	ITEM_MOD_HIT_RATING_SHORT               = "hit",
-	ITEM_MOD_HASTE_RATING_SHORT             = "haste",
-	ITEM_MOD_EXPERTISE_RATING_SHORT         = "exp",
+	ITEM_MOD_STRENGTH_SHORT               = "str",
+	ITEM_MOD_AGILITY_SHORT                = "agi",
+	ITEM_MOD_STAMINA_SHORT                = "sta",
+	ITEM_MOD_INTELLECT_SHORT              = "int",
+	ITEM_MOD_SPIRIT_SHORT                 = "spi",
+	ITEM_MOD_ATTACK_POWER_SHORT           = "ap",
+	ITEM_MOD_RANGED_ATTACK_POWER_SHORT    = "ap",
+	ITEM_MOD_CRIT_RATING_SHORT            = "crit",
+	ITEM_MOD_HIT_RATING_SHORT             = "hit",
+	ITEM_MOD_HASTE_RATING_SHORT           = "haste",
+	ITEM_MOD_EXPERTISE_RATING_SHORT       = "exp",
 	ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT = "arpen",
-	ITEM_MOD_SPELL_POWER_SHORT              = "sp",
-	ITEM_MOD_BLOCK_VALUE_SHORT              = "blockv",
-	RESISTANCE0_NAME                        = "armor",
+	ITEM_MOD_SPELL_POWER_SHORT            = "sp",
+	ITEM_MOD_BLOCK_VALUE_SHORT            = "blockv",
+	RESISTANCE0_NAME                      = "armor",
 }
 
 -- TopFit.slots key -> simc field name
@@ -210,7 +219,7 @@ local WEAPON_SLOTS = {
 
 function TopFit:GetSimcWeaponType(itemLink)
 	if not itemLink then return nil end
-	local _, _, _, _, _, _, subType = GetItemInfo(itemLink)
+	local _, _, _, _, _, _, subType = GetItemInfoSafe(itemLink)
 	if not subType then return nil end
 
 	subType = subType:lower()
@@ -232,8 +241,6 @@ function TopFit:GetSimcWeaponType(itemLink)
 	return nil
 end
 
--- locale-tolerant "does this line mention damage" check, used to gate the min-max dmg match
--- so we don't accidentally grab an unrelated "12 - 34" style number range from another line
 local DAMAGE_KEYWORDS = { "damage", "schaden", "d\195\169g\195\162ts", "da\195\177o", "danno" }
 local function ContainsDamageKeyword(text)
 	local lower = text:lower()
@@ -243,11 +250,6 @@ local function ContainsDamageKeyword(text)
 	return false
 end
 
--- live, post-haste attack speed for whichever hand is asked for. Only meaningful for melee
--- (main hand / off hand) -- WotLK exposes this straight from the client, no tooltip needed.
--- We do NOT use this as the primary source: simc wants the weapon's BASE speed and applies
--- haste itself, so feeding it an already-hasted number would double-count haste. It's only
--- used to sanity-check (and as a last-resort fallback for) what we parsed from the tooltip.
 local function GetLiveMeleeSpeed(slotName)
 	if slotName == "MainHandSlot" then
 		return (UnitAttackSpeed("player"))
@@ -258,11 +260,6 @@ local function GetLiveMeleeSpeed(slotName)
 	return nil
 end
 
--- Parses base weapon speed and damage range straight from the tooltip. WotLK weapons don't
--- expose these via GetItemStats -- they're plain item properties, not "bonus" stats, so the
--- tooltip is the only source. Returns speed, minDmg, maxDmg (any may be nil if unparsable).
--- Shared by the SimC export (simc weapon= line) and by inventory.lua's stat caching (letting
--- weapon speed itself be weighted, e.g. for a spec that wants a slow main hand).
 function TopFit:ParseWeaponTooltip(itemLink)
 	if not itemLink then return nil end
 
@@ -277,17 +274,12 @@ function TopFit:ParseWeaponTooltip(itemLink)
 		local leftLine = _G[tt:GetName() .. "TextLeft" .. i]
 		local text = leftLine and leftLine:GetText()
 
-		-- Also look at right-aligned text components where WotLK clients often hide speed metrics
 		local rightLine = _G[tt:GetName() .. "TextRight" .. i]
 		local textRight = rightLine and rightLine:GetText()
 
-		-- Combine texts safely to allow matching across layout structures
 		local combinedText = (text or "") .. " " .. (textRight or "")
 
 		if combinedText ~= " " then
-			-- 1. Resilient Speed Parser: handles "Speed 2.60", "2.60 Speed", comma-decimal locales
-			-- ("Tempo 2,60"), and a couple of common non-English labels. First match wins so a
-			-- stray number later in the tooltip (e.g. a proc ICD) can't clobber a good read.
 			if not speed then
 				local speedMatch = combinedText:match("[Ss]peed%s*([%d,%.]+)")
 					or combinedText:match("([%d,%.]+)%s*[Ss]peed")
@@ -299,9 +291,6 @@ function TopFit:ParseWeaponTooltip(itemLink)
 				end
 			end
 
-			-- 2. Damage Boundaries Parser -- anchored to the LEFT line only (the right line can
-			-- contain unrelated numbers like a level requirement) and gated on a damage keyword
-			-- appearing somewhere on the same line.
 			if not minDmg then
 				local dmgMin, dmgMax = (text or ""):match("^%s*(%d+)%s*%-%s*(%d+)")
 				if dmgMin and ContainsDamageKeyword(text or "") then
@@ -323,18 +312,12 @@ function TopFit:BuildWeaponField(itemLink, slotName)
 
 	local speed, minDmg, maxDmg = self:ParseWeaponTooltip(itemLink)
 
-	-- Melee sanity check: base (tooltip) speed can never be LOWER than the current live speed,
-	-- since haste only ever shortens the swing timer. If it is, the tooltip parse grabbed the
-	-- wrong number (e.g. matched an unrelated stat) -- distrust it rather than export garbage.
 	local liveSpeed = GetLiveMeleeSpeed(slotName)
 	if speed and liveSpeed and liveSpeed > 0 and speed < liveSpeed - 0.01 then
 		TopFit:Print(("|cffff5555TopFit:|r weapon speed parse for %s looked wrong (tooltip read %.2f, but live speed is %.2f) -- discarding that value."):format(itemLink, speed, liveSpeed))
 		speed = nil
 	end
 
-	-- Last-resort fallback for melee only: if tooltip parsing failed outright but the weapon is
-	-- actually equipped right now, the live speed is a usable (if haste-inflated) stand-in --
-	-- better than nothing, and flagged clearly so it gets checked by hand.
 	if not speed and liveSpeed and liveSpeed > 0 then
 		speed = liveSpeed
 		TopFit:Print(("|cffffcc00TopFit:|r couldn't read base weapon speed for %s from its tooltip -- used the current live speed (%.2f) instead. This may include haste; verify before simming."):format(itemLink, liveSpeed))
@@ -370,16 +353,6 @@ local function SlugifyGlyphName(name)
 end
 
 local function GetGlyphsString()
-	-- Both this function's premise (glyphs as a gameplay system) and GetNumGlyphSockets/
-	-- GetGlyphSocketInfo's continued existence are unconfirmed for WoW: Forever. Glyphs
-	-- were a WotLK-era Inscription feature; Forever's confirmed 51-point/3-tree talent
-	-- layout (see wowforevertalents.com scrape, REWRITE_PLAN_12_1_5.md) matches Vanilla's
-	-- talent scale, not WotLK's -- which is some evidence Forever may not include Inscription
-	-- glyphs at all, in which case this whole function is dead weight for Forever rather
-	-- than something to API-fix. Left in place rather than deleted, since removing a
-	-- feature on a guess is as wrong as keeping broken code on a guess -- the `and` guards
-	-- below already make it a no-op if the functions don't exist, so nothing breaks either
-	-- way. Confirm on beta and either delete this function or drop this comment.
 	local numSockets = GetNumGlyphSockets and GetNumGlyphSockets()
 	if not numSockets or numSockets == 0 then return nil end
 
@@ -387,10 +360,7 @@ local function GetGlyphsString()
 	for socket = 1, numSockets do
 		local enabled, _, glyphSpellID = GetGlyphSocketInfo(socket)
 		if enabled and glyphSpellID and glyphSpellID > 0 then
-			-- GetSpellInfo (the global) was removed outright in patch 11.0.0, deprecation
-			-- fallback removed in 11.0.2 -- it does not exist on 12.1.5 at all, confirmed via
-			-- warcraft.wiki.gg's patch-change notes. C_Spell.GetSpellInfo returns one table.
-			local spellInfo = C_Spell.GetSpellInfo(glyphSpellID)
+			local spellInfo = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(glyphSpellID)
 			local glyphName = spellInfo and spellInfo.name
 			local slug = SlugifyGlyphName(glyphName)
 			if slug then tinsert(slugs, slug) end
@@ -414,7 +384,7 @@ local function GetAmmoDps(itemLink)
 
 	local dps
 	for i = 1, numLines do
-		local leftLine = getglobal("TFScanTooltip" .. "TextLeft" .. i)
+		local leftLine = _G["TFScanTooltipTextLeft" .. i]
 		local leftLineText = leftLine and leftLine:GetText()
 		if leftLineText then
 			local match = leftLineText:lower():match("%(([%d%.]+)%s*damage per second%)")
@@ -431,11 +401,11 @@ local function GetBestAmmoDps(rangedSimcType)
 
 	local bestDps
 	for bag = 0, 4 do
-		local numSlots = C_Container.GetContainerNumSlots(bag)
+		local numSlots = C_Container.GetContainerNumSlots(bag) or 0
 		for slot = 1, numSlots do
 			local itemLink = C_Container.GetContainerItemLink(bag, slot)
 			if itemLink then
-				local subType = select(7, GetItemInfo(itemLink))
+				local subType = select(7, GetItemInfoSafe(itemLink))
 				if subType == neededSubType then
 					local dps = GetAmmoDps(itemLink)
 					if dps and (not bestDps or dps > bestDps) then
@@ -461,52 +431,48 @@ local function BonusTableToSimcBlob(bonusTable)
 	return table.concat(parts, "_")
 end
 
--- Extracts the slugified name of a meta gem (e.g., "Relentless Earthsiege Diamond" -> "relentless_earthsiege")
 local function GetMetaGemSlug(itemLink)
-    if not itemLink then return nil end
-    for i = 1, 4 do
-        local gemName, gemLink = C_Item.GetItemGem(itemLink, i)
-        local targetName = gemName
-        if not targetName and gemLink then
-            targetName = GetItemInfo(gemLink)
-        end
+	if not itemLink then return nil end
+	for i = 1, 4 do
+		local gemName, gemLink = C_Item.GetItemGem(itemLink, i)
+		local targetName = gemName
+		if not targetName and gemLink then
+			targetName = GetItemInfoSafe(gemLink)
+		end
 
-        if targetName and (string.find(targetName, "Diamond") or string.find(targetName, "Meta")) then
-            local cleanName = string.gsub(targetName, "%s*[Dd]iamond%s*", "")
-            cleanName = string.gsub(cleanName, "%s*[Mm]eta%s*", "")
-            return TopFit:Slugify(cleanName)
-        end
-    end
-    return nil
+		if targetName and (string.find(targetName, "Diamond") or string.find(targetName, "Meta")) then
+			local cleanName = string.gsub(targetName, "%s*[Dd]iamond%s*", "")
+			cleanName = string.gsub(cleanName, "%s*[Mm]eta%s*", "")
+			return TopFit:Slugify(cleanName)
+		end
+	end
+	return nil
 end
 
--- Builds the gems= string combining meta gem name slugs and flat stat tokens
 local function BuildGemsBlob(itemTable)
-    if not itemTable then return nil end
-    local parts = {}
+	if not itemTable then return nil end
+	local parts = {}
 
-    -- 1. Extract meta gem slug if present
-    if itemTable.itemLink then
-        local metaSlug = GetMetaGemSlug(itemTable.itemLink)
-        if metaSlug then
-            table.insert(parts, metaSlug)
-        end
-    end
+	if itemTable.itemLink then
+		local metaSlug = GetMetaGemSlug(itemTable.itemLink)
+		if metaSlug then
+			table.insert(parts, metaSlug)
+		end
+	end
 
-    -- 2. Append flat stat tokens
-    if itemTable.gemBonus then
-        for stat, value in pairs(itemTable.gemBonus) do
-            if stat ~= "ITEM_MOD_CRIT_DAMAGE_BONUS_SHORT" then
-                local token = STAT_TO_SIMC[stat]
-                if token and value and value ~= 0 then
-                    table.insert(parts, tostring(math.floor(value + 0.5)) .. token)
-                end
-            end
-        end
-    end
+	if itemTable.gemBonus then
+		for stat, value in pairs(itemTable.gemBonus) do
+			if stat ~= "ITEM_MOD_CRIT_DAMAGE_BONUS_SHORT" then
+				local token = STAT_TO_SIMC[stat]
+				if token and value and value ~= 0 then
+					table.insert(parts, tostring(math.floor(value + 0.5)) .. token)
+				end
+			end
+		end
+	end
 
-    if #parts == 0 then return nil end
-    return table.concat(parts, "_")
+	if #parts == 0 then return nil end
+	return table.concat(parts, "_")
 end
 
 -- ============================================================================
@@ -552,7 +518,6 @@ function TopFit:GenerateSimcExportString()
 	for _, slotInfo in ipairs(SLOT_ORDER) do
 		local slotName, simcField = slotInfo[1], slotInfo[2]
 		
-		-- Dynamic Slot Mapping Fallback Engine
 		local slotID = TopFit.slots and TopFit.slots[slotName]
 		if not slotID then
 			if slotName == "MainHandSlot" then slotID = 16
@@ -565,7 +530,7 @@ function TopFit:GenerateSimcExportString()
 
 		if itemLink then
 			local itemTable = TopFit.GetCachedItem and TopFit:GetCachedItem(itemLink)
-			local itemName = GetItemInfo(itemLink) or "Unknown Item"
+			local itemName = GetItemInfoSafe(itemLink) or "Unknown Item"
 			local slug = Slugify(itemName)
 			local fieldParts = { simcField .. "=" .. slug }
 
@@ -578,7 +543,6 @@ function TopFit:GenerateSimcExportString()
 			local enchantBlob = itemTable and BonusTableToSimcBlob(itemTable.enchantBonus)
 			if enchantBlob then tinsert(fieldParts, "enchant=" .. enchantBlob) end
 
-			-- Process Weapons configuration payload strings securely
 			if WEAPON_SLOTS[slotName] then
 				local weaponField = self:BuildWeaponField(itemLink, slotName)
 				if weaponField then tinsert(fieldParts, weaponField) end
@@ -620,7 +584,7 @@ function TopFit:GenerateSimcExportString()
 
 	tinsert(lines, "")
 	tinsert(lines, "# NOT exported -- fill in by hand if they matter:")
-	tinsert(lines, "#   heroic=1 flags")
+	tinsert(lines, "#    heroic=1 flags")
 	if #procComments > 0 then
 		tinsert(lines, "# Possible procs found (could not auto-encode, see simc_export.lua header):")
 		for _, comment in ipairs(procComments) do
@@ -642,7 +606,7 @@ function TopFit:DebugWeaponSlots()
 		if not itemLink then
 			TopFit:Print(slotName .. ": empty")
 		else
-			local itemName, _, _, _, _, _, subType = GetItemInfo(itemLink)
+			local itemName, _, _, _, _, _, subType = GetItemInfoSafe(itemLink)
 			local simcType = self:GetSimcWeaponType(itemLink)
 			local liveSpeed = GetLiveMeleeSpeed(slotName)
 			TopFit:Print(("%s: %s | subType=%s | simcType=%s%s"):format(
@@ -651,7 +615,7 @@ function TopFit:DebugWeaponSlots()
 			))
 			if simcType then
 				local field = self:BuildWeaponField(itemLink, slotName)
-				TopFit:Print("  Generated Row Fragment: " .. tostring(field))
+				TopFit:Print("   Generated Row Fragment: " .. tostring(field))
 			end
 		end
 	end

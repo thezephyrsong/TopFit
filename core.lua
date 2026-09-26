@@ -1,4 +1,3 @@
-
 -- utility for rounding
 function round(input, places)
     if not places then
@@ -54,6 +53,51 @@ function TopFit:GetTalentRankSafe(tab, index)
     if not TopFit.hasClassicTalentAPI then return 0, nil, nil end
     local name, _, _, _, currentRank, maxRank = GetTalentInfo(tab, index)
     return currentRank or 0, name, maxRank
+end
+
+-- Scans active Retail C_ClassTalents / C_Traits loadout and returns active ranks
+function TopFit:GetRetailTalentRanks()
+    local ranksBySpellID = {}
+    local ranksByName = {}
+
+    if not (C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_Traits) then
+        return ranksBySpellID, ranksByName
+    end
+
+    local configID = C_ClassTalents.GetActiveConfigID()
+    if not configID then return ranksBySpellID, ranksByName end
+
+    local configInfo = C_Traits.GetConfigInfo(configID)
+    if not configInfo or not configInfo.treeIDs then return ranksBySpellID, ranksByName end
+
+    for _, treeID in ipairs(configInfo.treeIDs) do
+        local nodes = C_Traits.GetTreeNodes(treeID)
+        if nodes then
+            for _, nodeID in ipairs(nodes) do
+                local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+                if nodeInfo and nodeInfo.activeRank and nodeInfo.activeRank > 0 then
+                    local entryID = nodeInfo.activeEntry and nodeInfo.activeEntry.entryID
+                    if entryID then
+                        local entryInfo = C_Traits.GetEntryInfo(configID, entryID)
+                        if entryInfo and entryInfo.definitionID then
+                            local defInfo = C_Traits.GetDefinitionInfo(entryInfo.definitionID)
+                            if defInfo and defInfo.spellID then
+                                ranksBySpellID[defInfo.spellID] = nodeInfo.activeRank
+
+                                local spellInfo = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(defInfo.spellID)
+                                local spellName = spellInfo and spellInfo.name
+                                if spellName then
+                                    ranksByName[spellName] = nodeInfo.activeRank
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return ranksBySpellID, ranksByName
 end
 
 -- debug function
@@ -206,17 +250,6 @@ function TopFit:onUpdateForEquipment()
         TopFit.updateFrame:SetScript("OnUpdate", nil)
         TopFit.ProgressFrame:StoppedCalculation()
         
-        -- FIXME (12.1.5 rewrite, unconfirmed -- test on WoW: Forever beta):
-        -- EquipmentManagerClearIgnoredSlotsForSave/EquipmentManagerIgnoreSlotForSave
-        -- let TopFit exclude slots it didn't fill from the saved set, so gear in an
-        -- unmanaged slot wouldn't get baked in. C_EquipmentSet has no confirmed
-        -- per-slot exclusion -- CreateEquipmentSet/SaveEquipmentSet snapshot every
-        -- currently equipped slot. Until beta confirms otherwise (there may be an
-        -- API for this that just wasn't findable without a live client to inspect),
-        -- the saved set will include whatever is worn in slots TopFit didn't manage
-        -- for this calculation, which the old behavior specifically avoided. Not
-        -- guessing at a workaround here per project convention -- flagged, not faked.
-        
         -- save equipment set
         if (C_EquipmentSet.CanUseEquipmentSets()) then
             setName = TopFit:GenerateSetName(TopFit.currentSetName)
@@ -316,15 +349,6 @@ function TopFit:ResolveStatToken(input)
     return nil
 end
 
--- /topfit caps                                          -- list every cap entry for the selected set
--- /topfit caps add <stat> <value> <soft|hard> [label]    -- add a new cap entry for a stat
--- /topfit caps remove <stat> <slot#>                     -- delete a specific entry
--- /topfit caps toggle <stat> <slot#>                     -- flip a specific entry's active state
---
--- Text-based on purpose: caps[stat] can now hold several independent entries (e.g. Hit Rating
--- carrying both a Spell Hit cap and a Dual Wield Hit cap), and building a second point-and-click
--- editor for that inside the existing cramped stat row risks the same kind of overlapping-widget
--- bugs the checkbox layout already had -- this covers the same ground without any new frames.
 function TopFit:CapsCommand(rest)
     if not TopFit.ProgressFrame or not TopFit.ProgressFrame.selectedSet then
         TopFit:Print("No set is currently selected.")
@@ -432,13 +456,6 @@ function TopFit:OnInitialize()
             table.weights[stat] = tonumber(value) or nil
         end
         
-        -- migrate caps from the old "one cap per stat" format ({value=,soft=,active=}) to the
-        -- new "list of caps per stat" format ({{value=,soft=,active=,label=}, ...}), which allows
-        -- several independent thresholds on the same stat -- e.g. Hit Rating carrying a hard Spell
-        -- Hit cap alongside a soft Dual Wield Hit cap. Old-format entries have a "value" field
-        -- directly on them; new-format entries are themselves a list of cap tables, so a top-level
-        -- "value" field reliably tells the two apart. Safe to run every login: an already-migrated
-        -- entry has no top-level "value" field, so it's left untouched.
         for stat, capEntry in pairs(table.caps) do
             if capEntry.value ~= nil and capEntry[1] == nil then
                 table.caps[stat] = { capEntry }
@@ -451,16 +468,7 @@ function TopFit:OnInitialize()
         end
     end
     
-    -- list of weight categories and stats
-    -- TOPFIT_WEAPON_SPEED is a TopFit-invented pseudo-stat (weapon base speed in seconds,
-    -- parsed from the tooltip in simc_export.lua's TopFit:ParseWeaponTooltip and injected into
-    -- itemBonus by inventory.lua) -- not a real Blizzard ITEM_MOD_* token, so unlike the others
-    -- it needs its own display-name global for the Weights & Caps UI to show something readable.
     _G["TOPFIT_WEAPON_SPEED"] = "Weapon Speed"
-
-    -- WoW: Forever / pre-rating itemization pseudo-stats (see procparser.lua's
-    -- ParsePermanentStatLine) -- flat/percent "Equip:" bonuses with no ITEM_MOD_* token of
-    -- their own to borrow a display name from, same treatment as TOPFIT_WEAPON_SPEED above.
     _G["TOPFIT_HIT_CHANCE_ALL"] = "Hit Chance"
     _G["TOPFIT_CRIT_CHANCE_ALL"] = "Critical Strike Chance"
     _G["TOPFIT_CRIT_CHANCE_MELEE"] = "Melee Critical Strike Chance"
@@ -470,12 +478,6 @@ function TopFit:OnInitialize()
     _G["TOPFIT_DEFENSE_FLAT"] = "Defense"
     _G["TOPFIT_SPELL_HEALING_FLAT"] = "Healing Power"
     _G["TOPFIT_SPELL_DAMAGE_FLAT"] = "Spell Damage"
-    -- weapon-skill keys are per weapon type and built dynamically (TOPFIT_WEAPON_SKILL_SWORDS,
-    -- _AXES, _DAGGERS, etc.) rather than enumerated here, since the full set of weapon-type
-    -- names used in "Increased <Type> +N" tooltip text isn't confirmed yet -- see
-    -- REWRITE_PLAN_12_1_5.md. ParsePermanentStatLine falls back to titling whatever word it
-    -- finds, so an unlisted display name just shows the raw key instead of a friendly label
-    -- until this list is filled in against real Forever/Classic item text.
 
     TopFit.statList = {
         ["Basic Attributes"] = {
@@ -537,7 +539,6 @@ function TopFit:OnInitialize()
     
     -- list of inventory slot names
     TopFit.slotList = {
-        --"AmmoSlot",
         "BackSlot",
         "ChestSlot",
         "FeetSlot",
@@ -638,73 +639,102 @@ function TopFit:OnInitialize()
     -- container for plugin information and frames
     TopFit.plugins = {}
     
-    -- button to open frame
-    hooksecurefunc("ToggleCharacter", function (...)
+    -- Dynamically anchors the button to the right of the last VISIBLE sidebar tab
+    local function UpdateTopFitButtonAnchor()
+        local button = TopFit.toggleProgressFrameButton
+        if not button then return end
+
+        button:ClearAllPoints()
+
+        -- Find the highest-numbered sidebar tab that is currently visible
+        local anchorTab = nil
+        if PaperDollSidebarTab3 and PaperDollSidebarTab3:IsShown() then
+            anchorTab = PaperDollSidebarTab3
+        elseif PaperDollSidebarTab2 and PaperDollSidebarTab2:IsShown() then
+            anchorTab = PaperDollSidebarTab2
+        elseif PaperDollSidebarTab1 and PaperDollSidebarTab1:IsShown() then
+            anchorTab = PaperDollSidebarTab1
+        end
+
+        if anchorTab then
+            button:SetPoint("LEFT", anchorTab, "RIGHT", 4, 0)
+            button:SetSize(anchorTab:GetSize())
+        else
+            button:SetPoint("TOPRIGHT", PaperDollFrame, "TOPRIGHT", -40, -40)
+            button:SetSize(30, 30)
+        end
+    end
+
+    -- Attach TopFit button to PaperDollSidebarTabs
+    hooksecurefunc("ToggleCharacter", function(...)
         if not TopFit.toggleProgressFrameButton then
-            TopFit.toggleProgressFrameButton = CreateFrame("Button", "TopFit_toggleProgressFrameButton", PaperDollFrame)
-            TopFit.toggleProgressFrameButton:SetWidth(30)
-            TopFit.toggleProgressFrameButton:SetHeight(32)
-            TopFit.toggleProgressFrameButton:SetPoint("RIGHT", GearManagerToggleButton, "LEFT")
-            
-            local normalTexture = TopFit.toggleProgressFrameButton:CreateTexture()
-            local pushedTexture = TopFit.toggleProgressFrameButton:CreateTexture()
-            local highlightTexture = TopFit.toggleProgressFrameButton:CreateTexture()
-            normalTexture:SetTexture("Interface\\Buttons\\UI-MicroButtonCharacter-Up")
-            pushedTexture:SetTexture("Interface\\Buttons\\UI-MicroButtonCharacter-Down")
-            highlightTexture:SetTexture("Interface\\Buttons\\UI-MicroButton-Hilight")
-            normalTexture:SetTexCoord(0, 25/64, 0, 63/64, 1, 25/64, 1, 62/64)
-            normalTexture:SetAllPoints()
-            pushedTexture:SetTexCoord(0, 25/64, 0, 63/64, 1, 25/64, 1, 62/64)
-            pushedTexture:SetAllPoints()
-            highlightTexture:SetTexCoord(0, 25/64, 0, 63/64, 1, 25/64, 1, 62/64)
-            highlightTexture:SetAllPoints()
-            TopFit.toggleProgressFrameButton:SetNormalTexture(normalTexture)
-            TopFit.toggleProgressFrameButton:SetPushedTexture(pushedTexture)
-            TopFit.toggleProgressFrameButton:SetHighlightTexture(highlightTexture)
-            local iconTexture = TopFit.toggleProgressFrameButton:CreateTexture()
-            iconTexture:SetTexture("Interface\\Icons\\Achievement_BG_trueAVshutout") -- golden sword
-            iconTexture:SetTexCoord(9/64, 4/64, 9/64, 61/64, 55/64, 4/64, 55/64, 61/64)
-            iconTexture:SetDrawLayer("OVERLAY")
-            iconTexture:SetBlendMode("ADD")
-            iconTexture:SetPoint("TOPLEFT", TopFit.toggleProgressFrameButton, "TOPLEFT", 6, -4)
-            iconTexture:SetPoint("BOTTOMRIGHT", TopFit.toggleProgressFrameButton, "BOTTOMRIGHT", -6, 4)
-            
-            TopFit.toggleProgressFrameButton:SetScript("OnClick", function(...)
-                if (not TopFit.ProgressFrame) or (not TopFit.ProgressFrame:IsShown()) then
+            local parent = PaperDollSidebarTabs or PaperDollFrame
+            local button = CreateFrame("Button", "TopFit_toggleProgressFrameButton", parent)
+            TopFit.toggleProgressFrameButton = button
+
+            -- Icon Texture (Golden Sword)
+            local icon = button:CreateTexture(nil, "ARTWORK")
+            icon:SetTexture("Interface\\Icons\\Achievement_BG_trueAVshutout")
+            icon:SetAllPoints()
+            button.icon = icon
+
+            -- Mouseover Highlight
+            local highlight = button:CreateTexture(nil, "HIGHLIGHT")
+            highlight:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+            highlight:SetBlendMode("ADD")
+            highlight:SetAllPoints()
+            button:SetHighlightTexture(highlight)
+
+            -- Click Handler
+            button:SetScript("OnClick", function()
+                if not TopFit.ProgressFrame or not TopFit.ProgressFrame:IsShown() then
                     TopFit:CreateProgressFrame()
                 else
                     TopFit:HideProgressFrame()
                 end
             end)
-            
-            TopFit.toggleProgressFrameButton:SetScript("OnMouseDown", function(...)
-                iconTexture:SetVertexColor(0.5, 0.5, 0.5)
+
+            -- Mouse Down/Up feedback
+            button:SetScript("OnMouseDown", function()
+                icon:SetVertexColor(0.6, 0.6, 0.6)
             end)
-            TopFit.toggleProgressFrameButton:SetScript("OnMouseUp", function(...)
-                iconTexture:SetVertexColor(1, 1, 1)
+            button:SetScript("OnMouseUp", function()
+                icon:SetVertexColor(1, 1, 1)
             end)
-            
-            -- tooltip
-            TopFit.toggleProgressFrameButton:SetScript("OnEnter", function(self)
+
+            -- Tooltip
+            button:SetScript("OnEnter", function(self)
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetText("Open TopFit", nil, nil, nil, nil, true)
+                GameTooltip:SetText("TopFit Gear Optimizer", 1, 1, 1)
+                GameTooltip:AddLine("Click to open calculation settings and recommendations.", 0.8, 0.8, 0.8, true)
                 GameTooltip:Show()
             end)
-            TopFit.toggleProgressFrameButton:SetScript("OnLeave", function(...)
+            button:SetScript("OnLeave", function()
                 GameTooltip:Hide()
             end)
         end
-        if GearManagerToggleButton:IsShown() then
-            TopFit.toggleProgressFrameButton:SetPoint("RIGHT", GearManagerToggleButton, "LEFT", 4, 0)
-        else
-            TopFit.toggleProgressFrameButton:SetPoint("RIGHT", GearManagerToggleButton, "RIGHT")
+
+        -- Update anchor position based on current tab visibility
+        UpdateTopFitButtonAnchor()
+
+        -- Sync visibility with PaperDollSidebarTabs
+        if TopFit.toggleProgressFrameButton then
+            if PaperDollSidebarTabs and PaperDollSidebarTabs:IsShown() then
+                TopFit.toggleProgressFrameButton:Show()
+            else
+                TopFit.toggleProgressFrameButton:Hide()
+            end
         end
     end)
-    
+
+    if PaperDollFrame_UpdateSidebarTabs then
+        hooksecurefunc("PaperDollFrame_UpdateSidebarTabs", UpdateTopFitButtonAnchor)
+    end
+
     -- create default plugin frames
     TopFit:CreateStatsPlugin()
     TopFit:CreateVirtualItemsPlugin()
-    
+
     TopFit:collectItems()
 end
 
@@ -713,10 +743,11 @@ function TopFit:collectEquippableItems()
     
     -- check bags
     for bag = 0, 4 do
-        for slot = 1, C_Container.GetContainerNumSlots(bag) do
+        local numSlots = C_Container.GetContainerNumSlots(bag) or 0
+        for slot = 1, numSlots do
             local item = C_Container.GetContainerItemLink(bag, slot)
             
-            if C_Item.IsEquippableItem(item) then
+            if item and C_Item.IsEquippableItem(item) then
                 local found = false
                 for _, link in pairs(TopFit.equippableItems) do
                     if link == item then
@@ -733,10 +764,11 @@ function TopFit:collectEquippableItems()
         end
     end
     
-    -- check equipment (mostly so your set doesn't get recalculated just because you unequip an item)
+    -- check equipment
     for _, invSlot in pairs(TopFit.slots) do
         local item = GetInventoryItemLink("player", invSlot)
-        if C_Item.IsEquippableItem(item) then
+        
+        if item and C_Item.IsEquippableItem(item) then
             local found = false
             for _, link in pairs(TopFit.equippableItems) do
                 if link == item then
@@ -767,36 +799,25 @@ end
 
 function TopFit:FrameOnEvent(event, ...)
     if (event == "BAG_UPDATE") then
-        -- update item list
-        --TODO: only update affected bag
         TopFit:collectItems()
         
-        -- check inventory for new equippable items
         if TopFit:collectEquippableItems() and not TopFit.loginDelay then
-            -- new equippable item in inventory!!!!
-            -- calculate set silently if player wishes
             if TopFit.db.profile.defaultUpdateSet then
                 if not TopFit.workSetList then
                     TopFit.workSetList = {}
                 end
                 tinsert(TopFit.workSetList, TopFit.db.profile.defaultUpdateSet)
                 
-                TopFit:CalculateSets(true) -- calculate silently
+                TopFit:CalculateSets(true)
             end
         end
     elseif (event == "GET_ITEM_INFO_RECEIVED") then
-        -- fired once an item's data finishes its async load (see inventory.lua's
-        -- GetItemInfoTable/GetItemInfoSafe -- on 12.1.5, GetItemInfo can come back nil
-        -- on a first call for an uncached item, unlike the synchronous 3.3.5a behavior
-        -- this addon was originally written against). itemID is the first vararg,
-        -- success (bool) the second.
         local itemID, success = ...
         if success and TopFit.pendingItemInfoRequests and TopFit.pendingItemInfoRequests[itemID] then
             TopFit.pendingItemInfoRequests[itemID] = nil
             TopFit:RescanPendingItem(itemID)
         end
     elseif (event == "PLAYER_LEVEL_UP") then
-        -- remove cache info for heirlooms so they are rescanned
         for itemLink, itemTable in pairs(TopFit.itemsCache) do
             if itemTable.itemQuality == 7 then
                 TopFit.itemsCache[itemLink] = nil
@@ -804,14 +825,13 @@ function TopFit:FrameOnEvent(event, ...)
             end
         end
         
-        -- if an auto-update-set is set, update that as well
         if TopFit.db.profile.defaultUpdateSet then
             if not TopFit.workSetList then
                 TopFit.workSetList = {}
             end
             tinsert(TopFit.workSetList, TopFit.db.profile.defaultUpdateSet)
             
-            TopFit:CalculateSets(true) -- calculate silently
+            TopFit:CalculateSets(true)
         end
     end
 end
