@@ -25,16 +25,16 @@ function TopFit:collectItems(bag)
     
     if bag and bag >= 0 and bag <= 4 then
         -- only check a specific bag (used on BAG_UPDATE)
-        for slot = 1, GetContainerNumSlots(bag) do
-            local item = GetContainerItemLink(bag, slot)
+        for slot = 1, C_Container.GetContainerNumSlots(bag) do
+            local item = C_Container.GetContainerItemLink(bag, slot)
             
             TopFit:UpdateCache(item)
         end
     else
         -- check bags
         for bag = 0, 4 do
-            for slot = 1, GetContainerNumSlots(bag) do
-                local item = GetContainerItemLink(bag, slot)
+            for slot = 1, C_Container.GetContainerNumSlots(bag) do
+                local item = C_Container.GetContainerItemLink(bag, slot)
                 
                 TopFit:UpdateCache(item)
             end
@@ -53,7 +53,7 @@ end
 function TopFit:UpdateCache(item)
     if item and (not TopFit.itemsCache[item]) then
         -- check if it's equipment
-        if IsEquippableItem(item) then
+        if C_Item.IsEquippableItem(item) then
             local itemTable = TopFit:GetItemInfoTable(item)
             
             if itemTable then
@@ -67,11 +67,45 @@ function TopFit:UpdateCache(item)
     end
 end
 
+-- 12.1.5's GetItemInfo can legitimately return nil on the first call for an item
+-- that isn't cached yet (unlike 3.3.5a's synchronous behavior, which this addon was
+-- originally written against). This tracks which itemIDs we're waiting on, so the
+-- GET_ITEM_INFO_RECEIVED handler in core.lua knows what to rescan once data arrives.
+-- Deliberately NOT a fallback/compat shim -- this is the correct, only way to handle
+-- item data on this client, not a bridge to older behavior.
+TopFit.pendingItemInfoRequests = TopFit.pendingItemInfoRequests or {}
+
+-- re-runs GetItemInfoTable for an item once its async data has loaded, and refreshes
+-- anything cached under its old (incomplete) result. Called from core.lua's
+-- GET_ITEM_INFO_RECEIVED handler.
+function TopFit:RescanPendingItem(itemID)
+    if not itemID then return end
+    -- clear any cache entries keyed off this itemID with unresolved data, then let the
+    -- normal collection pass (next BAG_UPDATE, or an explicit rescan) pick it back up
+    if TopFit.itemsCache then
+        for cacheKey in pairs(TopFit.itemsCache) do
+            if cacheKey:match("^" .. itemID .. ":") then
+                TopFit.itemsCache[cacheKey] = nil
+            end
+        end
+    end
+    TopFit:collectItems()
+end
+
 -- find out all we need to know about an item. and maybe even more
 -- this does not return information which might change, only things you can get from the item link
 function TopFit:GetItemInfoTable(item)
     local itemName, itemLink, itemQuality, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount, itemEquipLoc, itemTexture = GetItemInfo(item)
-    if not itemLink then return nil end
+    if not itemLink then
+        -- not cached yet -- request the data and remember to retry once it arrives,
+        -- rather than silently dropping this item from scoring until the next reload
+        local itemID = tonumber(item) or tonumber(tostring(item):match("item:(%d+)"))
+        if itemID then
+            C_Item.RequestLoadItemDataByID(itemID)
+            TopFit.pendingItemInfoRequests[itemID] = true
+        end
+        return nil
+    end
 
     -- Extract IDs for unique cache key
     local itemID = string.match(itemLink, "item:(%d+)")
@@ -93,6 +127,17 @@ function TopFit:GetItemInfoTable(item)
 
     -- 2. Base Item Stats (from API)
     local itemBonus = GetItemStats(itemLink) or {}
+
+    -- 2b. Permanent flat/percent "Equip:" stats not covered by GetItemStats() at all on
+    -- WoW: Forever's pre-rating itemization model (hit/crit %, dodge-parry reduction %,
+    -- flat weapon skill, flat defense, flat spell healing/damage) -- see procparser.lua.
+    -- Merged in as TOPFIT_* keys alongside the normal ITEM_MOD_* keys from GetItemStats().
+    if TopFit.ScanItemPermanentPercentStats then
+        local permanentStats = TopFit:ScanItemPermanentPercentStats(itemLink)
+        for statKey, amount in pairs(permanentStats) do
+            itemBonus[statKey] = amount
+        end
+    end
 
     if TopFit.GetSimcWeaponType and TopFit:GetSimcWeaponType(itemLink) then
         local weaponSpeed = TopFit.ParseWeaponTooltip and TopFit:ParseWeaponTooltip(itemLink)
@@ -147,7 +192,7 @@ function TopFit:GetItemInfoTable(item)
     local filledSocketColors = {}
 
     for i = 1, 4 do
-        local gemName, gemLink = GetItemGem(item, i)
+        local gemName, gemLink = C_Item.GetItemGem(item, i)
         if gemLink or gemName then
             local activeGemLink = gemLink or gemName
             gems[i] = activeGemLink
@@ -491,8 +536,8 @@ function TopFit:GetEquippableItems(requestedSlotID)
     
     -- check player's bags
     for bag = 0, 4 do
-        for slot = 1, GetContainerNumSlots(bag) do
-            local itemLink = GetContainerItemLink(bag, slot)
+        for slot = 1, C_Container.GetContainerNumSlots(bag) do
+            local itemLink = C_Container.GetContainerItemLink(bag, slot)
             if itemLink then
                 local itemID = string.gsub(itemLink, ".*|Hitem:([0-9]*):.*", "%1")
                 itemID = tonumber(itemID)

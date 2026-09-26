@@ -11,9 +11,25 @@ local function ShowTooltip(self)
 end
 local function HideTooltip() GameTooltip:Hide() end
 
+-- Old InterfaceOptionsFrame_OpenToCategory replaced by Settings.OpenToCategory on
+-- 12.1.5. Calls TopFit:createOptions() first so the category is guaranteed registered
+-- (and settingsCategoryID set) even if this is the first time the panel's been opened
+-- this session -- all four call sites across the codebase should go through this
+-- rather than calling Settings.OpenToCategory directly.
+function TopFit:OpenOptionsPanel()
+    TopFit:createOptions()
+    Settings.OpenToCategory(TopFit.settingsCategoryID)
+end
+
 function TopFit:createOptions()
     if not TopFit.InterfaceOptionsFrame then
-        TopFit.InterfaceOptionsFrame = CreateFrame("Frame", "TopFit_InterfaceOptionsFrame", InterfaceOptionsFramePanelContainer)
+        -- 12.1.5: InterfaceOptionsFramePanelContainer no longer exists -- the old
+        -- Interface Options panel system was replaced by the Settings namespace around
+        -- Dragonflight 10.0 (confirmed via BujuArena/AutoGear's own multi-version
+        -- compatibility shim, which supports both systems). A panel frame just needs a
+        -- normal parent now; Settings.RegisterCanvasLayoutCategory handles hosting/
+        -- placement itself rather than requiring a specific pre-built container frame.
+        TopFit.InterfaceOptionsFrame = CreateFrame("Frame", "TopFit_InterfaceOptionsFrame", UIParent)
         TopFit.InterfaceOptionsFrame.name = "TopFit"
         TopFit.InterfaceOptionsFrame:Hide()
         
@@ -82,7 +98,12 @@ function TopFit:createOptions()
             TopFit.db.profile.debugMode = not TopFit.db.profile.debugMode
         end)
         
-        InterfaceOptions_AddCategory(TopFit.InterfaceOptionsFrame)
+        -- Old InterfaceOptions_AddCategory replaced by the Settings namespace on 12.1.5.
+        -- Category is stored so TopFit:OpenOptionsPanel() can open it later without
+        -- re-registering.
+        local category = Settings.RegisterCanvasLayoutCategory(TopFit.InterfaceOptionsFrame, TopFit.InterfaceOptionsFrame.name, TopFit.InterfaceOptionsFrame.name)
+        Settings.RegisterAddOnCategory(category)
+        TopFit.settingsCategoryID = category:GetID()
         LibStub("tekKonfig-AboutPanel").new("TopFit", "TopFit")
         
         TopFit.InterfaceOptionsFrame:SetScript("OnShow", function()
@@ -140,8 +161,9 @@ function TopFit:DeleteSet(setCode)
     local setName = TopFit:GenerateSetName(self.db.profile.sets[setCode].name)
     
     -- remove from equipment manager
-    if (CanUseEquipmentSets() and GetEquipmentSetInfoByName(setName)) then
-        DeleteEquipmentSet(setName)
+    local existingSetID = C_EquipmentSet.CanUseEquipmentSets() and C_EquipmentSet.GetEquipmentSetID(setName)
+    if existingSetID then
+        C_EquipmentSet.DeleteEquipmentSet(existingSetID)
     end
     
     -- remove from saved variables
@@ -167,8 +189,9 @@ function TopFit:RenameSet(setCode, newName)
     self.db.profile.sets[setCode]["name"] = newName
     
     -- rename equipment set if it exists
-    if (CanUseEquipmentSets() and GetEquipmentSetInfoByName(oldSetName)) then
-        RenameEquipmentSet(oldSetName, newSetName)
+    local existingSetID = C_EquipmentSet.CanUseEquipmentSets() and C_EquipmentSet.GetEquipmentSetID(oldSetName)
+    if existingSetID then
+        C_EquipmentSet.RenameEquipmentSet(existingSetID, newSetName)
     end
     
     if (TopFit.ProgressFrame) then

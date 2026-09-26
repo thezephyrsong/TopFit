@@ -1,5 +1,10 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
-<Script file="LibStub.lua"/>
+<!-- LibStub.lua REMOVED 2026-09-18: this line always pointed at a copy of LibStub.lua that
+     was never bundled alongside this file (it would need to live at Libs\tekKonfig\LibStub.lua,
+     which doesn't exist; the real one is Libs\LibStub\LibStub.lua, already loaded directly by
+     embeds.xml before this file is even included). Caused "Error loading .../LibStub.lua" and
+     blocked the rest of tekKonfig's scripts from loading on 12.1.5. Redundant even if the path
+     were fixed, since LibStub is already a global by the time this file's Include runs. -->
 <Script file="tekKonfigCheckbox.lua"/>
 <Script file="tekKonfigDropdown.lua" />
 <Script file="tekKonfigHeading.lua"/>

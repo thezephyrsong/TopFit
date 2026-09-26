@@ -77,20 +77,28 @@ function TopFit:CalculateRecommendations()
     -- determine if the player can dualwield
     TopFit.playerCanDualWield = false
     TopFit.playerCanTitansGrip = false
-    if (select(2, UnitClass("player")) == "ROGUE") or (select(2, UnitClass("player")) == "DEATHKNIGHT") or (((select(2, UnitClass("player")) == "WARRIOR") or (select(2, UnitClass("player")) == "HUNTER")) and (UnitLevel("player") > 20)) or
-        ((select(2, UnitClass("player")) == "SHAMAN") and (select(5, GetTalentInfo(2, 20)) > 0)) then
+    -- CONFIRMED 2026-09-17 (Dan): Enhancement Shaman has no dual-wield at all in Forever --
+    -- not baseline, not talent-gated, just absent (matches Forever's overall Vanilla-baseline
+    -- design: Shaman dual-wield was a TBC-era talent addition to begin with, so a Vanilla-
+    -- rooted baseline never having it is consistent, not a removal). Warriors get ordinary
+    -- 1H dual-wield same as Rogue/DK/Hunter, no talent needed -- just the baseline level-20
+    -- unlock below. Titan's Grip (2H dual-wield) does not exist as a mechanic at all, for any
+    -- class -- not class-gated, genuinely absent from the game, so it's left permanently
+    -- false with no path to true (see the simulateTitansGrip note below).
+    if (select(2, UnitClass("player")) == "ROGUE") or (select(2, UnitClass("player")) == "DEATHKNIGHT") or (((select(2, UnitClass("player")) == "WARRIOR") or (select(2, UnitClass("player")) == "HUNTER")) and (UnitLevel("player") > 20)) then
         TopFit.playerCanDualWield = true
-    end
-    if ((select(2, UnitClass("player")) == "WARRIOR") and (select(5, GetTalentInfo(2, 27)) > 0)) then
-        TopFit.playerCanTitansGrip = true
     end
     
     if (TopFit.db.profile.sets[TopFit.setCode].simulateDualWield) then
         TopFit.playerCanDualWield = true
     end
-    if (TopFit.db.profile.sets[TopFit.setCode].simulateTitansGrip) then
-        TopFit.playerCanTitansGrip = true
-    end
+    -- Titan's Grip override intentionally NOT honored anymore -- the mechanic doesn't exist
+    -- in Forever at all, so forcing it on would make TopFit recommend gear setups that are
+    -- physically impossible to use in-game. The "Force Titan's Grip" checkbox itself is
+    -- hidden in plugins/stats.lua for the same reason; this is the belt-and-suspenders half.
+    -- if (TopFit.db.profile.sets[TopFit.setCode].simulateTitansGrip) then
+    --     TopFit.playerCanTitansGrip = true
+    -- end
     
     -- "Force Two-Handed": always recommend a 2H mainhand and leave the offhand empty,
     -- overriding whatever the class/spec would otherwise allow (dual-wield, Titan's Grip, etc.)
@@ -121,16 +129,22 @@ function TopFit:GetTalentRatingBonuses()
     -- least once this session -- GetNumTalentTabs() returns 0 until then, which would otherwise
     -- make every talent-granted rating bonus silently compute as 0 with no indication why, right
     -- when caps are being checked against gear. Warn once per session instead of failing silently.
-    if not GetNumTalentTabs or not GetNumTalentTabs() or GetNumTalentTabs() == 0 then
+    -- Also covers the case where the classic talent-tab API doesn't exist on this client at all
+    -- (see TopFit.hasClassicTalentAPI in core.lua) -- same safe "no data" outcome either way.
+    if TopFit:GetNumTalentTabsSafe() == 0 then
         if not TopFit.warnedAboutMissingTalentData then
-            TopFit:Print("Talent-granted rating bonuses (Hit/Crit/Expertise/etc. from talents) can't be read yet -- open your Talent panel (default key: N) once this session so gear recommendations account for them correctly.")
+            if TopFit.hasClassicTalentAPI then
+                TopFit:Print("Talent-granted rating bonuses (Hit/Crit/Expertise/etc. from talents) can't be read yet -- open your Talent panel (default key: N) once this session so gear recommendations account for them correctly.")
+            else
+                TopFit:Debug("Talent-granted rating bonuses skipped -- this client doesn't expose GetNumTalentTabs/GetTalentInfo (see REWRITE_PLAN_12_1_5.md section 6).")
+            end
             TopFit.warnedAboutMissingTalentData = true
         end
         return bonuses
     end
     
     for _, entry in ipairs(entries) do
-        local rank = select(5, GetTalentInfo(entry.tab, entry.index)) or 0
+        local rank = TopFit:GetTalentRankSafe(entry.tab, entry.index)
         if rank > 0 then
             local amount = 0
             if entry.perPoint then
@@ -940,6 +954,18 @@ end
 
 function TopFit:IsOnehandedWeapon(itemID)
     _, _, _, _, _, class, subclass, _, equipSlot, _, _ = GetItemInfo(itemID)
+    if not equipSlot then
+        -- item data not cached yet on this call -- see inventory.lua's
+        -- GetItemInfoTable for why this can legitimately happen on 12.1.5.
+        -- Request it and queue a retry; callers should treat a nil return from
+        -- this function as "unknown, try again" rather than "not two-handed".
+        local id = tonumber(itemID) or tonumber(tostring(itemID):match("item:(%d+)"))
+        if id then
+            C_Item.RequestLoadItemDataByID(id)
+            TopFit.pendingItemInfoRequests[id] = true
+        end
+        return nil
+    end
     if equipSlot and string.find(equipSlot, "2HWEAPON") then
         if (TopFit.playerCanTitansGrip) then
             local polearms = select(7, GetAuctionItemSubClasses(1))

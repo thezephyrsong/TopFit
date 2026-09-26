@@ -1,14 +1,37 @@
-﻿
+
 local lib, oldminor = LibStub:NewLibrary("tekKonfig-AboutPanel", 5)
 if not lib then return end
 
 
 function lib.new(parent, addonname)
-	local frame = CreateFrame("Frame", nil, InterfaceOptionsFramePanelContainer)
+	local frame = CreateFrame("Frame", nil, UIParent)
 	frame.name, frame.parent, frame.addonname = parent and "About" or addonname, parent, addonname
 	frame:Hide()
 	frame:SetScript("OnShow", lib.OnShow)
-	InterfaceOptions_AddCategory(frame)
+	-- 12.1.5: InterfaceOptions_AddCategory (and InterfaceOptionsFramePanelContainer as a
+	-- frame parent, above) no longer exist -- replaced by the Settings namespace, same fix
+	-- as TopFit's own options.lua. This lib also supports registering as a SUBcategory under
+	-- an existing category when `parent` is passed (used by TopFit's own call site to nest
+	-- an "About" panel under the main TopFit category) -- AutoGear's own compatibility code
+	-- (see REWRITE_PLAN_12_1_5.md) does this via Settings.GetCategory(name) +
+	-- Settings.RegisterCanvasLayoutSubcategory, followed here, but wrapped in pcall: this
+	-- exact call site already broke addon LOAD entirely once (2026-09-18, not just the About
+	-- panel) since it runs during OnInitialize, and an About panel isn't worth risking a
+	-- repeat of that over an unconfirmed exact signature for Settings.GetCategory.
+	local ok, err = pcall(function()
+		if frame.parent then
+			local parentCategory = Settings.GetCategory(frame.parent)
+			if parentCategory then
+				Settings.RegisterCanvasLayoutSubcategory(parentCategory, frame, frame.name)
+			end
+		else
+			local category = Settings.RegisterCanvasLayoutCategory(frame, frame.name, frame.name)
+			Settings.RegisterAddOnCategory(category)
+		end
+	end)
+	if not ok and TopFit and TopFit.Debug then
+		TopFit:Debug("tekKonfig-AboutPanel: Settings registration failed (" .. tostring(err) .. "), About panel unavailable this session")
+	end
 	return frame
 end
 

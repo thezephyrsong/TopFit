@@ -67,6 +67,22 @@ local statNameToKey = {
 	IsLeather         = 'TOPFIT_ARMORTYPE_LEATHER',
 	IsMail            = 'TOPFIT_ARMORTYPE_MAIL',
 	IsPlate           = 'TOPFIT_ARMORTYPE_PLATE',
+
+	-- WoW: Forever / pre-rating itemization pseudo-stats (see procparser.lua's
+	-- ParsePermanentStatLine and core.lua's TopFit.statList for where these come from).
+	-- Pawn's own stat table (checked against a real 2.13.16 install) has no percent-chance
+	-- hit/crit/dodge-parry keys to map from -- its rating-era stat table doesn't model them
+	-- -- so these only round-trip through TopFit's own export format, not Pawn's, until/
+	-- unless Pawn adds equivalents. Included here (rather than a separate table) so a
+	-- Pawn-format import that happens to contain one of these names for some other reason
+	-- doesn't silently misinterpret it.
+	TopfitHitChanceAll      = 'TOPFIT_HIT_CHANCE_ALL',
+	TopfitCritChanceAll     = 'TOPFIT_CRIT_CHANCE_ALL',
+	TopfitCritChanceMelee   = 'TOPFIT_CRIT_CHANCE_MELEE',
+	TopfitCritChanceRanged  = 'TOPFIT_CRIT_CHANCE_RANGED',
+	TopfitCritChanceSpell   = 'TOPFIT_CRIT_CHANCE_SPELL',
+	TopfitDodgeParryReduction = 'TOPFIT_DODGE_PARRY_REDUCTION',
+	TopfitDefenseFlat       = 'TOPFIT_DEFENSE_FLAT',
 }
 
 local function GetInverseStat(key)
@@ -160,6 +176,15 @@ local function SanitizeScales(scaleTable)
 	RenameStat(scaleTable, "RangedDPS", "RangedDps")
 
 	-- combine +healing and +damage into spell power
+	-- NOTE (WoW: Forever): this fold assumes WotLK's unified-SpellPower itemization model.
+	-- Forever's screenshot items (see MIGRATION_WOWFOREVER.md section 8) suggest healing-done
+	-- and damage-done may stay separate stats there, in which case folding a Forever-side
+	-- import into one SpellPower number would be wrong, not just imprecise. Left as-is for
+	-- now since this path only runs on values Pawn/AMR already computed as unified SpellPower
+	-- (matching Pawn's own SpellPower/SpellDamage/Healing keys, which fold identically on
+	-- Pawn's end) -- this is about values arriving FROM Pawn, not about how procparser.lua's
+	-- own TOPFIT_SPELL_HEALING_FLAT/TOPFIT_SPELL_DAMAGE_FLAT scan results get scored, which
+	-- are untouched by this function. Revisit once Forever's actual stat model is confirmed.
 	CombineStat(scaleTable, "SpellPower", "SpellDamage")
 	CombineStat(scaleTable, "SpellPower", "Healing")
 

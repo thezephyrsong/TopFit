@@ -39,7 +39,7 @@ local function CreateMinimapButton()
     frame:SetScript("OnClick", function(self, button)
         if IsControlKeyDown() then
             -- Control+Click opens options panel
-            InterfaceOptionsFrame_OpenToCategory("TopFit")
+            TopFit:OpenOptionsPanel()
         elseif button == "RightButton" then
             -- Right-Click opens the SimC export window
             TopFit:ShowSimcExportDialog()

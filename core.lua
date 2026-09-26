@@ -15,20 +15,46 @@ function round(input, places)
     end
 end
 
--- for keeping a set's icon intact when it is updated
-local function GetTextureIndex(tex) -- blatantly stolen from Tekkubs EquipSetUpdate. Thanks!
-    RefreshEquipmentSetIconInfo()
-    tex = tex:lower()
-    local numicons = GetNumMacroIcons()
-    for i = INVSLOT_FIRST_EQUIPPED,INVSLOT_LAST_EQUIPPED do if GetInventoryItemTexture("player", i) then numicons = numicons + 1 end end
-    for i = 1, numicons do
-        local texture, index = GetEquipmentSetIconInfo(i)
-        if texture:lower() == tex then return index end
-    end
-end
-
 -- create Addon object
 TopFit = LibStub("AceAddon-3.0"):NewAddon("TopFit", "AceConsole-3.0")
+
+-- Safe accessors for the classic-style 3-tab talent API (GetNumTalentTabs/GetTalentInfo/
+-- GetTalentTabInfo/GetNumTalents). Confirmed present on Classic-family client builds (TBC/
+-- Wrath Classic -- see REWRITE_PLAN_12_1_5.md's generalwrex/wowsimsexporter finding),
+-- confirmed ABSENT on unified retail 12.1.5 (see the same doc's AutoGear finding). Whether
+-- WoW: Forever has it is the single biggest open question in this whole rewrite, unresolved
+-- until there's a beta client to check against -- these wrappers exist so that uncertainty
+-- degrades gracefully (talent-based bonuses/detection silently read as "no data") instead of
+-- hard-erroring the entire calculation pipeline the moment a Shaman/Warrior tries to
+-- calculate a set. Every direct call to the four functions above elsewhere in the codebase
+-- should go through these instead.
+-- MUST stay below the TopFit = NewAddon(...) line above -- putting this block before TopFit
+-- exists is exactly what caused "attempt to perform indexed assignment on global 'TopFit'
+-- (a nil value)" on 2026-09-18. Do not move it back above the creation line.
+TopFit.hasClassicTalentAPI = (type(GetNumTalentTabs) == "function") and (type(GetTalentInfo) == "function")
+
+function TopFit:GetNumTalentTabsSafe()
+    if not TopFit.hasClassicTalentAPI then return 0 end
+    return GetNumTalentTabs() or 0
+end
+
+function TopFit:GetNumTalentsSafe(tab)
+    if not TopFit.hasClassicTalentAPI or type(GetNumTalents) ~= "function" then return 0 end
+    return GetNumTalents(tab) or 0
+end
+
+function TopFit:GetTalentTabNameSafe(tab)
+    if not TopFit.hasClassicTalentAPI or type(GetTalentTabInfo) ~= "function" then return nil end
+    return GetTalentTabInfo(tab)
+end
+
+-- returns rank, name, maxRank (rank defaults to 0, not nil, so `> 0` comparisons at call
+-- sites are always safe without an extra nil check)
+function TopFit:GetTalentRankSafe(tab, index)
+    if not TopFit.hasClassicTalentAPI then return 0, nil, nil end
+    local name, _, _, _, currentRank, maxRank = GetTalentInfo(tab, index)
+    return currentRank or 0, name, maxRank
+end
 
 -- debug function
 function TopFit:Debug(text)
@@ -114,8 +140,8 @@ function TopFit:onUpdateForEquipment()
                 local found = false
                 local foundBag, foundSlot
                 for bag = 0, 4 do
-                    for slot = 1, GetContainerNumSlots(bag) do
-                        local itemLink = GetContainerItemLink(bag,slot)
+                    for slot = 1, C_Container.GetContainerNumSlots(bag) do
+                        local itemLink = C_Container.GetContainerItemLink(bag,slot)
                         
                         if itemLink == recTable.locationTable.itemLink then
                             foundBag = bag
@@ -148,7 +174,7 @@ function TopFit:onUpdateForEquipment()
                     --TODO: if we try to equip offhand, and mainhand is two-handed, and no titan's grip, unequip mainhand first
                     ClearCursor()
                     if foundBag then
-                        PickupContainerItem(foundBag, foundSlot)
+                        C_Container.PickupContainerItem(foundBag, foundSlot)
                     else
                         PickupInventoryItem(foundSlot)
                     end
@@ -180,29 +206,35 @@ function TopFit:onUpdateForEquipment()
         TopFit.updateFrame:SetScript("OnUpdate", nil)
         TopFit.ProgressFrame:StoppedCalculation()
         
-        EquipmentManagerClearIgnoredSlotsForSave()
-        for _, slotID in pairs(TopFit.slots) do
-            if (not TopFit.itemRecommendations[slotID]) then
-                TopFit:Debug("Ignoring slot "..slotID)
-                EquipmentManagerIgnoreSlotForSave(slotID)
-            end
-        end
+        -- FIXME (12.1.5 rewrite, unconfirmed -- test on WoW: Forever beta):
+        -- EquipmentManagerClearIgnoredSlotsForSave/EquipmentManagerIgnoreSlotForSave
+        -- let TopFit exclude slots it didn't fill from the saved set, so gear in an
+        -- unmanaged slot wouldn't get baked in. C_EquipmentSet has no confirmed
+        -- per-slot exclusion -- CreateEquipmentSet/SaveEquipmentSet snapshot every
+        -- currently equipped slot. Until beta confirms otherwise (there may be an
+        -- API for this that just wasn't findable without a live client to inspect),
+        -- the saved set will include whatever is worn in slots TopFit didn't manage
+        -- for this calculation, which the old behavior specifically avoided. Not
+        -- guessing at a workaround here per project convention -- flagged, not faked.
         
         -- save equipment set
-        if (CanUseEquipmentSets()) then
+        if (C_EquipmentSet.CanUseEquipmentSets()) then
             setName = TopFit:GenerateSetName(TopFit.currentSetName)
-            -- check if a set with this name exists
-            if (GetEquipmentSetInfoByName(setName)) then
-                texture = GetEquipmentSetInfoByName(setName)
-                texture = "Interface\\Icons\\"..texture
-                
-                textureIndex = GetTextureIndex(texture)
+            local existingSetID = C_EquipmentSet.GetEquipmentSetID(setName)
+            local iconTexture
+            if existingSetID then
+                local _, icon = C_EquipmentSet.GetEquipmentSetInfo(existingSetID)
+                iconTexture = icon
             else
-                textureIndex = GetTextureIndex("Interface\\Icons\\Spell_Holy_EmpowerChampion")
+                iconTexture = "Interface\\Icons\\Spell_Holy_EmpowerChampion"
             end
             
-            TopFit:Debug("Trying to save set: "..setName..", "..(textureIndex or "nil"))
-            SaveEquipmentSet(setName, textureIndex)
+            TopFit:Debug("Trying to save set: "..setName..", "..(iconTexture or "nil"))
+            if existingSetID then
+                C_EquipmentSet.SaveEquipmentSet(existingSetID, iconTexture)
+            else
+                C_EquipmentSet.CreateEquipmentSet(setName, iconTexture)
+            end
         end
     
         -- we are done with this set
@@ -226,14 +258,14 @@ end
 
 function TopFit:ChatCommand(input)
     if not input or input:trim() == "" then
-        InterfaceOptionsFrame_OpenToCategory("TopFit")
+        TopFit:OpenOptionsPanel()
     else
         local command, rest = input:trim():match("^(%S+)%s*(.*)$")
         command = command and command:lower()
         if command == "show" then
             TopFit:CreateProgressFrame()
         elseif command == "options" then
-            InterfaceOptionsFrame_OpenToCategory("TopFit")
+            TopFit:OpenOptionsPanel()
         elseif command == "import" then
             TopFit:ShowImportDialog()
         elseif command == "export" then
@@ -425,6 +457,26 @@ function TopFit:OnInitialize()
     -- itemBonus by inventory.lua) -- not a real Blizzard ITEM_MOD_* token, so unlike the others
     -- it needs its own display-name global for the Weights & Caps UI to show something readable.
     _G["TOPFIT_WEAPON_SPEED"] = "Weapon Speed"
+
+    -- WoW: Forever / pre-rating itemization pseudo-stats (see procparser.lua's
+    -- ParsePermanentStatLine) -- flat/percent "Equip:" bonuses with no ITEM_MOD_* token of
+    -- their own to borrow a display name from, same treatment as TOPFIT_WEAPON_SPEED above.
+    _G["TOPFIT_HIT_CHANCE_ALL"] = "Hit Chance"
+    _G["TOPFIT_CRIT_CHANCE_ALL"] = "Critical Strike Chance"
+    _G["TOPFIT_CRIT_CHANCE_MELEE"] = "Melee Critical Strike Chance"
+    _G["TOPFIT_CRIT_CHANCE_RANGED"] = "Ranged Critical Strike Chance"
+    _G["TOPFIT_CRIT_CHANCE_SPELL"] = "Spell Critical Strike Chance"
+    _G["TOPFIT_DODGE_PARRY_REDUCTION"] = "Dodge/Parry Reduction"
+    _G["TOPFIT_DEFENSE_FLAT"] = "Defense"
+    _G["TOPFIT_SPELL_HEALING_FLAT"] = "Healing Power"
+    _G["TOPFIT_SPELL_DAMAGE_FLAT"] = "Spell Damage"
+    -- weapon-skill keys are per weapon type and built dynamically (TOPFIT_WEAPON_SKILL_SWORDS,
+    -- _AXES, _DAGGERS, etc.) rather than enumerated here, since the full set of weapon-type
+    -- names used in "Increased <Type> +N" tooltip text isn't confirmed yet -- see
+    -- REWRITE_PLAN_12_1_5.md. ParsePermanentStatLine falls back to titling whatever word it
+    -- finds, so an unlisted display name just shows the raw key instead of a friendly label
+    -- until this list is filled in against real Forever/Classic item text.
+
     TopFit.statList = {
         ["Basic Attributes"] = {
             [1] = "ITEM_MOD_AGILITY_SHORT",
@@ -439,11 +491,16 @@ function TopFit:OnInitialize()
             [3] = "ITEM_MOD_EXPERTISE_RATING_SHORT",
             [4] = "ITEM_MOD_FERAL_ATTACK_POWER_SHORT",
             [5] = "TOPFIT_WEAPON_SPEED",
+            [6] = "TOPFIT_CRIT_CHANCE_MELEE",
+            [7] = "TOPFIT_DODGE_PARRY_REDUCTION",
         },
         ["Caster"] = {
             [1] = "ITEM_MOD_SPELL_PENETRATION_SHORT",
             [2] = "ITEM_MOD_SPELL_POWER_SHORT",
             [3] = "ITEM_MOD_MANA_REGENERATION_SHORT",
+            [4] = "TOPFIT_SPELL_DAMAGE_FLAT",
+            [5] = "TOPFIT_SPELL_HEALING_FLAT",
+            [6] = "TOPFIT_CRIT_CHANCE_SPELL",
         },
         ["Defensive"] = {
             [1] = "ITEM_MOD_BLOCK_RATING_SHORT",
@@ -453,12 +510,15 @@ function TopFit:OnInitialize()
             [5] = "ITEM_MOD_PARRY_RATING_SHORT",
             [6] = "ITEM_MOD_RESILIENCE_RATING_SHORT",
             [7] = "RESISTANCE0_NAME",                   -- armor
+            [8] = "TOPFIT_DEFENSE_FLAT",
         },
         ["Hybrid"] = {
             [1] = "ITEM_MOD_CRIT_RATING_SHORT",
             [2] = "ITEM_MOD_DAMAGE_PER_SECOND_SHORT",
             [3] = "ITEM_MOD_HASTE_RATING_SHORT",
             [4] = "ITEM_MOD_HIT_RATING_SHORT",
+            [5] = "TOPFIT_HIT_CHANCE_ALL",
+            [6] = "TOPFIT_CRIT_CHANCE_ALL",
         },
         ["Misc."] = {
             [1] = "ITEM_MOD_HEALTH_SHORT",
@@ -531,6 +591,7 @@ function TopFit:OnInitialize()
     TopFit.eventFrame = CreateFrame("Frame")
     TopFit.eventFrame:RegisterEvent("BAG_UPDATE")
     TopFit.eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
+    TopFit.eventFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
     TopFit.eventFrame:SetScript("OnEvent", TopFit.FrameOnEvent)
     TopFit.eventFrame:SetScript("OnUpdate", TopFit.delayCalculationOnLogin)
     
@@ -652,10 +713,10 @@ function TopFit:collectEquippableItems()
     
     -- check bags
     for bag = 0, 4 do
-        for slot = 1, GetContainerNumSlots(bag) do
-            local item = GetContainerItemLink(bag, slot)
+        for slot = 1, C_Container.GetContainerNumSlots(bag) do
+            local item = C_Container.GetContainerItemLink(bag, slot)
             
-            if IsEquippableItem(item) then
+            if C_Item.IsEquippableItem(item) then
                 local found = false
                 for _, link in pairs(TopFit.equippableItems) do
                     if link == item then
@@ -675,7 +736,7 @@ function TopFit:collectEquippableItems()
     -- check equipment (mostly so your set doesn't get recalculated just because you unequip an item)
     for _, invSlot in pairs(TopFit.slots) do
         local item = GetInventoryItemLink("player", invSlot)
-        if IsEquippableItem(item) then
+        if C_Item.IsEquippableItem(item) then
             local found = false
             for _, link in pairs(TopFit.equippableItems) do
                 if link == item then
@@ -722,6 +783,17 @@ function TopFit:FrameOnEvent(event, ...)
                 
                 TopFit:CalculateSets(true) -- calculate silently
             end
+        end
+    elseif (event == "GET_ITEM_INFO_RECEIVED") then
+        -- fired once an item's data finishes its async load (see inventory.lua's
+        -- GetItemInfoTable/GetItemInfoSafe -- on 12.1.5, GetItemInfo can come back nil
+        -- on a first call for an uncached item, unlike the synchronous 3.3.5a behavior
+        -- this addon was originally written against). itemID is the first vararg,
+        -- success (bool) the second.
+        local itemID, success = ...
+        if success and TopFit.pendingItemInfoRequests and TopFit.pendingItemInfoRequests[itemID] then
+            TopFit.pendingItemInfoRequests[itemID] = nil
+            TopFit:RescanPendingItem(itemID)
         end
     elseif (event == "PLAYER_LEVEL_UP") then
         -- remove cache info for heirlooms so they are rescanned

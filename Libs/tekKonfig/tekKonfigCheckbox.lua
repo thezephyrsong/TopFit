@@ -1,4 +1,4 @@
-﻿
+
 local lib, oldminor = LibStub:NewLibrary("tekKonfig-Checkbox", 1)
 if not lib then return end
 

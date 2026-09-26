@@ -36,52 +36,15 @@ function TopFit:CreateStatsPlugin()
         end
     end)
     
-    -- option to simulate dualwielding / titan's grip
-    -- anchored to the previous checkbox's bottom (rather than a fixed pixel offset from the
-    -- panel) so row spacing stays correct no matter how many checkboxes precede it.
-    if select(2, UnitClass("player")) == "SHAMAN" then
-        statsFrame.simulateDualWieldCheckButton = LibStub("tekKonfig-Checkbox").new(statsFrame, nil, "Force dual-wield", "TOPLEFT", statsFrame.includeInTooltipCheckButton, "BOTTOMLEFT", 0, -6)
-        statsFrame.simulateDualWieldCheckButton.tiptext = "|cffffffffCheck to calculate this set with dualwielding in mind even if your current spec does not allow you to. If left off, the set will be calculated with your current spec in mind."
-        if TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet then
-            statsFrame.simulateDualWieldCheckButton:SetChecked(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].simulateDualWield)
-        end
-        local checksound = statsFrame.simulateDualWieldCheckButton:GetScript("OnClick")
-        statsFrame.simulateDualWieldCheckButton:SetScript("OnClick", function(self)
-            checksound(self)
-            if (TopFit.ProgressFrame.selectedSet) then
-                local set = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet]
-                set.simulateDualWield = not set.simulateDualWield
-                -- mutually exclusive with Force two-handed
-                if set.simulateDualWield and set.forceTwoHanded then
-                    set.forceTwoHanded = false
-                    if statsFrame.forceTwoHandedCheckButton then
-                        statsFrame.forceTwoHandedCheckButton:SetChecked(false)
-                    end
-                end
-            end
-        end)
-    elseif select(2, UnitClass("player")) == "WARRIOR" then
-        statsFrame.simulateTitansGripCheckButton = LibStub("tekKonfig-Checkbox").new(statsFrame, nil, "Force Titan's Grip", "TOPLEFT", statsFrame.includeInTooltipCheckButton, "BOTTOMLEFT", 0, -6)
-        statsFrame.simulateTitansGripCheckButton.tiptext = "|cffffffffCheck to calculate this set with Titan's Grip in mind even if your current spec does not include it. If left off, the set will be calculated with your current spec in mind."
-        if TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet then
-            statsFrame.simulateTitansGripCheckButton:SetChecked(TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].simulateTitansGrip)
-        end
-        local checksound = statsFrame.simulateTitansGripCheckButton:GetScript("OnClick")
-        statsFrame.simulateTitansGripCheckButton:SetScript("OnClick", function(self)
-            checksound(self)
-            if (TopFit.ProgressFrame.selectedSet) then
-                local set = TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet]
-                set.simulateTitansGrip = not set.simulateTitansGrip
-                -- mutually exclusive with Force two-handed
-                if set.simulateTitansGrip and set.forceTwoHanded then
-                    set.forceTwoHanded = false
-                    if statsFrame.forceTwoHandedCheckButton then
-                        statsFrame.forceTwoHandedCheckButton:SetChecked(false)
-                    end
-                end
-            end
-        end)
-    end
+    -- REMOVED 2026-09-17 (Dan confirmed): this block used to offer Shaman a "Force dual-
+    -- wield" override and Warrior a "Force Titan's Grip" override -- both existed because,
+    -- in WotLK, those were the one talent-gated case per mechanic (every other dual-wield-
+    -- capable class was unconditionally so by the relevant level, no override needed). In
+    -- Forever, Shaman dual-wield isn't gated, it's simply absent for the class entirely, and
+    -- Titan's Grip doesn't exist as a mechanic for anyone. An override toggle for a mechanic
+    -- that can't exist would let someone check a box and get gear recommendations that are
+    -- physically impossible to use in-game, so removed rather than left dead. See
+    -- calculation.lua's playerCanDualWield/playerCanTitansGrip setup for the matching change.
     
     -- option to force a two-handed weapon (empty offhand), overriding dual-wield/Titan's Grip.
     -- Available for any class -- useful whenever you want to theorycraft/compare a 2H build,
@@ -119,7 +82,7 @@ function TopFit:CreateStatsPlugin()
     end
     
     statsFrame.optionsButton:SetScript("OnClick", function(...)
-        InterfaceOptionsFrame_OpenToCategory("TopFit")
+        TopFit:OpenOptionsPanel()
         TopFit.ProgressFrame:Hide()
     end)
     statsFrame.optionsButton.tipText = "Open TopFit's options"

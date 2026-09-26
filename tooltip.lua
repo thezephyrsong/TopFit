@@ -38,7 +38,7 @@ local function TooltipAddCompareLines(tt, link)
                                 end
                             elseif bags then
                                 -- item is in player's bags
-                                itemLink = GetContainerItemLink(bag, slot)
+                                itemLink = C_Container.GetContainerItemLink(bag, slot)
                             else
                                 -- item is equipped
                                 itemLink = GetInventoryItemLink("player", slot)
@@ -319,7 +319,7 @@ local function OnTooltipSetItem(self)
     if cleared then
         local name, link = self:GetItem()
         if (name) then
-            local equippable = IsEquippableItem(link)
+            local equippable = C_Item.IsEquippableItem(link)
             if (not equippable) then
                 -- Do nothing
             else
@@ -341,7 +341,7 @@ local function OnRefTooltipSetItem(self)
     if refCleared then
         local name, link = self:GetItem()
         if (name) then
-            local equippable = IsEquippableItem(link)
+            local equippable = C_Item.IsEquippableItem(link)
             if (not equippable) then
                 -- Do nothing
             else
@@ -363,7 +363,7 @@ local function OnShoppingTooltip1SetItem(self)
     if s1Cleared then
         local name, link = self:GetItem()
         if (name) then
-            local equippable = IsEquippableItem(link)
+            local equippable = C_Item.IsEquippableItem(link)
             if (not equippable) then
                 -- Do nothing
             else
@@ -382,7 +382,7 @@ local function OnShoppingTooltip2SetItem(self)
     if s2Cleared then
         local name, link = self:GetItem()
         if (name) then
-            local equippable = IsEquippableItem(link)
+            local equippable = C_Item.IsEquippableItem(link)
             if (not equippable) then
                 -- Do nothing
             else

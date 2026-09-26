@@ -687,7 +687,7 @@ function TopFit:CreateProgressFrame()
                                     end
                                 elseif bags then
                                     -- item is in player's bags
-                                    itemLink = GetContainerItemLink(bag, slot)
+                                    itemLink = C_Container.GetContainerItemLink(bag, slot)
                                 else
                                     -- item is equipped
                                     itemLink = GetInventoryItemLink("player", slot)

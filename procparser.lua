@@ -197,6 +197,129 @@ function TopFit:LookupSimcProcData(itemLink, section)
 	return TopFit:DecodeSimcEffectString(raw)
 end
 
+-- ============================================================================
+-- Flat/percent "Equip:" passive stats (pre-WotLK-rating itemization model)
+--
+-- WoW: Forever's confirmed itemization (from real item tooltips, and from
+-- WoW: Forever's own talent text -- e.g. Shaman's Thundering Strikes/Tidal
+-- Focus use these exact same templates) expresses hit/crit/dodge-parry-
+-- reduction/weapon-skill/spell-power as plain on-equip spell text, NOT as
+-- GetItemStats() ITEM_MOD_* rating stats. These bonuses are invisible to
+-- inventory.lua's GetItemStats() call entirely. This section extracts them
+-- from tooltip text into TopFit's own namespaced stat keys (matching the
+-- existing TOPFIT_WEAPON_SPEED convention in inventory.lua).
+--
+-- Templates confirmed from live Season of Discovery/Classic item and talent
+-- text (Forever wording not yet confirmed independently -- verify against
+-- real Forever tooltips once beta is up, per REWRITE_PLAN_12_1_5.md):
+--   "Improves your chance to hit with all spells and attacks by N%."
+--   "Improves your chance to get a critical strike with all spells and
+--    attacks by N%." / "...with melee attacks by N%." / "...with spells
+--    by N%." (melee/ranged/spell variants seen as separate lines too)
+--   "Reduces the chance for your attacks to be dodged or parried by N%."
+--   "Reduces chance to be dodged or parried by N%." (shorter variant seen
+--    in the WoW: Forever Items & Gear panel specifically)
+--   "Increased Defense +N." / "Increased Swords +N." (flat, per weapon type)
+--   "Increases healing done by up to X and damage done by up to Y for all
+--    magical spells and effects." (one line, two stats)
+-- ============================================================================
+
+TopFit.PermanentPercentStatPatterns =
+{
+	-- combined hit
+	{ pattern = "improves your chance to hit with all spells and attacks by ([%d%.]+)%%",
+	  statKey = "TOPFIT_HIT_CHANCE_ALL" },
+	-- combined crit
+	{ pattern = "improves your chance to get a critical strike with all spells and attacks by ([%d%.]+)%%",
+	  statKey = "TOPFIT_CRIT_CHANCE_ALL" },
+	-- split crit variants (melee/ranged/spell as separate lines)
+	{ pattern = "improves your chance to get a critical strike with melee attacks by ([%d%.]+)%%",
+	  statKey = "TOPFIT_CRIT_CHANCE_MELEE" },
+	{ pattern = "improves your chance to get a critical strike with ranged attacks by ([%d%.]+)%%",
+	  statKey = "TOPFIT_CRIT_CHANCE_RANGED" },
+	{ pattern = "improves your chance to get a critical strike with spells by ([%d%.]+)%%",
+	  statKey = "TOPFIT_CRIT_CHANCE_SPELL" },
+	-- dodge/parry reduction -- tolerate both the longer Classic/SoD wording and the
+	-- shorter wording seen in the WoW: Forever Items & Gear panel
+	{ pattern = "reduces the chance for your attacks to be dodged or parried by ([%d%.]+)%%",
+	  statKey = "TOPFIT_DODGE_PARRY_REDUCTION" },
+	{ pattern = "reduces chance to be dodged or parried by ([%d%.]+)%%",
+	  statKey = "TOPFIT_DODGE_PARRY_REDUCTION" },
+	-- dual-stat spell healing/damage line -- two captures, handled specially below
+	{ pattern = "increases healing done by up to (%d+) and damage done by up to (%d+) for all magical spells and effects",
+	  dualStatKeys = { "TOPFIT_SPELL_HEALING_FLAT", "TOPFIT_SPELL_DAMAGE_FLAT" } },
+}
+
+-- flat "Increased <WeaponType/Defense> +N" lines -- no % sign, no "chance" word, so these
+-- were never at risk of the proc misclassification, but still invisible to GetItemStats()
+local FLAT_INCREASED_PATTERN = "^increased (%a+) %+(%d+)%.?$"
+
+-- given one line of tooltip text, returns a table of {statKey = amount, ...} for every
+-- known permanent flat/percent stat pattern it matches, or nil if none matched. A single
+-- line can match more than one entry only for the dual-stat healing/damage template.
+function TopFit:ParsePermanentStatLine(text)
+	if not text then return nil end
+	local lower = text:lower()
+
+	for _, entry in ipairs(TopFit.PermanentPercentStatPatterns) do
+		if entry.dualStatKeys then
+			local a, b = lower:match(entry.pattern)
+			if a and b then
+				return { [entry.dualStatKeys[1]] = tonumber(a), [entry.dualStatKeys[2]] = tonumber(b) }
+			end
+		else
+			local amount = lower:match(entry.pattern)
+			if amount then
+				return { [entry.statKey] = tonumber(amount) }
+			end
+		end
+	end
+
+	local weaponOrDefense, flatAmount = lower:match(FLAT_INCREASED_PATTERN)
+	if weaponOrDefense and flatAmount then
+		local statKey
+		if weaponOrDefense == "defense" then
+			statKey = "TOPFIT_DEFENSE_FLAT"
+		else
+			statKey = "TOPFIT_WEAPON_SKILL_" .. weaponOrDefense:upper()
+		end
+		return { [statKey] = tonumber(flatAmount) }
+	end
+
+	return nil
+end
+
+-- scans itemLink's full tooltip for every permanent flat/percent stat line (see above) and
+-- returns a merged {statKey = amount, ...} table (empty table, not nil, if none found -- so
+-- callers can merge it into an item's stat table unconditionally). Unlike ParseItemProc,
+-- this is not limited to a single matched line: an item can have both a percent stat
+-- (e.g. "Increased chance to hit") AND a flat one (e.g. "Increased Defense +21") as separate
+-- Equip: lines, and both need to be captured.
+function TopFit:ScanItemPermanentPercentStats(itemLink)
+	local result = {}
+	if not itemLink then return result end
+
+	TopFit.scanTooltip:SetOwner(UIParent, 'ANCHOR_NONE')
+	TopFit.scanTooltip:SetHyperlink(itemLink)
+	local numLines = TopFit.scanTooltip:NumLines()
+
+	for i = 1, numLines do
+		local leftLine = getglobal("TFScanTooltip" .. "TextLeft" .. i)
+		local leftLineText = leftLine and leftLine:GetText()
+		if leftLineText then
+			local matched = TopFit:ParsePermanentStatLine(leftLineText)
+			if matched then
+				for statKey, amount in pairs(matched) do
+					result[statKey] = amount
+				end
+			end
+		end
+	end
+	TopFit.scanTooltip:Hide()
+
+	return result
+end
+
 -- distinguishes an actual chance/triggered effect line from an ordinary flat, always-on
 -- "Equip: +N Stat" passive bonus. Both use the identical "Equip:" tooltip prefix in WoW's UI,
 -- but only a genuine proc/triggered effect will either say "chance" (the overwhelming majority
@@ -206,7 +329,15 @@ end
 -- misidentified as having an unparsed proc. Found 2026-07-11 after the case-sensitivity fix
 -- made stat/amount extraction succeed on these flat lines too, which had been silently masking
 -- this pre-existing ambiguity.
+--
+-- UPDATED 2026-09-16: the "chance" heuristic alone is wrong for WoW: Forever/pre-rating
+-- itemization -- permanent stats like "Improves your chance to hit..." and "Reduces chance
+-- to be dodged or parried..." use the word "chance" in ordinary phrasing while being just as
+-- permanent as a flat "+N Stat" line. Check against the known permanent-stat templates
+-- (see ParsePermanentStatLine above) BEFORE falling back to the generic "chance" check, so
+-- these don't get misrouted into the proc path and silently scored as zero.
 local function LooksLikeTriggeredEffect(text)
+	if TopFit:ParsePermanentStatLine(text) then return false end
 	local lower = text:lower()
 	if lower:find("chance") then return true end
 	if text:match("for%s+%d+%s*sec") then return true end

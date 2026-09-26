@@ -45,14 +45,14 @@ local CLASS_TO_WOWARMORY_CID = {
 -- silently producing an empty string, so the caller can tell the difference between "no talent
 -- data available yet" and "character genuinely has 0 points spent".
 local function GetWowarmoryTalentString()
-	local numTabs = GetNumTalentTabs()
-	if not numTabs or numTabs == 0 then
-		return nil, "no_talent_data"
+	local numTabs = TopFit:GetNumTalentTabsSafe()
+	if numTabs == 0 then
+		return nil, TopFit.hasClassicTalentAPI and "no_talent_data" or "no_talent_api"
 	end
 	local digits = {}
 	for tab = 1, numTabs do
-		for i = 1, GetNumTalents(tab) do
-			local currentRank = select(5, GetTalentInfo(tab, i)) or 0
+		for i = 1, TopFit:GetNumTalentsSafe(tab) do
+			local currentRank = TopFit:GetTalentRankSafe(tab, i)
 			tinsert(digits, tostring(currentRank))
 		end
 	end
@@ -61,21 +61,25 @@ end
 
 -- diagnostic talent tracking
 function TopFit:DebugTalentCounts()
-	local numTabs = GetNumTalentTabs()
-	if not numTabs or numTabs == 0 then
-		TopFit:Print("No talent data available -- open your Talent panel (default key: N) once this session, then run this again.")
+	local numTabs = TopFit:GetNumTalentTabsSafe()
+	if numTabs == 0 then
+		if TopFit.hasClassicTalentAPI then
+			TopFit:Print("No talent data available -- open your Talent panel (default key: N) once this session, then run this again.")
+		else
+			TopFit:Print("This client doesn't expose GetNumTalentTabs/GetTalentInfo at all (TopFit.hasClassicTalentAPI is false) -- see REWRITE_PLAN_12_1_5.md section 6/beta-day-one checklist.")
+		end
 		return
 	end
 	TopFit:Print("GetNumTalentTabs() = " .. tostring(numTabs))
 	local total = 0
 	for tab = 1, numTabs do
-		local tabName = select(1, GetTalentTabInfo(tab))
-		local numTalents = GetNumTalents(tab)
+		local tabName = TopFit:GetTalentTabNameSafe(tab)
+		local numTalents = TopFit:GetNumTalentsSafe(tab)
 		total = total + numTalents
 		TopFit:Print(("Tab %d (%s): GetNumTalents() = %d"):format(tab, tostring(tabName), numTalents))
 		for i = 1, numTalents do
-			local name, _, _, _, currentRank, maxRank = GetTalentInfo(tab, i)
-			TopFit:Print(("  [%d] %s -- rank %d/%d"):format(i, tostring(name), currentRank or 0, maxRank or 0))
+			local currentRank, name, maxRank = TopFit:GetTalentRankSafe(tab, i)
+			TopFit:Print(("  [%d] %s -- rank %d/%d"):format(i, tostring(name), currentRank, maxRank or 0))
 		end
 	end
 	TopFit:Print("Total talent slots across all tabs = " .. total)
@@ -89,7 +93,7 @@ function TopFit:DebugTalentCounts()
 	if entries and #entries > 0 then
 		TopFit:Print("--- talentbonuses.lua entries for " .. playerClass .. " ---")
 		for _, entry in ipairs(entries) do
-			local name, _, _, _, currentRank, maxRank = GetTalentInfo(entry.tab, entry.index)
+			local currentRank, name, maxRank = TopFit:GetTalentRankSafe(entry.tab, entry.index)
 			local amount = 0
 			if currentRank and currentRank > 0 then
 				if entry.perPoint then
@@ -366,6 +370,16 @@ local function SlugifyGlyphName(name)
 end
 
 local function GetGlyphsString()
+	-- Both this function's premise (glyphs as a gameplay system) and GetNumGlyphSockets/
+	-- GetGlyphSocketInfo's continued existence are unconfirmed for WoW: Forever. Glyphs
+	-- were a WotLK-era Inscription feature; Forever's confirmed 51-point/3-tree talent
+	-- layout (see wowforevertalents.com scrape, REWRITE_PLAN_12_1_5.md) matches Vanilla's
+	-- talent scale, not WotLK's -- which is some evidence Forever may not include Inscription
+	-- glyphs at all, in which case this whole function is dead weight for Forever rather
+	-- than something to API-fix. Left in place rather than deleted, since removing a
+	-- feature on a guess is as wrong as keeping broken code on a guess -- the `and` guards
+	-- below already make it a no-op if the functions don't exist, so nothing breaks either
+	-- way. Confirm on beta and either delete this function or drop this comment.
 	local numSockets = GetNumGlyphSockets and GetNumGlyphSockets()
 	if not numSockets or numSockets == 0 then return nil end
 
@@ -373,7 +387,11 @@ local function GetGlyphsString()
 	for socket = 1, numSockets do
 		local enabled, _, glyphSpellID = GetGlyphSocketInfo(socket)
 		if enabled and glyphSpellID and glyphSpellID > 0 then
-			local glyphName = GetSpellInfo(glyphSpellID)
+			-- GetSpellInfo (the global) was removed outright in patch 11.0.0, deprecation
+			-- fallback removed in 11.0.2 -- it does not exist on 12.1.5 at all, confirmed via
+			-- warcraft.wiki.gg's patch-change notes. C_Spell.GetSpellInfo returns one table.
+			local spellInfo = C_Spell.GetSpellInfo(glyphSpellID)
+			local glyphName = spellInfo and spellInfo.name
 			local slug = SlugifyGlyphName(glyphName)
 			if slug then tinsert(slugs, slug) end
 		end
@@ -413,9 +431,9 @@ local function GetBestAmmoDps(rangedSimcType)
 
 	local bestDps
 	for bag = 0, 4 do
-		local numSlots = GetContainerNumSlots(bag)
+		local numSlots = C_Container.GetContainerNumSlots(bag)
 		for slot = 1, numSlots do
-			local itemLink = GetContainerItemLink(bag, slot)
+			local itemLink = C_Container.GetContainerItemLink(bag, slot)
 			if itemLink then
 				local subType = select(7, GetItemInfo(itemLink))
 				if subType == neededSubType then
@@ -447,7 +465,7 @@ end
 local function GetMetaGemSlug(itemLink)
     if not itemLink then return nil end
     for i = 1, 4 do
-        local gemName, gemLink = GetItemGem(itemLink, i)
+        local gemName, gemLink = C_Item.GetItemGem(itemLink, i)
         local targetName = gemName
         if not targetName and gemLink then
             targetName = GetItemInfo(gemLink)
