@@ -498,6 +498,21 @@ function TopFit:OnInitialize()
     -- way it itemizes hit/crit/dodge-parry-reduction (see procparser.lua's matching patterns).
     _G["TOPFIT_PARRY_CHANCE_ALL"] = "Parry Chance"
     _G["TOPFIT_BLOCK_CHANCE_ALL"] = "Block Chance"
+    -- Added 2026-09-26, from full class talent data (client-data-sourced via wago.tools).
+    -- TOPFIT_HIT_CHANCE_SPELL/TOPFIT_CRIT_CHANCE_SPELL are deliberately generic, single "spell"
+    -- buckets rather than split per school (Holy/Shadow/Fire/Frost/etc.) -- nearly every caster
+    -- class has its own school-specific hit/crit talent (Paladin/Priest's Holy, Mage's Arcane/
+    -- Frost/Fire, Priest's Shadow, ...), but a given character only has one relevant casting
+    -- school in practice, so tracking 6+ separate school buckets wasn't worth the complexity.
+    -- Flagged here rather than silently decided.
+    _G["TOPFIT_HIT_CHANCE_SPELL"] = "Spell Hit Chance"
+    -- "chance to [get a critical strike/crit] with all attacks" (no spell mention) -- distinct
+    -- from TOPFIT_CRIT_CHANCE_ALL (which specifically means spells+attacks combined) and from
+    -- TOPFIT_CRIT_CHANCE_MELEE (Hunter's version of this phrase, e.g. Lethal Attacks, needs to
+    -- include ranged too, since Hunter is a ranged-primary class -- mapping it to MELEE alone
+    -- would be wrong).
+    _G["TOPFIT_CRIT_CHANCE_PHYSICAL"] = "Physical Critical Strike Chance"
+    _G["TOPFIT_DODGE_CHANCE_ALL"] = "Dodge Chance"
     _G["TOPFIT_DEFENSE_FLAT"] = "Defense"
     _G["TOPFIT_SPELL_HEALING_FLAT"] = "Healing Power"
     _G["TOPFIT_SPELL_DAMAGE_FLAT"] = "Spell Damage"
@@ -526,6 +541,7 @@ function TopFit:OnInitialize()
             [4] = "TOPFIT_SPELL_DAMAGE_FLAT",
             [5] = "TOPFIT_SPELL_HEALING_FLAT",
             [6] = "TOPFIT_CRIT_CHANCE_SPELL",
+            [7] = "TOPFIT_HIT_CHANCE_SPELL",
         },
         ["Defensive"] = {
             [1] = "ITEM_MOD_BLOCK_RATING_SHORT",
@@ -538,6 +554,7 @@ function TopFit:OnInitialize()
             [8] = "TOPFIT_DEFENSE_FLAT",
             [9] = "TOPFIT_PARRY_CHANCE_ALL",
             [10] = "TOPFIT_BLOCK_CHANCE_ALL",
+            [11] = "TOPFIT_DODGE_CHANCE_ALL",
         },
         ["Hybrid"] = {
             [1] = "ITEM_MOD_CRIT_RATING_SHORT",
@@ -546,6 +563,7 @@ function TopFit:OnInitialize()
             [4] = "ITEM_MOD_HIT_RATING_SHORT",
             [5] = "TOPFIT_HIT_CHANCE_ALL",
             [6] = "TOPFIT_CRIT_CHANCE_ALL",
+            [7] = "TOPFIT_CRIT_CHANCE_PHYSICAL",
         },
         ["Misc."] = {
             [1] = "ITEM_MOD_HEALTH_SHORT",
@@ -626,7 +644,8 @@ function TopFit:OnInitialize()
     
     -- heirloom info
     local isPlateWearer, isMailWearer = false, false
-    if (select(2, UnitClass("player")) == "WARRIOR") or (select(2, UnitClass("player")) == "PALADIN") or (select(2, UnitClass("player")) == "DEATHKNIGHT") then
+    -- Death Knight removed 2026-09-26 (Dan confirmed): doesn't exist in WoW: Forever.
+    if (select(2, UnitClass("player")) == "WARRIOR") or (select(2, UnitClass("player")) == "PALADIN") then
         isPlateWearer = true
     end
     if (select(2, UnitClass("player")) == "SHAMAN") or (select(2, UnitClass("player")) == "HUNTER") then

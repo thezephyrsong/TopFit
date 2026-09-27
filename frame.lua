@@ -460,7 +460,7 @@ function TopFit:CreateProgressFrame()
                                 itemButtons[i].itemLabel:SetPoint("LEFT", itemButtons[i].itemTexture, "RIGHT", 3)
                                 
                                 itemButtons[i]:SetScript("OnClick", function(self)
-                                    local _, link = GetItemInfo(self.itemID)
+                                    local _, link = C_Item.GetItemInfo(self.itemID)
                                     TopFit:Debug("Forced item "..(link or self.itemID).." for slot "..self.slotID)
                                     TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].forced[self.slotID] = self.itemID
                                     TopFit.ProgressFrame.equipButtons[self.slotID].highlightTexture:SetVertexColor(1, 0, 0, 1)
@@ -481,7 +481,7 @@ function TopFit:CreateProgressFrame()
                                 maxWidth = itemButtons[i].itemLabel:GetWidth()
                             end
                             
-                            local tex = select(10, GetItemInfo(locationTable.itemLink))
+                            local tex = select(10, C_Item.GetItemInfo(locationTable.itemLink))
                             if not tex then tex = "Interface\\Icons\\Inv_misc_questionmark" end
                             itemButtons[i].itemTexture:SetTexture(tex)
                             
@@ -687,7 +687,7 @@ function TopFit:CreateProgressFrame()
                                 if bank then
                                     local itemID = storedItemIDs[slotID]
                                     if itemID and itemID ~= 1 then
-                                        _, itemLink = GetItemInfo(itemID)
+                                        _, itemLink = C_Item.GetItemInfo(itemID)
                                     end
                                 elseif bags then
                                     itemLink = C_Container.GetContainerItemLink(bag, slot)
@@ -744,7 +744,7 @@ function TopFit:CreateProgressFrame()
                 end
             end
             for slotID, locationTable in pairs(combination.items) do
-                local texture = select(10, GetItemInfo(locationTable.itemLink))
+                local texture = select(10, C_Item.GetItemInfo(locationTable.itemLink))
                 if not texture then texture = "Interface\\Icons\\Inv_misc_questionmark" end
                 TopFit.ProgressFrame.equipButtons[slotID]:SetNormalTexture(texture)
                 TopFit.ProgressFrame.equipButtons[slotID].itemLink = locationTable.itemLink

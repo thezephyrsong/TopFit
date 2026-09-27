@@ -709,9 +709,23 @@ the biggest open question independently — `TopFit:GetRetailTalentRanks()` in
 GetNodeInfo/GetEntryInfo/GetDefinitionInfo` — the modern node-based trait system,
 addressed by spellID/name, not `(tab, index)`. This matches what the SixtyUpgrades
 talent export schema hinted at earlier (talents keyed by `id`/`spellId`, never
-tab/index) — that was the right signal. Also confirmed: Forever's class roster
-includes Evoker, Demon Hunter, and Monk alongside the classic nine (new entries in
-`CLASS_ARMOR_TYPE` and `simc_export.lua`'s class-token map).
+tab/index) — that was the right signal.
+
+**Correction, logged rather than quietly fixed:** this section originally also
+claimed "Forever's class roster includes Evoker, Demon Hunter, and Monk alongside
+the classic nine," based on seeing those three (plus Death Knight) added to
+`CLASS_ARMOR_TYPE` and `simc_export.lua`'s class-token maps in Dan's repo. That
+was wrong — Dan confirmed later the same day that **none of those four classes
+exist in WoW: Forever at all**. The entries had been added speculatively, not as
+confirmed data, and I reported them as a finding without flagging that distinction.
+All four have since been removed from `calculation.lua` (`CLASS_ARMOR_TYPE`, the
+dual-wield class check), `core.lua` (the plate-wearer check), `simc_export.lua`
+(both class-token tables), and `presets.lua` (Death Knight's entire stale preset
+block, ~150 lines of WotLK-rating-based data that would have been wrong twice
+over — wrong class, wrong stat model). `talentbonuses.lua`'s trailing note updated
+to say these classes don't exist, not "no data yet." Worth being more careful
+going forward about distinguishing "this appeared in the code" from "this was
+confirmed" — those are different claims and this entry conflated them.
 
 One gap found in Dan's version: `GetRetailTalentRanks()` was wired into the
 `DebugTalentCounts` diagnostic but not into the actual scoring pipeline — closed
@@ -789,8 +803,34 @@ just append another log entry) as items get closed out.
       Weaponmaster (Arms) branches by equipped weapon type; Dual Wield
       Specialization (Fury) grants three simultaneous off-hand-specific effects
       not known to be itemized on gear separately.
-- [ ] Rogue, Priest, Mage, Warlock, Hunter, Paladin, Druid, Death Knight, and
-      Evoker/Demon Hunter/Monk if covered by the site -- same process
+- [x] Hunter, Paladin, Rogue, Mage, Priest, Druid, Warlock -- DONE 2026-09-26,
+      from a full 8-class data zip Dan provided directly (all client-data-sourced
+      via wago.tools, same confidence tier as Warrior). Also used to independently
+      re-confirm Shaman's Thundering Strikes/Tidal Focus (matched exactly) and add
+      the previously-missed Anticipation (dodge%) entry for Shaman.
+      Three new pseudo-stats added: TOPFIT_HIT_CHANCE_SPELL (generic single-bucket
+      spell hit, since nearly every caster class has its own school-specific hit
+      talent but a given character only has one relevant school),
+      TOPFIT_CRIT_CHANCE_PHYSICAL (Hunter/Rogue's "critical strike chance with all
+      attacks" phrasing -- distinct from MELEE since Hunter is ranged-primary),
+      TOPFIT_DODGE_CHANCE_ALL. All registered in core.lua's statList with
+      inferred-but-unconfirmed item-tooltip patterns added to procparser.lua.
+      A long list of talents were deliberately excluded (pet-only stats,
+      derived/scaling-from-another-stat effects, procs/temporary buffs,
+      form-locked Druid talents, single-spell-specific bonuses, weapon-type-
+      conditional multi-effects, and damage/healing multipliers) -- see
+      talentbonuses.lua's own header comment for the full reasoning, grouped by
+      exclusion reason rather than repeated per class.
+- [x] ~~Death Knight, Evoker, Demon Hunter, Monk~~ -- RESOLVED 2026-09-26 (Dan
+      confirmed): none of these four exist as playable classes in WoW: Forever
+      at all. All talent-data checklist items are now closed -- all nine real
+      classes are covered above. Stray references to these four classes found
+      and removed from `calculation.lua`, `core.lua`, `simc_export.lua`, and
+      `presets.lua` (the last of which was also carrying a stale ~150-line
+      Death Knight preset that would have been wrong regardless).
+
+**Talent checklist complete.** Every remaining item below is unrelated to
+talents.
 
 **From SixtyUpgrades exports:**
 - [x] ~~A sample with real gem sockets filled~~ -- MOOT 2026-09-26 (Dan confirmed): no Jewelcrafting in Forever at all, no gems or sockets exist on any item. `gem_ids.lua` cleared (was 2400+ lines of stale WotLK/Triumvirate gem data) and removed from the TOC's load order; gem-reading code left in place where it was already safely inert, simplified to a stub where it was self-contained enough to do so safely.
@@ -808,3 +848,28 @@ skepticism as the SavedVariables true/false-vs-1/0 claim (2026-09-26) --
 plausible-sounding folk fixes circulate fast in a new beta community and aren't
 always right. Bring anything that sounds like a real client behavior change
 here to check against what TopFit actually does before acting on it.
+
+---
+
+## 7. `GetItemInfo` bare global confirmed fully absent on Forever (correction)
+
+2026-09-27, from an in-game crash: `procparser.lua:189: attempt to call a nil
+value` in `LookupSimcProcData`, which called the bare global `GetItemInfo(itemLink)`
+directly. This corrects an assumption in section 1 above ("Item data →
+`GetItemInfo` (kept)") -- that assumption was wrong, or at least doesn't hold on
+this client. The bare `GetItemInfo` global is confirmed **completely absent**
+(nil, not just async-different) on Forever; only `C_Item.GetItemInfo` exists.
+
+This call site had simply never been touched -- the async-safe wrapper work
+earlier only covered `inventory.lua`/`calculation.lua`, not every bare call in
+the codebase. Swept and found 4 more in `frame.lua` with the same problem, all
+fixed the same way (direct rename to `C_Item.GetItemInfo`, no fallback).
+Checked for the same issue on other item-related globals
+(`GetItemInfoInstant`, `GetItemIcon`, `GetItemQualityColor`, `IsUsableItem`,
+`GetItemSpell`, `GetItemCount`) -- none found as bare calls anywhere in the
+codebase, so this appears to have been isolated to `GetItemInfo` specifically.
+
+Lesson for future fixes in this doc: a targeted wrapper in one or two files
+doesn't mean a function is fixed everywhere it's called -- worth greping the
+whole codebase for a bare global by name once one confirmed-broken instance
+turns up, rather than assuming other call sites were already covered.

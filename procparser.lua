@@ -186,7 +186,7 @@ end
 -- there's no entry under this trigger's section for this item name.
 function TopFit:LookupSimcProcData(itemLink, section)
 	if not itemLink or not TopFit.SimcProcData or not TopFit.SimcProcData[section] then return nil end
-	local name = GetItemInfo(itemLink)
+	local name = C_Item.GetItemInfo(itemLink)
 	if not name then return nil end
 
 	local entry = TopFit.SimcProcData[section][TopFit:Slugify(name)]
@@ -253,6 +253,15 @@ TopFit.PermanentPercentStatPatterns =
 	  statKey = "TOPFIT_PARRY_CHANCE_ALL" },
 	{ pattern = "increases your chance to block by ([%d%.]+)%%",
 	  statKey = "TOPFIT_BLOCK_CHANCE_ALL" },
+	-- dodge chance, spell hit chance, "physical" (all-attacks-no-spell) crit -- added 2026-09-26
+	-- from the same full class talent data pass. Same caveat as parry/block above: phrasing
+	-- inferred by consistency with confirmed talent text, not yet seen on a real item tooltip.
+	{ pattern = "increases your chance to dodge by ([%d%.]+)%%",
+	  statKey = "TOPFIT_DODGE_CHANCE_ALL" },
+	{ pattern = "improves your chance to hit with %a+ spells by ([%d%.]+)%%",
+	  statKey = "TOPFIT_HIT_CHANCE_SPELL" },
+	{ pattern = "improves your chance to get a critical strike with all attacks by ([%d%.]+)%%",
+	  statKey = "TOPFIT_CRIT_CHANCE_PHYSICAL" },
 	-- dual-stat spell healing/damage line -- two captures, handled specially below
 	{ pattern = "increases healing done by up to (%d+) and damage done by up to (%d+) for all magical spells and effects",
 	  dualStatKeys = { "TOPFIT_SPELL_HEALING_FLAT", "TOPFIT_SPELL_DAMAGE_FLAT" } },

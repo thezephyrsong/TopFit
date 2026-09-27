@@ -1,17 +1,18 @@
 -- maps a class's English (non-localized) token to the armor material it's meant to wear.
 -- used by the "Force Armor Type" per-set option to keep e.g. a Paladin from being recommended
 -- a leather/cloth piece purely because it scores higher on raw weights than the available plate.
+-- Death Knight, Evoker, Demon Hunter, and Monk intentionally absent -- confirmed 2026-09-26
+-- (Dan): none of these four exist as playable classes in WoW: Forever at all. They'd been
+-- added here speculatively when the class token maps elsewhere in the codebase were first
+-- ported; that was wrong, not just premature, so removed rather than left as harmless-but-
+-- incorrect entries a future reader might mistake for confirmation these classes exist.
 local CLASS_ARMOR_TYPE = {
 	WARRIOR     = "Plate",
 	PALADIN     = "Plate",
-	DEATHKNIGHT = "Plate",
 	HUNTER      = "Mail",
 	SHAMAN      = "Mail",
-	EVOKER      = "Mail",
 	ROGUE       = "Leather",
 	DRUID       = "Leather",
-	DEMONHUNTER = "Leather",
-	MONK        = "Leather",
 	PRIEST      = "Cloth",
 	MAGE        = "Cloth",
 	WARLOCK     = "Cloth",
@@ -81,7 +82,9 @@ function TopFit:CalculateRecommendations()
 	TopFit.playerCanTitansGrip = false
 	
 	local playerClass = select(2, UnitClass("player"))
-	if playerClass == "ROGUE" or playerClass == "DEATHKNIGHT" or playerClass == "DEMONHUNTER" or playerClass == "MONK"
+	-- Death Knight/Demon Hunter/Monk removed from this check 2026-09-26 (Dan confirmed): none
+	-- exist in WoW: Forever. See CLASS_ARMOR_TYPE's comment above for the same correction.
+	if playerClass == "ROGUE"
 		or ((playerClass == "WARRIOR" or playerClass == "HUNTER") and UnitLevel("player") > 20) then
 		TopFit.playerCanDualWield = true
 	end

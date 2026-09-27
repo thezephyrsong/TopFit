@@ -41,24 +41,22 @@ local CLASS_TO_SIMC = {
 	HUNTER      = "hunter",
 	ROGUE       = "rogue",
 	PRIEST      = "priest",
-	DEATHKNIGHT = "death_knight",
 	SHAMAN      = "shaman",
 	MAGE        = "mage",
 	WARLOCK     = "warlock",
 	DRUID       = "druid",
-	DEMONHUNTER = "demon_hunter",
-	MONK        = "monk",
-	EVOKER      = "evoker",
 }
 
 -- Blizzard's old wowarmory.com talent-calc "cid" (class id) numbering.
+-- Death Knight, Evoker, Demon Hunter, Monk removed 2026-09-26 (Dan confirmed): none exist in
+-- WoW: Forever. Same correction as CLASS_ARMOR_TYPE in calculation.lua -- these were added
+-- speculatively when this class-token map was first ported and that was wrong, not premature.
 local CLASS_TO_WOWARMORY_CID = {
 	WARRIOR     = 1,
 	PALADIN     = 2,
 	HUNTER      = 3,
 	ROGUE       = 4,
 	PRIEST      = 5,
-	DEATHKNIGHT = 6,
 	SHAMAN      = 7,
 	MAGE        = 8,
 	WARLOCK     = 9,

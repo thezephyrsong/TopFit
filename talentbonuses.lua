@@ -39,20 +39,23 @@
 
 TopFit.talentRatingBonuses = {}
 
--- Source: wowforevertalents.com Shaman page scrape (fan-built from BlizzCon 2026 footage,
--- marked provisional there) -- NOT yet cross-checked against a live character's
--- "/topfit talentdebug" output. spellID intentionally omitted: the scrape didn't capture one,
--- and a fabricated number would be worse than leaving it out -- a wrong spellID would silently
--- never match, where a missing one just falls through to the name match, which is confirmed as
--- far as the source goes. Fill in spellID once confirmed live, and flip this comment once the
--- name match itself has been confirmed too.
+-- Source: wowforevertalents.com Shaman page. Originally sourced from a BlizzCon 2026 footage
+-- scrape (lower confidence); the Thundering Strikes/Tidal Focus entries below were independently
+-- re-confirmed 2026-09-26 against a full class-data pass that IS client-data-sourced via
+-- wago.tools -- both talents matched exactly, so treat those two as confirmed-by-client-data now,
+-- same confidence tier as Warrior below. Anticipation added from that same newer pass (missed in
+-- the original footage-based scrape). Still no numeric spellID available from either source --
+-- name match only, to be confirmed against live "/topfit talentdebug" output.
 TopFit.talentRatingBonuses["SHAMAN"] = {
 	-- Thundering Strikes (Enhancement): "Improves your chance to get a critical strike with all
 	-- spells and attacks by 1%" per rank, 5 ranks.
 	{ name = "Thundering Strikes", stat = "TOPFIT_CRIT_CHANCE_ALL", percentPerPoint = 1 },
-	-- Tidal Focus (Restoration): "...increases your chance to hit with all spells and attacks by
-	-- 1%" per rank, 5 ranks.
+	-- Tidal Focus (Restoration): "...improves your chance to hit by 1%" per rank, 5 ranks (also
+	-- reduces healing mana cost by 1%/rank, not itemization-relevant, not modeled here).
 	{ name = "Tidal Focus", stat = "TOPFIT_HIT_CHANCE_ALL", percentPerPoint = 1 },
+	-- Anticipation (Enhancement): "Increases your chance to dodge by an additional 2%" per rank,
+	-- 3 ranks (max rank confirmed 3 in Forever, was 5 ranks/1% each in Classic).
+	{ name = "Anticipation", stat = "TOPFIT_DODGE_CHANCE_ALL", percentPerPoint = 2 },
 }
 
 -- Source: wowforevertalents.com Warrior page, saved copy provided directly (not the earlier
@@ -95,13 +98,124 @@ TopFit.talentRatingBonuses["WARRIOR"] = {
 	{ name = "Shield Specialization", stat = "TOPFIT_BLOCK_CHANCE_ALL", percentPerPoint = 1 },
 }
 
--- Every other class (Rogue, Priest, Mage, Warlock, Hunter, Paladin, Druid, Death Knight, and
--- Evoker/Demon Hunter/Monk if present): no confirmed Forever talent data yet. Do NOT port the
--- old WotLK/Triumvirate entries over even as a rough starting guess -- Forever's talents are a
--- real redesign, not a renumbering (e.g. Shaman's own Stormstrike and Flurry came back
--- completely reworked, not just moved -- see REWRITE_PLAN_12_1_5.md), so a WotLK-based guess
--- isn't an approximation, it's just wrong. Populate the same way Shaman/Warrior were: get the
--- class's wowforevertalents.com page (client-data-sourced pages, like Warrior's, are higher
--- confidence than footage-sourced ones, like Shaman's -- check each page's own sourcing), then
--- cross-check with "/topfit talentdebug" on a real character with the relevant talents taken,
--- using the format above.
+-- Everything below (Hunter through Warlock) sourced 2026-09-26 from a full 8-class data pass Dan
+-- provided directly (saved wowforevertalents.com pages, one zip). Same confidence tier as
+-- Warrior -- every entry in that source data is explicitly marked client_data-sourced via
+-- wago.tools, not footage. No numeric spellID available from any of them -- name match only,
+-- same as everywhere else in this file, to be confirmed against live "/topfit talentdebug"
+-- output. TOPFIT_HIT_CHANCE_SPELL/TOPFIT_CRIT_CHANCE_SPELL are deliberately generic single
+-- "spell" buckets rather than split per school -- see core.lua's comment on those keys.
+--
+-- Talents seen across all 8 classes but deliberately NOT included, with why (grouped by reason
+-- rather than repeated per class):
+--   Pet-only stats (Hunter's Ferocity -- pet/hawk crit) -- not the player's own itemization.
+--   Derived-from-another-stat scaling (Hunter's Careful Aim, Paladin's Champion of the Light,
+--     Priest's Spiritual Guidance, Shaman's Mental Dexterity/Mental Quickness, Warlock's
+--     Demonic Knowledge -- all "+X% of your Intellect/Spirit/level") -- different math shape
+--     (percent of another stat, not a flat additive percent), doesn't fit this table.
+--   Proc/conditional/temporary effects (Hunter's Intimidation, Paladin's Redoubt/Holy Shield/
+--     Vindication, Rogue's Remorseless Attacks/Cold Blood/Ghostly Strike, Mage's Wake of Fire/
+--     Combustion, Priest's Renewed Hope/Power Infusion/Vampiric Embrace/Early Demise, Shaman's
+--     Elemental Devastation/Spirit Weapons/Ancestral Healing) -- not passive/always-on.
+--   Form-locked (Druid's Feral Swiftness/Thick Hide/Sharpened Claws/Leader of the Pack/Berserk/
+--     Moonkin Form) -- conditional on shapeshift state, which this table doesn't track.
+--   Single-specific-spell bonuses, not a general stat (Rogue's Puncturing Wounds/Improved
+--     Ambush, Mage's Improved Flamestrike, Shaman's Call of Thunder, Warlock's Agonizing Flames/
+--     Fire and Brimstone) -- too narrow to be a general gear-cap-relevant stat.
+--   Weapon-type-conditional multi-effect (Rogue's Hack and Slash, same shape as Warrior's
+--     Weaponmaster) -- doesn't fit a flat per-rank model.
+--   Damage/healing % multipliers, debuffs on enemies, or non-itemization utility (Druid's
+--     Genesis/Improved Moonfire/Insect Swarm, Mage's Arcane Instability's damage component,
+--     Priest's Spell Warding, Warlock's Suppression's threat-reduction component, Warlock's
+--     Demonic Energies) -- different stat category entirely, out of scope for this table.
+TopFit.talentRatingBonuses["HUNTER"] = {
+	-- Lethal Attacks (Marksmanship): "Increases your critical strike chance with all attacks by
+	-- 1%" per rank, 5 ranks. "All attacks" (no spell mention) but Hunter is ranged-primary, so
+	-- mapped to the PHYSICAL bucket (melee+ranged, no spell) rather than MELEE alone.
+	{ name = "Lethal Attacks", stat = "TOPFIT_CRIT_CHANCE_PHYSICAL", percentPerPoint = 1 },
+	-- Savage Strikes (Survival): "Increases the critical strike chance of all your melee
+	-- abilities by 2%" per rank, 2 ranks.
+	{ name = "Savage Strikes", stat = "TOPFIT_CRIT_CHANCE_MELEE", percentPerPoint = 2 },
+}
+
+TopFit.talentRatingBonuses["PALADIN"] = {
+	-- Divine Precision (Holy): "Improves your chance to hit with Holy spells by 6%" per rank,
+	-- 3 ranks.
+	{ name = "Divine Precision", stat = "TOPFIT_HIT_CHANCE_SPELL", percentPerPoint = 6 },
+	-- Holy Power (Holy): "...and all other spells by 1%" per rank, 5 ranks -- only the general
+	-- component is modeled; the extra bonus specifically for Holy Shock/Holy Strike (3%/rank) is
+	-- too spell-specific to fit here, so this entry understates Holy Power's true value for a
+	-- Holy Shock/Strike-heavy rotation. Flagged, not silently ignored.
+	{ name = "Holy Power", stat = "TOPFIT_CRIT_CHANCE_SPELL", percentPerPoint = 1 },
+	-- Precision (Protection): "Improves your chance to hit by 1%" per rank, 3 ranks -- same
+	-- generic talent name/effect as Warrior's and Rogue's own "Precision".
+	{ name = "Precision", stat = "TOPFIT_HIT_CHANCE_ALL", percentPerPoint = 1 },
+	-- Anticipation (Protection): "Increases your Defense Skill by 4" per rank, 5 ranks -- same
+	-- generic talent name/effect as Warrior's own "Anticipation" (a different talent from
+	-- Shaman's same-named dodge one -- three classes share this exact name across different
+	-- effects, watch for the collision if adding more).
+	{ name = "Anticipation", stat = "TOPFIT_DEFENSE_FLAT", percentPerPoint = 4 },
+	-- Conviction (Retribution): "Improves your chance to get a critical strike with melee attacks
+	-- by 1%" per rank, 5 ranks.
+	{ name = "Conviction", stat = "TOPFIT_CRIT_CHANCE_MELEE", percentPerPoint = 1 },
+}
+
+TopFit.talentRatingBonuses["ROGUE"] = {
+	-- Malice (Assassination): "Increases your critical strike chance with all attacks and
+	-- Poisons by 1%" per rank, 5 ranks. Same PHYSICAL-bucket reasoning as Hunter's Lethal
+	-- Attacks (no spell mention, and Poisons aren't spells either).
+	{ name = "Malice", stat = "TOPFIT_CRIT_CHANCE_PHYSICAL", percentPerPoint = 1 },
+	-- Precision (Combat): "Improves your chance to hit by 1%" per rank, 3 ranks.
+	{ name = "Precision", stat = "TOPFIT_HIT_CHANCE_ALL", percentPerPoint = 1 },
+}
+
+TopFit.talentRatingBonuses["MAGE"] = {
+	-- Arcane Focus (Arcane): "Improves your chance to hit with Arcane spells by 1%" per rank,
+	-- 5 ranks.
+	{ name = "Arcane Focus", stat = "TOPFIT_HIT_CHANCE_SPELL", percentPerPoint = 1 },
+	-- Arcane Impact (Arcane): "Increases the critical strike chance of your Arcane spells by 2%"
+	-- per rank, 3 ranks.
+	{ name = "Arcane Impact", stat = "TOPFIT_CRIT_CHANCE_SPELL", percentPerPoint = 2 },
+	-- Arcane Instability (Arcane): "...and your critical strike chance by 1%" per rank, 3 ranks
+	-- -- only the crit component is modeled; the accompanying 1%/rank damage-done increase is a
+	-- multiplicative damage modifier, a different stat category, not included here.
+	{ name = "Arcane Instability", stat = "TOPFIT_CRIT_CHANCE_SPELL", percentPerPoint = 1 },
+	-- Critical Mass (Fire): "Increases the critical strike chance of your Fire spells by 2%" per
+	-- rank, 3 ranks -- school-general (all Fire spells), not a single named spell.
+	{ name = "Critical Mass", stat = "TOPFIT_CRIT_CHANCE_SPELL", percentPerPoint = 2 },
+	-- Elemental Precision (Frost): "Improves your chance to hit with Frost and Fire spells by 1%"
+	-- per rank, 5 ranks.
+	{ name = "Elemental Precision", stat = "TOPFIT_HIT_CHANCE_SPELL", percentPerPoint = 1 },
+}
+
+TopFit.talentRatingBonuses["PRIEST"] = {
+	-- Holy Precision (Discipline): "Improves your chance to hit with Holy spells by 6%" per
+	-- rank, 3 ranks.
+	{ name = "Holy Precision", stat = "TOPFIT_HIT_CHANCE_SPELL", percentPerPoint = 6 },
+	-- Shadow Focus (Shadow Magic): "Improves your chance to hit with Shadow spells by 1%" per
+	-- rank, 5 ranks.
+	{ name = "Shadow Focus", stat = "TOPFIT_HIT_CHANCE_SPELL", percentPerPoint = 1 },
+}
+
+TopFit.talentRatingBonuses["DRUID"] = {
+	-- Nature's Majesty (Balance): "Increases your critical strike chance with spells and melee
+	-- attacks by 2%" per rank, 2 ranks -- close enough to the ALL bucket's definition (spells +
+	-- physical combined); Druids have no relevant ranged component.
+	{ name = "Nature's Majesty", stat = "TOPFIT_CRIT_CHANCE_ALL", percentPerPoint = 2 },
+	-- Nature's Reach (Balance): "...improves your chance to hit by 2%" per rank, 2 ranks (also
+	-- increases spell range, not itemization-relevant, not modeled here).
+	{ name = "Nature's Reach", stat = "TOPFIT_HIT_CHANCE_ALL", percentPerPoint = 2 },
+}
+
+TopFit.talentRatingBonuses["WARLOCK"] = {
+	-- Suppression (Affliction): "Improves your chance to hit by 1%" per rank, 5 ranks -- generic,
+	-- not Shadow/Fire-school-specific despite being in a caster tree (also reduces threat
+	-- generated by 4%/rank, not itemization-relevant, not modeled here).
+	{ name = "Suppression", stat = "TOPFIT_HIT_CHANCE_ALL", percentPerPoint = 1 },
+}
+
+-- All nine classes that exist in WoW: Forever are covered above. Death Knight, Evoker, Demon
+-- Hunter, and Monk are NOT playable classes in Forever at all -- confirmed 2026-09-26 (Dan) --
+-- so there is nothing to gather or add for them, not just "not yet confirmed." If any of these
+-- names show up again in a future data source, treat that source with suspicion rather than
+-- assuming Forever's class roster changed.
