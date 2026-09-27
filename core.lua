@@ -251,6 +251,10 @@ function TopFit:onUpdateForEquipment()
         TopFit.ProgressFrame:StoppedCalculation()
         
         -- save equipment set
+        -- 2026-09-26: Dan reported sets not saving with no visible error. Since C_EquipmentSet's
+        -- exact failure modes on Forever haven't been confirmed live, this is instrumented
+        -- rather than guess-fixed -- each step now prints what actually happened so the next
+        -- test run pinpoints the real failure instead of leaving it silent.
         if (C_EquipmentSet.CanUseEquipmentSets()) then
             setName = TopFit:GenerateSetName(TopFit.currentSetName)
             local existingSetID = C_EquipmentSet.GetEquipmentSetID(setName)
@@ -262,12 +266,26 @@ function TopFit:onUpdateForEquipment()
                 iconTexture = "Interface\\Icons\\Spell_Holy_EmpowerChampion"
             end
             
-            TopFit:Debug("Trying to save set: "..setName..", "..(iconTexture or "nil"))
+            TopFit:Debug("Trying to save set: "..setName..", "..(iconTexture or "nil")..", existingSetID="..tostring(existingSetID))
             if existingSetID then
-                C_EquipmentSet.SaveEquipmentSet(existingSetID, iconTexture)
+                local ok, err = pcall(C_EquipmentSet.SaveEquipmentSet, existingSetID, iconTexture)
+                if not ok then
+                    TopFit:Print("Failed to update equipment set '"..setName.."': "..tostring(err))
+                else
+                    TopFit:Debug("SaveEquipmentSet call completed for setID "..tostring(existingSetID))
+                end
             else
-                C_EquipmentSet.CreateEquipmentSet(setName, iconTexture)
+                local ok, newSetIDOrErr = pcall(C_EquipmentSet.CreateEquipmentSet, setName, iconTexture)
+                if not ok then
+                    TopFit:Print("Failed to create equipment set '"..setName.."': "..tostring(newSetIDOrErr))
+                elseif not newSetIDOrErr then
+                    TopFit:Print("Failed to create equipment set '"..setName.."': CreateEquipmentSet returned no set ID (nil).")
+                else
+                    TopFit:Debug("Created equipment set '"..setName.."' with ID "..tostring(newSetIDOrErr))
+                end
             end
+        else
+            TopFit:Print("Cannot save equipment set: C_EquipmentSet.CanUseEquipmentSets() returned false. This may mean Equipment Manager is unavailable in this game mode, or a client-side condition (e.g. combat) is blocking it.")
         end
     
         -- we are done with this set
@@ -475,6 +493,11 @@ function TopFit:OnInitialize()
     _G["TOPFIT_CRIT_CHANCE_RANGED"] = "Ranged Critical Strike Chance"
     _G["TOPFIT_CRIT_CHANCE_SPELL"] = "Spell Critical Strike Chance"
     _G["TOPFIT_DODGE_PARRY_REDUCTION"] = "Dodge/Parry Reduction"
+    -- Added 2026-09-26, confirmed via WoW: Forever beta client trait data (Warrior's Deflection
+    -- and Shield Specialization talents grant these directly) -- gear may itemize these the same
+    -- way it itemizes hit/crit/dodge-parry-reduction (see procparser.lua's matching patterns).
+    _G["TOPFIT_PARRY_CHANCE_ALL"] = "Parry Chance"
+    _G["TOPFIT_BLOCK_CHANCE_ALL"] = "Block Chance"
     _G["TOPFIT_DEFENSE_FLAT"] = "Defense"
     _G["TOPFIT_SPELL_HEALING_FLAT"] = "Healing Power"
     _G["TOPFIT_SPELL_DAMAGE_FLAT"] = "Spell Damage"
@@ -513,6 +536,8 @@ function TopFit:OnInitialize()
             [6] = "ITEM_MOD_RESILIENCE_RATING_SHORT",
             [7] = "RESISTANCE0_NAME",                   -- armor
             [8] = "TOPFIT_DEFENSE_FLAT",
+            [9] = "TOPFIT_PARRY_CHANCE_ALL",
+            [10] = "TOPFIT_BLOCK_CHANCE_ALL",
         },
         ["Hybrid"] = {
             [1] = "ITEM_MOD_CRIT_RATING_SHORT",

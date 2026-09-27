@@ -697,3 +697,114 @@ grep mistakes (matching substrings inside already-correct `C_Container.*`/
 filter that could never match against the truncated output) — logged here
 so it's clear those were verification bugs, not code bugs, if this comes
 up again.
+
+---
+
+## 5. Talent system fully wired end-to-end; equipment-set save instrumented
+
+2026-09-26: Dan's own repo (real git history, `forever` branch) had already resolved
+the biggest open question independently — `TopFit:GetRetailTalentRanks()` in
+`core.lua` confirmed via live testing that Forever's talents are read through
+`C_ClassTalents.GetActiveConfigID()` + `C_Traits.GetConfigInfo/GetTreeNodes/
+GetNodeInfo/GetEntryInfo/GetDefinitionInfo` — the modern node-based trait system,
+addressed by spellID/name, not `(tab, index)`. This matches what the SixtyUpgrades
+talent export schema hinted at earlier (talents keyed by `id`/`spellId`, never
+tab/index) — that was the right signal. Also confirmed: Forever's class roster
+includes Evoker, Demon Hunter, and Monk alongside the classic nine (new entries in
+`CLASS_ARMOR_TYPE` and `simc_export.lua`'s class-token map).
+
+One gap found in Dan's version: `GetRetailTalentRanks()` was wired into the
+`DebugTalentCounts` diagnostic but not into the actual scoring pipeline — closed
+now:
+
+- **`talentbonuses.lua` fully rewritten**, not just patched. New format keyed by
+  `name` (and optional `spellID`, preferred once confirmed) instead of
+  `(tab, index)`, crediting `TOPFIT_*` percent pseudo-stats directly instead of
+  converting through a rating-per-percent constant into `ITEM_MOD_*_RATING` —
+  correct for Forever's flat-percent itemization model (section 8), where the old
+  rating-conversion approach was simply wrong, independent of Triumvirate being
+  cancelled. All old WotLK/Triumvirate data removed rather than left as a
+  "starting guess" — Forever's talents are a real redesign (Stormstrike, Flurry
+  rework, etc.), so a WotLK-based number isn't an approximation, it's just wrong.
+  Only two entries populated (Shaman: Thundering Strikes → `TOPFIT_CRIT_CHANCE_ALL`,
+  Tidal Focus → `TOPFIT_HIT_CHANCE_ALL`, both 1%/rank), sourced from the
+  wowforevertalents.com scrape and explicitly marked as NOT yet cross-checked
+  against a live `/topfit talentdebug` output. Every other class is intentionally
+  empty (a no-op, not an oversight) until real data is gathered the same way.
+- **`calculation.lua`'s `GetTalentRatingBonuses()` rewritten** to call
+  `GetRetailTalentRanks()` and match entries by `spellID` first, falling back to
+  `name`. Confirmed the consuming side (`GetEffectiveCapValue`) is unit-consistent
+  with no changes needed — it subtracts `talentBonusStats[stat]` from a cap's
+  nominal value generically by stat key, and since both gear (via
+  `procparser.lua`'s tooltip scan) and talents now report `TOPFIT_*` stats as
+  plain percent, this works correctly with no conversion layer.
+- Swept the whole codebase for any other code assuming the old `entry.tab`/
+  `entry.index`/`entry.perPoint`/`entry.percentType` shape — none found.
+
+**Equipment set save issue (Dan reported sets not saving) — instrumented, not
+guess-fixed.** Without live access, the exact failure point isn't confirmed (
+`CanUseEquipmentSets()` returning false, `CreateEquipmentSet` failing silently, or
+something else). Wrapped the create/save calls in `pcall` and added explicit
+`Print`/`Debug` output at each branch (whether an existing set was found, whether
+create/save succeeded, and the specific error if `CanUseEquipmentSets()` returns
+false) so the next test run pinpoints the actual cause instead of staying silent.
+
+All touched files re-verified with `luac5.1 -p`, full codebase sweep included.
+
+---
+
+## 6. Consolidated outstanding data-gathering checklist (2026-09-26)
+
+Everything below is real data that has to come from an external source before it
+can be filled in — pulled together here from throughout this doc so it's one
+list instead of scattered across the session log. Update this section (don't
+just append another log entry) as items get closed out.
+
+**From the live client:**
+- [ ] `WOW_PROJECT_ID` (`/dump WOW_PROJECT_ID`) -- confirms whether Forever needs
+      a SoD-style heuristic detection instead of its own project ID
+- [ ] Actual interface/build number (`/dump select(4, GetBuildInfo())`) against
+      the TOC's guessed `120105`
+- [ ] `GetItemStats()` key names on a few real Forever items
+- [x] Whether `GetNumGlyphSockets`/`GetGlyphSocketInfo` return anything real -- RESOLVED 2026-09-26 (Dan confirmed): no Inscription in Forever at all, no glyphs to read. Glyph-export code removed rather than left as a guard.
+- [ ] Equipment set save failure -- now instrumented, needs one real test + the
+      resulting debug/print output
+- [ ] `/topfit talentdebug` output for every class, run with a stat-relevant
+      talent actually selected -- this is what turns a scraped talent into a
+      confirmed `talentbonuses.lua` entry
+
+**From wowforevertalents.com:**
+- [x] Warrior -- DONE 2026-09-26, from a saved wowforevertalents.com page Dan
+      provided directly. Higher confidence than Shaman's entries: this page's
+      data is sourced from actual beta client trait data via wago.tools (build
+      1.60.1.70009), not BlizzCon footage. Added: Deflection (parry%), Cruelty
+      (melee crit%), Precision (hit%), Anticipation (flat Defense -- a different
+      talent from Shaman's same-named one), Shield Specialization (block%).
+      Confirmed no Titan's Grip talent exists anywhere in the tree, matching
+      Dan's direct confirmation. New pseudo-stats added along the way:
+      TOPFIT_PARRY_CHANCE_ALL, TOPFIT_BLOCK_CHANCE_ALL (registered in core.lua's
+      statList and given inferred-but-unconfirmed item-tooltip patterns in
+      procparser.lua). Skipped as too complex for this table's model: Toughness
+      (Protection) is a multiplicative armor scalar, not an additive stat;
+      Weaponmaster (Arms) branches by equipped weapon type; Dual Wield
+      Specialization (Fury) grants three simultaneous off-hand-specific effects
+      not known to be itemized on gear separately.
+- [ ] Rogue, Priest, Mage, Warlock, Hunter, Paladin, Druid, Death Knight, and
+      Evoker/Demon Hunter/Monk if covered by the site -- same process
+
+**From SixtyUpgrades exports:**
+- [x] ~~A sample with real gem sockets filled~~ -- MOOT 2026-09-26 (Dan confirmed): no Jewelcrafting in Forever at all, no gems or sockets exist on any item. `gem_ids.lua` cleared (was 2400+ lines of stale WotLK/Triumvirate gem data) and removed from the TOC's load order; gem-reading code left in place where it was already safely inert, simplified to a stub where it was self-contained enough to do so safely.
+- [ ] One or two more classes, ideally a caster, to cross-check stat-block
+      field-name consistency
+
+**From real item tooltips in-game:**
+- [ ] Confirm `procparser.lua`'s percent-stat phrase templates (hit/crit/
+      dodge-parry/weapon-skill/Defense/healing-damage) against actual Forever
+      wording -- everything currently coded is sourced from Season of
+      Discovery as a stand-in, not confirmed Forever text
+
+**Not a data source, a caution:** treat Discord/community "fixes" with the same
+skepticism as the SavedVariables true/false-vs-1/0 claim (2026-09-26) --
+plausible-sounding folk fixes circulate fast in a new beta community and aren't
+always right. Bring anything that sounds like a real client behavior change
+here to check against what TopFit actually does before acting on it.

@@ -191,6 +191,12 @@ function TopFit:GetItemInfoTable(item)
     end
 
     -- Scan socketed gems
+    -- CONFIRMED 2026-09-26 (Dan): Forever has no Jewelcrafting, so no item will ever have a gem
+    -- socketed -- this loop is safely inert (C_Item.GetItemGem always returns nil, so gemBonus/
+    -- gems/filledSocketColors stay empty) but left in place rather than removed, since several
+    -- other places in this file consume those tables and tracing every one of them to confirm
+    -- an empty table is always equivalent to "never ran" wasn't worth the risk for what's
+    -- already a correctly-inert code path. Safe to remove properly in a later cleanup pass.
     local gemBonus = {}
     local gems = {}
     local filledSocketColors = {}

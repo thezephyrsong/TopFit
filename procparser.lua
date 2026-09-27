@@ -245,6 +245,14 @@ TopFit.PermanentPercentStatPatterns =
 	  statKey = "TOPFIT_DODGE_PARRY_REDUCTION" },
 	{ pattern = "reduces chance to be dodged or parried by ([%d%.]+)%%",
 	  statKey = "TOPFIT_DODGE_PARRY_REDUCTION" },
+	-- parry / block chance -- added 2026-09-26, phrasing inferred by consistency with the
+	-- confirmed beta-client talent text ("Increases your Parry chance by N%.", Warrior's
+	-- Deflection/Shield Specialization) and the established Equip: phrasing family above, NOT
+	-- yet confirmed against a real item tooltip. Flag and correct if actual gear text differs.
+	{ pattern = "increases your parry chance by ([%d%.]+)%%",
+	  statKey = "TOPFIT_PARRY_CHANCE_ALL" },
+	{ pattern = "increases your chance to block by ([%d%.]+)%%",
+	  statKey = "TOPFIT_BLOCK_CHANCE_ALL" },
 	-- dual-stat spell healing/damage line -- two captures, handled specially below
 	{ pattern = "increases healing done by up to (%d+) and damage done by up to (%d+) for all magical spells and effects",
 	  dualStatKeys = { "TOPFIT_SPELL_HEALING_FLAT", "TOPFIT_SPELL_DAMAGE_FLAT" } },

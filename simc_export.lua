@@ -346,29 +346,13 @@ function TopFit:Slugify(name)
 end
 local function Slugify(name) return TopFit:Slugify(name) end
 
-local function SlugifyGlyphName(name)
-	if not name then return nil end
-	name = name:gsub("^[Gg]lyph%s+of%s+", "")
-	return Slugify(name)
-end
-
+-- CONFIRMED 2026-09-26 (Dan): Forever has no Inscription at all, so there are no glyphs to
+-- export -- this isn't an API uncertainty being guarded against anymore, it's a game-design
+-- fact. The old glyph-scanning implementation (and its SlugifyGlyphName helper) has been
+-- removed entirely rather than left as dead code; this stub exists only so the call site below
+-- doesn't need its own separate removal.
 local function GetGlyphsString()
-	local numSockets = GetNumGlyphSockets and GetNumGlyphSockets()
-	if not numSockets or numSockets == 0 then return nil end
-
-	local slugs = {}
-	for socket = 1, numSockets do
-		local enabled, _, glyphSpellID = GetGlyphSocketInfo(socket)
-		if enabled and glyphSpellID and glyphSpellID > 0 then
-			local spellInfo = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(glyphSpellID)
-			local glyphName = spellInfo and spellInfo.name
-			local slug = SlugifyGlyphName(glyphName)
-			if slug then tinsert(slugs, slug) end
-		end
-	end
-
-	if #slugs == 0 then return nil end
-	return table.concat(slugs, "/")
+	return nil
 end
 
 local RANGED_TYPE_TO_AMMO_SUBTYPE = {
@@ -431,21 +415,11 @@ local function BonusTableToSimcBlob(bonusTable)
 	return table.concat(parts, "_")
 end
 
+-- CONFIRMED 2026-09-26 (Dan): Forever has no Jewelcrafting, so no item will ever have a meta
+-- gem (or any gem) socketed. Simplified to a stub rather than left as a loop that can never
+-- find anything -- unlike inventory.lua's gem scan, this function is self-contained with a
+-- single call site, so it was safe to actually clean up rather than just comment.
 local function GetMetaGemSlug(itemLink)
-	if not itemLink then return nil end
-	for i = 1, 4 do
-		local gemName, gemLink = C_Item.GetItemGem(itemLink, i)
-		local targetName = gemName
-		if not targetName and gemLink then
-			targetName = GetItemInfoSafe(gemLink)
-		end
-
-		if targetName and (string.find(targetName, "Diamond") or string.find(targetName, "Meta")) then
-			local cleanName = string.gsub(targetName, "%s*[Dd]iamond%s*", "")
-			cleanName = string.gsub(cleanName, "%s*[Mm]eta%s*", "")
-			return TopFit:Slugify(cleanName)
-		end
-	end
 	return nil
 end
 

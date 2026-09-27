@@ -103,7 +103,12 @@ function TopFit:CalculateRecommendations()
 	TopFit:InitSemiRecursiveCalculations()
 end
 
--- Sums the rating bonuses granted by talents configured in talentbonuses.lua
+-- Sums the percent stat bonuses granted by talents configured in talentbonuses.lua.
+-- Forever's talents are read via TopFit:GetRetailTalentRanks() (core.lua) -- the modern
+-- C_ClassTalents/C_Traits node system, addressed by spellID/name, not (tab, index). See
+-- talentbonuses.lua's own header for why the old tab/index + rating-conversion approach (still
+-- visible in git history) doesn't apply here at all anymore, not just because Triumvirate's
+-- cancelled but because the underlying mechanism itself is different on this client.
 function TopFit:GetTalentRatingBonuses()
 	local bonuses = {}
 	local playerClass = select(2, UnitClass("player"))
@@ -112,31 +117,30 @@ function TopFit:GetTalentRatingBonuses()
 		return bonuses
 	end
 	
-	if TopFit:GetNumTalentTabsSafe() == 0 then
+	if not (C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_Traits) then
 		if not TopFit.warnedAboutMissingTalentData then
-			if TopFit.hasClassicTalentAPI then
-				TopFit:Print("Talent-granted rating bonuses can't be read yet -- open your Talent panel (default key: N) once this session so gear recommendations account for them correctly.")
-			else
-				TopFit:Debug("Talent-granted rating bonuses skipped -- this client doesn't expose GetNumTalentTabs/GetTalentInfo.")
-			end
+			TopFit:Debug("Talent-granted stat bonuses skipped -- this client doesn't expose C_ClassTalents/C_Traits.")
+			TopFit.warnedAboutMissingTalentData = true
+		end
+		return bonuses
+	end
+	
+	local ranksBySpellID, ranksByName = TopFit:GetRetailTalentRanks()
+	if not next(ranksBySpellID) and not next(ranksByName) then
+		if not TopFit.warnedAboutMissingTalentData then
+			TopFit:Print("Talent-granted stat bonuses can't be read yet -- your active talent config may not be loaded. Try opening your Talent panel once this session, then recalculate.")
 			TopFit.warnedAboutMissingTalentData = true
 		end
 		return bonuses
 	end
 	
 	for _, entry in ipairs(entries) do
-		local rank = TopFit:GetTalentRankSafe(entry.tab, entry.index)
-		if rank and rank > 0 then
-			local amount = 0
-			if entry.perPoint then
-				amount = entry.perPoint * rank
-			elseif entry.percentPerPoint then
-				local ratingPerPercent = (entry.percentType == "spell") and 8 or 10
-				amount = entry.percentPerPoint * rank * ratingPerPercent
-			end
-			if amount ~= 0 then
-				bonuses[entry.stat] = (bonuses[entry.stat] or 0) + amount
-			end
+		-- spellID checked first (more stable across locale/rewording than name), falling back
+		-- to name if no spellID is given on this entry or it isn't found this way
+		local rank = (entry.spellID and ranksBySpellID[entry.spellID]) or (entry.name and ranksByName[entry.name]) or 0
+		if rank > 0 and entry.percentPerPoint then
+			local amount = entry.percentPerPoint * rank
+			bonuses[entry.stat] = (bonuses[entry.stat] or 0) + amount
 		end
 	end
 	
