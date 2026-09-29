@@ -291,6 +291,22 @@ local function GetDefaultEquipmentSetIcon()
     return 134400 -- INV_Misc_QuestionMark
 end
 
+-- A wrapper around C_EquipmentSet.GetEquipmentSetID that never returns 0 as a "found" result.
+-- The documented contract (warcraft.wiki.gg) is that this returns nil, never 0, when no set with
+-- the given name exists. 2026-09-27: Dan's log showed a set being "updated (ID 0)" on what should
+-- have been its first-ever save, and equipment sets started appearing to save across CHARACTERS
+-- rather than per set -- both are exactly what would happen if this beta client's implementation
+-- returns 0 (not nil) for "not found": in Lua, 0 is truthy, so `if existingSetID then` would take
+-- the update-existing-set-0 branch instead of creating a real, distinct set, every single time.
+-- Whether that is really what's happening on this client isn't confirmed, but treating 0 as "not
+-- found" everywhere this is checked is strictly safer than not doing so: it changes nothing if
+-- the documented contract holds, and fixes exactly this failure mode if it doesn't.
+function TopFit:GetEquipmentSetIDSafe(setName)
+    local id = C_EquipmentSet.GetEquipmentSetID(setName)
+    if id and id ~= 0 then return id end
+    return nil
+end
+
 -- Saves the gear currently worn into a Blizzard equipment set called setName, creating the set if
 -- it doesn't exist yet. ignoredSlots (optional list of inventory slot IDs) are left out of the set,
 -- so slots TopFit had no recommendation for don't get baked in. Returns true on success.
@@ -324,7 +340,7 @@ function TopFit:SaveGearToEquipmentSet(setName, ignoredSlots, verbose)
         end
     end
 
-    local setID = C_EquipmentSet.GetEquipmentSetID(setName)
+    local setID = TopFit:GetEquipmentSetIDSafe(setName)
     local created = false
     local ok, err
     if setID then
@@ -332,7 +348,7 @@ function TopFit:SaveGearToEquipmentSet(setName, ignoredSlots, verbose)
     else
         created = true
         ok, err = pcall(C_EquipmentSet.CreateEquipmentSet, setName, GetDefaultEquipmentSetIcon())
-        setID = C_EquipmentSet.GetEquipmentSetID(setName)
+        setID = TopFit:GetEquipmentSetIDSafe(setName)
     end
 
     -- don't leave TopFit's exclusions active for the player's own manual saves in the game UI

@@ -161,7 +161,7 @@ function TopFit:DeleteSet(setCode)
     local setName = TopFit:GenerateSetName(self.db.profile.sets[setCode].name)
     
     -- remove from equipment manager
-    local existingSetID = C_EquipmentSet.CanUseEquipmentSets() and C_EquipmentSet.GetEquipmentSetID(setName)
+    local existingSetID = C_EquipmentSet.CanUseEquipmentSets() and TopFit:GetEquipmentSetIDSafe(setName)
     if existingSetID then
         C_EquipmentSet.DeleteEquipmentSet(existingSetID)
     end
@@ -189,7 +189,7 @@ function TopFit:RenameSet(setCode, newName)
     self.db.profile.sets[setCode]["name"] = newName
     
     -- rename equipment set if it exists
-    local existingSetID = C_EquipmentSet.CanUseEquipmentSets() and C_EquipmentSet.GetEquipmentSetID(oldSetName)
+    local existingSetID = C_EquipmentSet.CanUseEquipmentSets() and TopFit:GetEquipmentSetIDSafe(oldSetName)
     if existingSetID then
         -- C_EquipmentSet has no RenameEquipmentSet (the old global of that name was replaced in
         -- patch 7.2 by ModifyEquipmentSet(setID, newName [, newIcon])). An earlier version of this

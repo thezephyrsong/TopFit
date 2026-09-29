@@ -1024,6 +1024,35 @@ plus a second symptom: switching TopFit's own set dropdown away and back
    The `/topfit saveset` command plus the new warning message are what will
    actually answer this on the next test.
 
+**2026-09-27 follow-up, same session:** the warning fired -- neither
+`C_EquipmentSet.UnpackLocation` nor `EquipmentManager_UnpackLocation` exist
+on this client. Confirmed, not suspected, now. No fix needed beyond what's
+already there: the preview-reconstruction rewrite above doesn't depend on
+either function as its primary path, so this is expected and handled.
+
+**A second, more serious bug found from the same log**: `/topfit saveset`
+reported `Equipment set 'Enhancement (TF)' updated (ID 0)` on what should
+have been that set's first-ever save, and Dan reported sets appearing to
+save across CHARACTERS rather than staying per-set. `C_EquipmentSet.
+GetEquipmentSetID`'s documented contract (warcraft.wiki.gg) is that it
+returns `nil`, never `0`, when no set with the given name exists -- but in
+Lua, `0` is truthy, so if this beta client actually returns `0` for "not
+found" (a plausible beta-client deviation from the documented contract,
+not confirmed by name but strongly implied by the symptom), every
+`if existingSetID then` check in the codebase would wrongly take the
+"update existing set" branch instead of creating a distinct new one --
+exactly matching both the "ID 0" log line and the cross-character symptom.
+Added `TopFit:GetEquipmentSetIDSafe(setName)`, which treats `0` the same
+as `nil`, and routed every `C_EquipmentSet.GetEquipmentSetID` call in the
+codebase through it (`core.lua`'s save routine, both `options.lua` rename/
+delete call sites, both `frame.lua` set-preview call sites -- 5 call sites
+total, all previously calling the raw function directly). Verified against
+a mock reproducing the suspected buggy behavior before shipping: the raw
+call returns `0` (truthy) for a nonexistent set, the wrapper correctly
+returns `nil`. This is a strictly safe change either way -- it's a no-op
+if the client actually follows the documented contract, and fixes exactly
+this failure mode if it doesn't.
+
 All touched files re-verified with `luac5.1 -p`. The parser and the
 save/preview logic changes were additionally tested against Lua mocks
 (`/tmp/ptest`) before being written back, not just syntax-checked --

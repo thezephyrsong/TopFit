@@ -35,7 +35,7 @@ local function UnpackLocationSafe(location)
 end
 
 local function GetSetLocationsSafe(setName)
-    local setID = C_EquipmentSet.GetEquipmentSetID and C_EquipmentSet.GetEquipmentSetID(setName)
+    local setID = TopFit:GetEquipmentSetIDSafe(setName) -- see core.lua for why not GetEquipmentSetID directly
     if setID then
         return C_EquipmentSet.GetItemLocations(setID)
     elseif GetEquipmentSetLocations then
@@ -45,7 +45,7 @@ local function GetSetLocationsSafe(setName)
 end
 
 local function GetSetItemIDsSafe(setName)
-    local setID = C_EquipmentSet.GetEquipmentSetID and C_EquipmentSet.GetEquipmentSetID(setName)
+    local setID = TopFit:GetEquipmentSetIDSafe(setName) -- see core.lua for why not GetEquipmentSetID directly
     if setID then
         return C_EquipmentSet.GetItemIDs(setID)
     elseif GetEquipmentSetItemIDs then
