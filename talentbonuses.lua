@@ -132,7 +132,12 @@ TopFit.talentRatingBonuses["HUNTER"] = {
 	-- Lethal Attacks (Marksmanship): "Increases your critical strike chance with all attacks by
 	-- 1%" per rank, 5 ranks. "All attacks" (no spell mention) but Hunter is ranged-primary, so
 	-- mapped to the PHYSICAL bucket (melee+ranged, no spell) rather than MELEE alone.
-	{ name = "Lethal Attacks", stat = "TOPFIT_CRIT_CHANCE_PHYSICAL", percentPerPoint = 1 },
+	-- spellID 19426 + exact name "Lethal Attacks" (rank 5) both come from a live Forever
+	-- SixtyUpgrades export of Dan's Hunter (2026-09-27) -- the first entry in this file with a
+	-- spellID from a real Forever character rather than a scraped page. Not yet checked against
+	-- what C_Traits' definitionInfo.spellID actually returns, but the lookup falls back to name
+	-- if the spellID doesn't match, so a mismatch is harmless.
+	{ name = "Lethal Attacks", spellID = 19426, stat = "TOPFIT_CRIT_CHANCE_PHYSICAL", percentPerPoint = 1 },
 	-- Savage Strikes (Survival): "Increases the critical strike chance of all your melee
 	-- abilities by 2%" per rank, 2 ranks.
 	{ name = "Savage Strikes", stat = "TOPFIT_CRIT_CHANCE_MELEE", percentPerPoint = 2 },

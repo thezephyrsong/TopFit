@@ -262,14 +262,43 @@ TopFit.PermanentPercentStatPatterns =
 	  statKey = "TOPFIT_HIT_CHANCE_SPELL" },
 	{ pattern = "improves your chance to get a critical strike with all attacks by ([%d%.]+)%%",
 	  statKey = "TOPFIT_CRIT_CHANCE_PHYSICAL" },
+	-- SHORT-FORM hit / crit -- CONFIRMED against real Forever gear tooltips 2026-09-27 (Precision
+	-- Bow: "Equip: Improves your chance to hit by 0.3%.", Theramore Spaulders: "Equip: Improves
+	-- your chance to get a critical strike by 1.0%."). The "with all spells and attacks" wording
+	-- above was Season of Discovery's phrasing; real Forever gear uses these shorter forms, so
+	-- without these two entries essentially all gear-granted hit/crit went unscored (and, worse,
+	-- was misrouted into the proc path by the generic "chance" check).
+	{ pattern = "improves your chance to hit by ([%d%.]+)%%",
+	  statKey = "TOPFIT_HIT_CHANCE_ALL" },
+	{ pattern = "improves your chance to get a critical strike by ([%d%.]+)%%",
+	  statKey = "TOPFIT_CRIT_CHANCE_ALL" },
 	-- dual-stat spell healing/damage line -- two captures, handled specially below
 	{ pattern = "increases healing done by up to (%d+) and damage done by up to (%d+) for all magical spells and effects",
 	  dualStatKeys = { "TOPFIT_SPELL_HEALING_FLAT", "TOPFIT_SPELL_DAMAGE_FLAT" } },
+	-- COMBINED spell damage + healing, one number that applies to both -- CONFIRMED on real gear
+	-- 2026-09-27 (Enriched Thorium Helm "...by up to 23", Stalwart Helm "...by up to 38"). Distinct
+	-- from the split healing-X-and-damage-Y line above; credits the SAME value to both stats.
+	{ pattern = "increases damage and healing done by magical spells and effects by up to (%d+)",
+	  sameValueKeys = { "TOPFIT_SPELL_DAMAGE_FLAT", "TOPFIT_SPELL_HEALING_FLAT" } },
+	-- SCHOOL-specific damage -- CONFIRMED on real gear 2026-09-27 (Filigreed Shadow Circlet:
+	-- "Increases damage done by Shadow spells and effects by up to 14."). Unlike hit/crit talents,
+	-- these are tracked per school, not one generic bucket: a Shadow Priest wants Shadow damage and
+	-- should not be credited for Fire, and Forever's own stat block lists each school separately.
+	{ pattern = "increases damage done by (%a+) spells and effects by up to (%d+)",
+	  schoolKeys = {
+		arcane = "TOPFIT_ARCANE_DAMAGE_FLAT", fire = "TOPFIT_FIRE_DAMAGE_FLAT",
+		frost = "TOPFIT_FROST_DAMAGE_FLAT", holy = "TOPFIT_HOLY_DAMAGE_FLAT",
+		nature = "TOPFIT_NATURE_DAMAGE_FLAT", shadow = "TOPFIT_SHADOW_DAMAGE_FLAT",
+	  } },
 }
 
 -- flat "Increased <WeaponType/Defense> +N" lines -- no % sign, no "chance" word, so these
 -- were never at risk of the proc misclassification, but still invisible to GetItemStats()
-local FLAT_INCREASED_PATTERN = "^increased (%a+) %+(%d+)%.?$"
+-- NOT anchored to the start of the line: real tooltip text carries the "Equip: " prefix
+-- ("Equip: Increased Defense +8." on Enriched Thorium Helm, confirmed 2026-09-27), and the earlier
+-- "^increased" version silently never matched any real line. Also allows multi-word/hyphenated
+-- weapon names (e.g. "Fist Weapons", "Two-Handed Swords").
+local FLAT_INCREASED_PATTERN = "increased ([%a%- ]+) %+(%d+)"
 
 -- given one line of tooltip text, returns a table of {statKey = amount, ...} for every
 -- known permanent flat/percent stat pattern it matches, or nil if none matched. A single
@@ -284,6 +313,18 @@ function TopFit:ParsePermanentStatLine(text)
 			if a and b then
 				return { [entry.dualStatKeys[1]] = tonumber(a), [entry.dualStatKeys[2]] = tonumber(b) }
 			end
+		elseif entry.sameValueKeys then
+			local value = lower:match(entry.pattern)
+			if value then
+				local result = {}
+				for _, key in ipairs(entry.sameValueKeys) do result[key] = tonumber(value) end
+				return result
+			end
+		elseif entry.schoolKeys then
+			local school, value = lower:match(entry.pattern)
+			if school and value and entry.schoolKeys[school] then
+				return { [entry.schoolKeys[school]] = tonumber(value) }
+			end
 		else
 			local amount = lower:match(entry.pattern)
 			if amount then
@@ -295,10 +336,11 @@ function TopFit:ParsePermanentStatLine(text)
 	local weaponOrDefense, flatAmount = lower:match(FLAT_INCREASED_PATTERN)
 	if weaponOrDefense and flatAmount then
 		local statKey
+		weaponOrDefense = weaponOrDefense:gsub("%s+$", "")
 		if weaponOrDefense == "defense" then
 			statKey = "TOPFIT_DEFENSE_FLAT"
 		else
-			statKey = "TOPFIT_WEAPON_SKILL_" .. weaponOrDefense:upper()
+			statKey = "TOPFIT_WEAPON_SKILL_" .. weaponOrDefense:upper():gsub("[^%w]+", "_")
 		end
 		return { [statKey] = tonumber(flatAmount) }
 	end

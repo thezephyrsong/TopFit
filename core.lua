@@ -250,43 +250,16 @@ function TopFit:onUpdateForEquipment()
         TopFit.updateFrame:SetScript("OnUpdate", nil)
         TopFit.ProgressFrame:StoppedCalculation()
         
-        -- save equipment set
-        -- 2026-09-26: Dan reported sets not saving with no visible error. Since C_EquipmentSet's
-        -- exact failure modes on Forever haven't been confirmed live, this is instrumented
-        -- rather than guess-fixed -- each step now prints what actually happened so the next
-        -- test run pinpoints the real failure instead of leaving it silent.
-        if (C_EquipmentSet.CanUseEquipmentSets()) then
-            setName = TopFit:GenerateSetName(TopFit.currentSetName)
-            local existingSetID = C_EquipmentSet.GetEquipmentSetID(setName)
-            local iconTexture
-            if existingSetID then
-                local _, icon = C_EquipmentSet.GetEquipmentSetInfo(existingSetID)
-                iconTexture = icon
-            else
-                iconTexture = "Interface\\Icons\\Spell_Holy_EmpowerChampion"
+        -- save equipment set (see TopFit:SaveGearToEquipmentSet for what it does and why)
+        -- slots TopFit had no recommendation for are excluded from the saved set, as they were
+        -- in the original implementation
+        local ignoredSlots = {}
+        for _, slotID in pairs(TopFit.slots) do
+            if not TopFit.itemRecommendations[slotID] then
+                tinsert(ignoredSlots, slotID)
             end
-            
-            TopFit:Debug("Trying to save set: "..setName..", "..(iconTexture or "nil")..", existingSetID="..tostring(existingSetID))
-            if existingSetID then
-                local ok, err = pcall(C_EquipmentSet.SaveEquipmentSet, existingSetID, iconTexture)
-                if not ok then
-                    TopFit:Print("Failed to update equipment set '"..setName.."': "..tostring(err))
-                else
-                    TopFit:Debug("SaveEquipmentSet call completed for setID "..tostring(existingSetID))
-                end
-            else
-                local ok, newSetIDOrErr = pcall(C_EquipmentSet.CreateEquipmentSet, setName, iconTexture)
-                if not ok then
-                    TopFit:Print("Failed to create equipment set '"..setName.."': "..tostring(newSetIDOrErr))
-                elseif not newSetIDOrErr then
-                    TopFit:Print("Failed to create equipment set '"..setName.."': CreateEquipmentSet returned no set ID (nil).")
-                else
-                    TopFit:Debug("Created equipment set '"..setName.."' with ID "..tostring(newSetIDOrErr))
-                end
-            end
-        else
-            TopFit:Print("Cannot save equipment set: C_EquipmentSet.CanUseEquipmentSets() returned false. This may mean Equipment Manager is unavailable in this game mode, or a client-side condition (e.g. combat) is blocking it.")
         end
+        TopFit:SaveGearToEquipmentSet(TopFit:GenerateSetName(TopFit.currentSetName), ignoredSlots)
     
         -- we are done with this set
         TopFit.isBlocked = false
@@ -299,6 +272,100 @@ function TopFit:onUpdateForEquipment()
             TopFit:CalculateSets()
         end
     end
+end
+
+-- A numeric icon fileID guaranteed to be valid: the icon of something the player is wearing (the
+-- same approach the AskMrRobot addon uses when it creates sets). The API documents file IDs and
+-- bare texture names as accepted icon values, not full "Interface\\Icons\\..." paths, which is
+-- what the earlier version of this code passed.
+local function GetDefaultEquipmentSetIcon()
+    for _, slotID in ipairs({ 16, 1, 5, 17, 3 }) do -- main hand, head, chest, off hand, shoulder
+        local icon
+        if GetInventoryItemTexture then icon = GetInventoryItemTexture("player", slotID) end
+        if not icon then
+            local link = GetInventoryItemLink("player", slotID)
+            if link and C_Item.GetItemIconByID then icon = C_Item.GetItemIconByID(link) end
+        end
+        if icon then return icon end
+    end
+    return 134400 -- INV_Misc_QuestionMark
+end
+
+-- Saves the gear currently worn into a Blizzard equipment set called setName, creating the set if
+-- it doesn't exist yet. ignoredSlots (optional list of inventory slot IDs) are left out of the set,
+-- so slots TopFit had no recommendation for don't get baked in. Returns true on success.
+--
+-- Rewritten 2026-09-27 after equipment sets were reported as not persisting. What changed, and why:
+--   * The outcome is ALWAYS printed. Success used to be reported through TopFit:Debug (off unless
+--     debug mode is enabled), so a save that worked and one that silently didn't looked identical.
+--   * The result is read back with GetEquipmentSetInfo and reported (items saved / ignored slots)
+--     instead of trusting that the Create/Save call did what was asked.
+--   * Per-slot exclusion is restored through C_EquipmentSet.IgnoreSlotForSave. An earlier FIXME in
+--     this file claimed that API might not exist; it does (it is one of the 23 documented
+--     C_EquipmentSet functions), so that note was wrong.
+--   * The default icon is a numeric fileID (see GetDefaultEquipmentSetIcon above).
+--   * CreateEquipmentSet's return value is not relied on; the set ID is looked up by name after.
+--   * Existing sets are updated without passing an icon, which keeps their current one.
+-- verbose additionally lists every equipment set on the character, for the /topfit saveset command.
+function TopFit:SaveGearToEquipmentSet(setName, ignoredSlots, verbose)
+    if not C_EquipmentSet.CanUseEquipmentSets() then
+        TopFit:Print("Could not save equipment set '"..setName.."': C_EquipmentSet.CanUseEquipmentSets() returned false.")
+        return false
+    end
+
+    -- per-slot exclusion; failures here are reported but don't stop the save
+    pcall(C_EquipmentSet.ClearIgnoredSlotsForSave)
+    local ignoreFailed = false
+    if ignoredSlots then
+        for _, slotID in ipairs(ignoredSlots) do
+            if not pcall(C_EquipmentSet.IgnoreSlotForSave, slotID) then
+                ignoreFailed = true
+            end
+        end
+    end
+
+    local setID = C_EquipmentSet.GetEquipmentSetID(setName)
+    local created = false
+    local ok, err
+    if setID then
+        ok, err = pcall(C_EquipmentSet.SaveEquipmentSet, setID)
+    else
+        created = true
+        ok, err = pcall(C_EquipmentSet.CreateEquipmentSet, setName, GetDefaultEquipmentSetIcon())
+        setID = C_EquipmentSet.GetEquipmentSetID(setName)
+    end
+
+    -- don't leave TopFit's exclusions active for the player's own manual saves in the game UI
+    pcall(C_EquipmentSet.ClearIgnoredSlotsForSave)
+
+    if not ok then
+        TopFit:Print(("Failed to %s equipment set '%s': %s"):format(created and "create" or "update", setName, tostring(err)))
+        return false
+    end
+    if not setID then
+        TopFit:Print(("Equipment set '%s' was NOT created: CreateEquipmentSet raised no error, but no set with that name exists afterwards."):format(setName))
+        return false
+    end
+
+    local _, _, _, _, numItems, numEquipped, _, _, numIgnored = C_EquipmentSet.GetEquipmentSetInfo(setID)
+    TopFit:Print(("Equipment set '%s' %s (ID %s): %s item(s) saved, %s slot(s) ignored.%s"):format(
+        setName, created and "created" or "updated", tostring(setID), tostring(numItems), tostring(numIgnored),
+        ignoreFailed and " (slot exclusion failed: C_EquipmentSet.IgnoreSlotForSave errored)" or ""))
+    if numItems == 0 then
+        TopFit:Print("Warning: the set was saved with 0 items. Nothing was equipped in the slots it covers when it was saved.")
+    end
+
+    if verbose then
+        local okIDs, ids = pcall(C_EquipmentSet.GetEquipmentSetIDs)
+        if okIDs and ids then
+            TopFit:Print("Equipment sets on this character ("..#ids.."):")
+            for _, id in ipairs(ids) do
+                local name, _, _, _, items, equipped = C_EquipmentSet.GetEquipmentSetInfo(id)
+                TopFit:Print(("  [%s] %s -- %s item(s), %s equipped"):format(tostring(id), tostring(name), tostring(items), tostring(equipped)))
+            end
+        end
+    end
+    return true
 end
 
 function TopFit:GenerateSetName(name)
@@ -325,12 +392,18 @@ function TopFit:ChatCommand(input)
             TopFit:ShowSimcExportDialog()
         elseif command == "talentdebug" then
             TopFit:DebugTalentCounts()
+        elseif command == "saveset" then
+            -- tests equipment set saving on its own, without running a calculation: saves the
+            -- gear you are wearing right now into a set (default name "TopFit Test") and reports
+            -- exactly what happened, including a list of every set on the character
+            local testName = (rest and rest ~= "") and rest or "TopFit Test"
+            TopFit:SaveGearToEquipmentSet(testName, nil, true)
         elseif command == "weapondebug" then
             TopFit:DebugWeaponSlots()
         elseif command == "caps" then
             TopFit:CapsCommand(rest)
         else
-            TopFit:Print("Available Options:\n  show - shows the calculations frame\n  options - shows TopFit's options\n  import - import a Pawn/AskMrRobot/TopFit weight string as a new set\n  export [pawn] - export the selected set as a string (add 'pawn' for Pawn format)\n  simc - export your currently equipped gear as a .simc profile\n  talentdebug - print raw talent tab/count info for debugging\n  weapondebug - print weapon slot subType/speed/damage scan results for debugging\n  caps - list/add/remove/toggle cap entries for the selected set (type 'caps' alone for help)")
+            TopFit:Print("Available Options:\n  show - shows the calculations frame\n  options - shows TopFit's options\n  import - import a Pawn/AskMrRobot/TopFit weight string as a new set\n  export [pawn] - export the selected set as a string (add 'pawn' for Pawn format)\n  simc - export your currently equipped gear as a .simc profile\n  talentdebug - print raw talent tab/count info for debugging\n  saveset [name] - save your worn gear into an equipment set and report exactly what happened (for testing)\n  weapondebug - print weapon slot subType/speed/damage scan results for debugging\n  caps - list/add/remove/toggle cap entries for the selected set (type 'caps' alone for help)")
         end
     end
 end
@@ -444,6 +517,18 @@ end
 function TopFit:OnInitialize()
     -- load saved variables
     self.db = LibStub("AceDB-3.0"):New("TopFitDB")
+
+    -- Invalidate the persisted item-scan cache whenever what a scan PRODUCES changes. Scans are
+    -- cached in SavedVariables (db.global.itemCache, see inventory.lua), so without this, a
+    -- parser fix never reaches items the client has already seen -- they keep their old (wrong)
+    -- stats forever. Bump ITEM_CACHE_VERSION any time procparser.lua/inventory.lua change which
+    -- stats a scan extracts. Version 2 (2026-09-27): short-form hit/crit, flat Defense/weapon
+    -- skill, combined and per-school spell damage were all missed by version 1.
+    self.ITEM_CACHE_VERSION = 2
+    if self.db.global.itemCacheVersion ~= self.ITEM_CACHE_VERSION then
+        self.db.global.itemCache = {}
+        self.db.global.itemCacheVersion = self.ITEM_CACHE_VERSION
+    end
     
     -- set callback handler
     TopFit.eventHandler = TopFit.eventHandler or LibStub("CallbackHandler-1.0"):New(TopFit)
@@ -513,6 +598,14 @@ function TopFit:OnInitialize()
     -- would be wrong).
     _G["TOPFIT_CRIT_CHANCE_PHYSICAL"] = "Physical Critical Strike Chance"
     _G["TOPFIT_DODGE_CHANCE_ALL"] = "Dodge Chance"
+    -- Per-school flat spell damage -- CONFIRMED on real Forever gear 2026-09-27 (e.g. Filigreed
+    -- Shadow Circlet). Tracked per school, unlike the generic hit/crit spell buckets above.
+    _G["TOPFIT_ARCANE_DAMAGE_FLAT"] = "Arcane Damage"
+    _G["TOPFIT_FIRE_DAMAGE_FLAT"] = "Fire Damage"
+    _G["TOPFIT_FROST_DAMAGE_FLAT"] = "Frost Damage"
+    _G["TOPFIT_HOLY_DAMAGE_FLAT"] = "Holy Damage"
+    _G["TOPFIT_NATURE_DAMAGE_FLAT"] = "Nature Damage"
+    _G["TOPFIT_SHADOW_DAMAGE_FLAT"] = "Shadow Damage"
     _G["TOPFIT_DEFENSE_FLAT"] = "Defense"
     _G["TOPFIT_SPELL_HEALING_FLAT"] = "Healing Power"
     _G["TOPFIT_SPELL_DAMAGE_FLAT"] = "Spell Damage"
@@ -542,6 +635,12 @@ function TopFit:OnInitialize()
             [5] = "TOPFIT_SPELL_HEALING_FLAT",
             [6] = "TOPFIT_CRIT_CHANCE_SPELL",
             [7] = "TOPFIT_HIT_CHANCE_SPELL",
+            [8] = "TOPFIT_ARCANE_DAMAGE_FLAT",
+            [9] = "TOPFIT_FIRE_DAMAGE_FLAT",
+            [10] = "TOPFIT_FROST_DAMAGE_FLAT",
+            [11] = "TOPFIT_HOLY_DAMAGE_FLAT",
+            [12] = "TOPFIT_NATURE_DAMAGE_FLAT",
+            [13] = "TOPFIT_SHADOW_DAMAGE_FLAT",
         },
         ["Defensive"] = {
             [1] = "ITEM_MOD_BLOCK_RATING_SHORT",

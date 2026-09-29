@@ -2,6 +2,17 @@ local minimalist = [=[Interface\AddOns\TopFit\media\minimalist]=]
 
 local GetItemInfo = C_Item.GetItemInfo or GetItemInfo
 
+-- 2026-09-27: C_EquipmentSet.UnpackLocation does NOT appear in any documented list of
+-- C_EquipmentSet's functions found for this project (see REWRITE_PLAN_12_1_5.md) -- every
+-- historical source names the plain global EquipmentManager_UnpackLocation instead, a FrameXML
+-- Lua function (not an engine-level C_ API), which is exactly the kind of legacy global that's
+-- been removed outright elsewhere this session (GetSpellInfo, IsEquippableItem,
+-- InterfaceOptions_AddCategory). Whether it still exists on 12.1.5 is unconfirmed either way.
+-- This is suspected as the actual cause of "switch to another set and back, it forgets the
+-- original set": this function's only call site (below) rebuilds a saved set's item preview for
+-- TopFit's own dropdown, and if it silently returns all nil, that preview comes back empty --
+-- which is exactly the reported symptom, not a guess about unrelated behavior.
+local warnedNoUnpackLocation = false
 local function UnpackLocationSafe(location)
     if not location then return nil end
     local a1, a2, a3, a4, a5, a6
@@ -9,6 +20,9 @@ local function UnpackLocationSafe(location)
         a1, a2, a3, a4, a5, a6 = C_EquipmentSet.UnpackLocation(location)
     elseif EquipmentManager_UnpackLocation then
         a1, a2, a3, a4, a5, a6 = EquipmentManager_UnpackLocation(location)
+    elseif not warnedNoUnpackLocation then
+        warnedNoUnpackLocation = true
+        TopFit:Print("Neither C_EquipmentSet.UnpackLocation nor EquipmentManager_UnpackLocation exist on this client -- saved-set item previews will appear empty. This is a known suspect for sets 'forgetting' their contents; please report this message if you see it.")
     end
 
     if type(a4) == "boolean" then
@@ -678,24 +692,67 @@ function TopFit:CreateProgressFrame()
                 local itemPositions = GetSetLocationsSafe(setName)
                 local storedItemIDs = GetSetItemIDsSafe(setName)
                 
+                -- 2026-09-27: rewritten so this no longer depends solely on UnpackLocationSafe (see
+                -- its own comment -- whether it works at all on this client is unconfirmed). Tries
+                -- several independent, already-confirmed-working paths in order, so the preview
+                -- still shows real items even if the legacy unpack function returns nothing.
+                local function GetItemIDFromLink(link)
+                    if not link then return nil end
+                    if C_Item.GetItemInfoInstant then return (C_Item.GetItemInfoInstant(link)) end
+                    return tonumber(link:match("item:(%d+)"))
+                end
+
                 if itemPositions then
                     for slotID, itemLocation in pairs(itemPositions) do
                         if itemLocation and itemLocation ~= 1 and itemLocation ~= 0 then
-                            local itemLink = nil
-                            local player, bank, bags, slot, bag = UnpackLocationSafe(itemLocation)
-                            if player then
-                                if bank then
-                                    local itemID = storedItemIDs[slotID]
-                                    if itemID and itemID ~= 1 then
-                                        _, itemLink = C_Item.GetItemInfo(itemID)
+                            local itemLink, bag, slot = nil, nil, nil
+                            local storedItemID = storedItemIDs and storedItemIDs[slotID]
+
+                            -- 1. most common case: still equipped in this exact slot. Doesn't touch
+                            -- UnpackLocationSafe at all, and preserves full enchant/instance data.
+                            local equippedLink = GetInventoryItemLink("player", slotID)
+                            if equippedLink and (not storedItemID or GetItemIDFromLink(equippedLink) == storedItemID) then
+                                itemLink = equippedLink
+                                slot = slotID
+                            end
+
+                            -- 2. not equipped there -- try the legacy unpack path to find it in
+                            -- bags/bank instead (a no-op if that function isn't available)
+                            if not itemLink then
+                                local player, bank, bags, uSlot, uBag = UnpackLocationSafe(itemLocation)
+                                if player then
+                                    if bank then
+                                        if storedItemID and storedItemID ~= 1 then
+                                            _, itemLink = C_Item.GetItemInfo(storedItemID)
+                                        end
+                                    elseif bags then
+                                        itemLink = C_Container.GetContainerItemLink(uBag, uSlot)
+                                        bag, slot = uBag, uSlot
                                     end
-                                elseif bags then
-                                    itemLink = C_Container.GetContainerItemLink(bag, slot)
-                                else
-                                    itemLink = GetInventoryItemLink("player", slot)
                                 end
                             end
-                            
+
+                            -- 3. still nothing -- scan all bags for a matching itemID, so a set
+                            -- preview isn't just silently missing a slot
+                            if not itemLink and storedItemID and storedItemID ~= 1 then
+                                for scanBag = 0, 4 do
+                                    if itemLink then break end
+                                    for scanSlot = 1, C_Container.GetContainerNumSlots(scanBag) do
+                                        local link = C_Container.GetContainerItemLink(scanBag, scanSlot)
+                                        if link and GetItemIDFromLink(link) == storedItemID then
+                                            itemLink, bag, slot = link, scanBag, scanSlot
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+
+                            -- 4. absolute last resort: a plain link from the bare itemID alone (no
+                            -- enchant/instance fidelity), just so the preview isn't empty
+                            if not itemLink and storedItemID and storedItemID ~= 1 then
+                                _, itemLink = C_Item.GetItemInfo(storedItemID)
+                            end
+
                             if itemLink then
                                 local itemTable = TopFit:GetCachedItem(itemLink)
                                 if itemTable then

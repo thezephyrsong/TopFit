@@ -191,7 +191,10 @@ function TopFit:RenameSet(setCode, newName)
     -- rename equipment set if it exists
     local existingSetID = C_EquipmentSet.CanUseEquipmentSets() and C_EquipmentSet.GetEquipmentSetID(oldSetName)
     if existingSetID then
-        C_EquipmentSet.RenameEquipmentSet(existingSetID, newSetName)
+        -- C_EquipmentSet has no RenameEquipmentSet (the old global of that name was replaced in
+        -- patch 7.2 by ModifyEquipmentSet(setID, newName [, newIcon])). An earlier version of this
+        -- file called the nonexistent RenameEquipmentSet, which would have thrown on any rename.
+        C_EquipmentSet.ModifyEquipmentSet(existingSetID, newSetName)
     end
     
     if (TopFit.ProgressFrame) then

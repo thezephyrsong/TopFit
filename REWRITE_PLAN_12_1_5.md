@@ -634,8 +634,13 @@ initially (wrongly) treating it as Forever-sourced.**
   carries the same category is unconfirmed, but the SixtyUpgrades export
   *format itself* clearly supports it as a concept, which is the useful
   part for planning purposes.
-- **SixtyUpgrades has no Forever support either** (same situation as
-  WowSims) — this whole exercise was Dan using SoD as a stand-in
+- ~~**SixtyUpgrades has no Forever support either**~~ — **RETRACTED
+  2026-09-27:** a later live export (see "Live Forever export" below) has
+  `sixtyupgrades.com/forever/...` set and talent links in it, so
+  SixtyUpgrades DOES have live Forever support. This bullet was true when
+  written (that earlier sample was a Season of Discovery stand-in) but
+  went stale and never got corrected until now. Original text follows for
+  the record — this whole exercise was Dan using SoD as a stand-in
   supported game mode just to learn the export tool's shape ahead of
   Forever existing, which is exactly the right move given nothing Forever-
   specific exists to test against yet. The schema shape (envelope, items,
@@ -699,6 +704,48 @@ so it's clear those were verification bugs, not code bugs, if this comes
 up again.
 
 ---
+
+### Live Forever export (2026-09-27) -- a real Forever character, not a stand-in
+
+Dan's Forever Hunter "Zae" (level 21, Night Elf, Alliance, "Levelling" set, phase 1),
+exported from SixtyUpgrades with `links.set` / `links.talents` pointing at
+`sixtyupgrades.com/forever/...`. This is the first genuinely Forever-sourced
+sample and settles several things the SoD stand-in couldn't:
+
+- **Talent schema, finally seen with data:** `{name, id, rank, spellId}` per
+  talent -- e.g. Lethal Attacks `{id: 105011, rank: 5, spellId: 19426}`. Keyed by
+  unique ID + spellId, never by tab/index, consistent with the C_Traits
+  node-based system Dan's `GetRetailTalentRanks()` already reads. Only talents
+  with points spent appear to be listed (3 entries here, not the whole tree). Real
+  spellIDs are available from this source, unlike wowforevertalents.com.
+- **Item enchant schema:** `"enchant": {"name", "id", "spellId"}` per item, e.g.
+  Forceful Medium Armor Kit / Enchant Bracer - Minor Agility. Enchants exist
+  in Forever (armor kits included); gems still don't (no `gems` key anywhere).
+- **New per-item field `"acquired": true`** -- not seen in the SoD sample;
+  presumably distinguishes owned gear from wishlist entries in a set.
+- **Item IDs are a mix**: some low classic-style IDs (Serpent's Shoulders 5404,
+  Blackened Defias Boots 10402, Venomstrike 6469) alongside high fresh-looking
+  ones (252504, 277204, 279897, 282283). So Forever appears to reuse classic item IDs for
+  classic items and use new ID ranges for its own additions (an inference from
+  one small sample, not confirmed) -- this replaces the retracted "all-new IDs"
+  guess from earlier, which the data contradicts.
+- **Stat block is the flat model, again:** `crit`, `spellCrit`, `rangedCrit`,
+  `dodge`, `parry` as plain percentages, plus per-school flat damage stats
+  (`arcaneDamage`, `fireDamage`, `frostDamage`, `natureDamage`, `shadowDamage`,
+  `holyDamage`), `spellDamage`, and `healing` -- so damage bonuses are tracked
+  per school as well as generically. `procparser.lua`'s single
+  `TOPFIT_SPELL_DAMAGE_FLAT` bucket may be too coarse if gear itemizes
+  school-specific damage; unconfirmed, flagged.
+- **Ranged/melee stat split confirmed:** `rangedAttackPower`, `rangedCrit`,
+  `rangedSpeed`, `mainHandSpeed` are separate fields.
+- **`points` example (Forever, Hunter):** "Hunter EP" = `attackPower 1,
+  rangedAttackPower 1, agility 2.79, crit 28.57, hit 21.98, rangedDps 14,
+  rangedSpeed 100` -- a community-tuned starting point for Forever Hunter
+  weights, and the natural source for rewriting `presets.lua` (see below).
+- **Real test case for the talent pipeline:** Zae has Lethal Attacks at 5/5,
+  which `talentbonuses.lua` maps to `TOPFIT_CRIT_CHANCE_PHYSICAL` at 1%/rank.
+  Running `/topfit talentdebug` on Zae should list "Lethal Attacks" rank 5, and
+  a physical-crit cap should drop by 5 in the effective value.
 
 ## 5. Talent system fully wired end-to-end; equipment-set save instrumented
 
@@ -838,10 +885,16 @@ talents.
       field-name consistency
 
 **From real item tooltips in-game:**
-- [ ] Confirm `procparser.lua`'s percent-stat phrase templates (hit/crit/
-      dodge-parry/weapon-skill/Defense/healing-damage) against actual Forever
-      wording -- everything currently coded is sourced from Season of
-      Discovery as a stand-in, not confirmed Forever text
+- [x] `procparser.lua`'s percent-stat phrase templates -- DONE 2026-09-27,
+      from 8 real Forever gear screenshots. Confirmed the SoD-sourced
+      phrasing was close but not exact (hit/crit are shorter forms on real
+      Forever gear); added the combined damage+healing line and per-school
+      damage lines, which weren't anticipated at all; fixed the flat
+      `Increased X +N` pattern, which was never matching anything due to a
+      start-of-line anchor real tooltip text doesn't satisfy. See section 8
+      for the full before/after. Parry/block/dodge-chance item phrasing
+      (added speculatively alongside the Warrior talent work) remains
+      unconfirmed -- none of the 8 screenshots happened to show one.
 
 **Not a data source, a caution:** treat Discord/community "fixes" with the same
 skepticism as the SavedVariables true/false-vs-1/0 claim (2026-09-26) --
@@ -873,3 +926,106 @@ Lesson for future fixes in this doc: a targeted wrapper in one or two files
 doesn't mean a function is fixed everywhere it's called -- worth greping the
 whole codebase for a bare global by name once one confirmed-broken instance
 turns up, rather than assuming other call sites were already covered.
+
+---
+
+## 8. Real gear tooltips confirmed, equipment-set save rewritten, set-preview bug found
+
+2026-09-27, from 8 in-game screenshots of real Forever gear -- the itemization
+phrase-pattern checklist item is now genuinely closed, not just carried
+forward. Ran every real `Equip:` line through the actual parser before
+touching anything (`/tmp/ptest`, a standalone Lua harness loading
+`procparser.lua`'s pattern table directly) rather than eyeballing the regexes.
+Baseline: **2 of 10 real lines parsed, 8 missed** -- the Season of Discovery
+phrasing this was all built against was close but not exact.
+
+Fixed, each confirmed against a real screenshot:
+- **Short-form hit/crit** (Precision Bow, Theramore Spaulders): Forever drops
+  "with all spells and attacks" that SoD uses -- gear says "Improves your
+  chance to hit by N%." / "...to get a critical strike by N%." directly. This
+  was the single biggest miss -- essentially all gear-granted hit/crit was
+  going unscored, and worse, being misrouted into the proc-detection path by
+  the generic "chance" check.
+- **Combined damage+healing, one number** (Enriched Thorium Helm, Stalwart
+  Helm): "Increases damage and healing done by magical spells and effects by
+  up to N." -- distinct from the existing split healing-X-damage-Y pattern;
+  credits the same value to both `TOPFIT_SPELL_DAMAGE_FLAT` and
+  `TOPFIT_SPELL_HEALING_FLAT`.
+- **Per-school damage** (Filigreed Shadow Circlet, Acolyte's Chain Helm):
+  "Increases damage done by Shadow spells and effects by up to N." Six new
+  stats added (`TOPFIT_ARCANE/FIRE/FROST/HOLY/NATURE/SHADOW_DAMAGE_FLAT`) --
+  tracked per school, not folded into the generic bucket, since a Shadow
+  Priest shouldn't be credited for Fire damage gear and Forever's own
+  character-stats block (section on the live SixtyUpgrades export above)
+  already lists these six separately.
+- **Flat `Increased X +N`** was never matching at all -- the pattern was
+  anchored to the start of the line (`^increased`), but real tooltip text
+  carries the `Equip: ` prefix (Enriched Thorium Helm: "Equip: Increased
+  Defense +8."). Un-anchored, and extended to allow multi-word weapon names.
+- **Persisted item-cache versioning added** (`core.lua`, `ITEM_CACHE_VERSION`
+  = 2): every one of these fixes was invisible to any item the client had
+  already scanned before now, since `db.global.itemCache` had no version
+  check and just kept serving the old (wrong) result forever. Bumping this
+  constant on any future scan-affecting change now wipes the cache once.
+
+## 9. Equipment sets: one real bug found, one rewritten for verifiability, one still open
+
+Dan confirmed sets still weren't saving after the first instrumentation pass,
+plus a second symptom: switching TopFit's own set dropdown away and back
+"forgets" the original set's contents. Three separate things addressed:
+
+1. **Real bug, `options.lua`'s rename function**: called
+   `C_EquipmentSet.RenameEquipmentSet`, which does not exist -- the actual
+   modern function is `ModifyEquipmentSet(setID, newName)` (the old
+   `RenameEquipmentSet` global was replaced by this in patch 7.2). Any rename
+   would have thrown. Fixed.
+2. **`TopFit:SaveGearToEquipmentSet` rewritten as a single, testable routine**
+   used by both the post-calculation save and a new `/topfit saveset [name]`
+   command that tests saving without running a full calculation first. Every
+   outcome is unconditionally printed (the old code only used `TopFit:Debug`,
+   silent unless debug mode is on -- a save that worked and one that silently
+   didn't looked identical). The result is read back with
+   `GetEquipmentSetInfo` and reported (items saved, slots ignored) rather than
+   trusting the create/save call did what was asked. Per-slot exclusion via
+   `IgnoreSlotForSave` is back (an earlier FIXME in this file claimed that
+   function might not exist -- it does, confirmed against a documented list
+   of all 23 `C_EquipmentSet` functions, so that FIXME was itself wrong). The
+   icon is now a numeric fileID read off the player's own gear rather than a
+   hardcoded `"Interface\\Icons\\..."` path string, which the API does not
+   document as an accepted format for `CreateEquipmentSet`. Every branch
+   (create, update, `CanUseEquipmentSets` false, create throwing, create
+   silently returning nothing) tested against a mock `C_EquipmentSet` in
+   `/tmp/ptest` before shipping.
+3. **Still open, but now correctly diagnosed rather than guessed at further**:
+   `frame.lua`'s `UnpackLocationSafe` assumed `C_EquipmentSet.UnpackLocation`
+   is the modern name for the old `EquipmentManager_UnpackLocation` global.
+   That name does not appear in the same documented 23-function list from
+   point 2 above -- every historical source describes only the bare global.
+   Whether the bare global still exists on 12.1.5 is unconfirmed either way
+   (it's exactly the kind of legacy FrameXML global removed elsewhere this
+   session -- `GetSpellInfo`, `IsEquippableItem`, `InterfaceOptions_*`). This
+   function's only call site rebuilds a saved set's item preview for TopFit's
+   own dropdown -- if it silently returns all-nil, that preview comes back
+   empty, which matches "forgets the original set" more precisely than a
+   coincidence. Two things done about it:
+   - A one-time `TopFit:Print` warning if neither the `C_EquipmentSet` nor
+     bare-global path is available, so this stops being silent.
+   - The set-preview reconstruction rewritten to not depend on it as the
+     *only* path: tries the currently-equipped slot first (exact itemID
+     match against what the set recorded, full enchant fidelity, no
+     UnpackLocation involved at all), then the legacy unpack path, then a
+     full bag scan for a matching itemID, then a bare-itemID link as a last
+     resort. All four branches tested against a mock in `/tmp/ptest`,
+     including confirming a stale/mismatched equipped item is correctly
+     rejected rather than used.
+
+   Not claiming this is fixed -- claiming it's now instrumented and
+   defended-in-depth rather than resting entirely on one unconfirmed function.
+   The `/topfit saveset` command plus the new warning message are what will
+   actually answer this on the next test.
+
+All touched files re-verified with `luac5.1 -p`. The parser and the
+save/preview logic changes were additionally tested against Lua mocks
+(`/tmp/ptest`) before being written back, not just syntax-checked --
+worth doing this for any future fix with real branching logic, not only
+ones that happen to raise a suspicion this strong.
