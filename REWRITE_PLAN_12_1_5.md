@@ -1058,3 +1058,50 @@ save/preview logic changes were additionally tested against Lua mocks
 (`/tmp/ptest`) before being written back, not just syntax-checked --
 worth doing this for any future fix with real branching logic, not only
 ones that happen to raise a suspicion this strong.
+
+---
+
+## 10. Zero-ID fix confirmed working, new per-name create failure found
+
+2026-09-27, same session, a third log from Dan. Good news first: **the
+GetEquipmentSetIDSafe fix is confirmed working** -- "Elemental (TF)" got a
+real ID (1) on its first save, not 0. The `UnpackLocation` warning firing
+again is expected and already understood (section 9).
+
+**New problem, narrower than before**: "Enhancement (TF)" specifically
+failed to create 4 times in a row (`CreateEquipmentSet raised no error, but
+no set with that name exists afterwards`), while "Elemental (TF)" and
+"Default Set (TF)" both created successfully in the same session. This is a
+per-name failure, not a general one -- ruling out anything account-wide
+(a set-count cap would block every name once hit, not one specific name
+while others keep working). Leading theory: "Enhancement (TF)" already
+exists as a real set (very plausibly a leftover from earlier sessions under
+the since-fixed zero-ID bug, given it's been the most-tested name all
+along), but `GetEquipmentSetID("Enhancement (TF)")` isn't finding it for
+some reason -- so every attempt tries to create a duplicate, which the API
+silently refuses.
+
+Rather than guess further, made the diagnosis automatic: refactored the
+set-listing code (previously only shown when `/topfit saveset` was run with
+its verbose flag) into a shared `PrintAllSets` helper, and made the create-
+failure path call it unconditionally. Also added `C_EquipmentSet.
+GetNumEquipmentSets()` to that output (a real documented function not
+previously used) to rule the count-cap theory in or out at the same time.
+The next time this failure happens -- in normal play, not just manual
+testing -- the log will show every set currently on the character,
+including whatever ID "Enhancement (TF)" might already be sitting under.
+
+Tested against a mock reproducing the suspected scenario exactly (a set
+named "Enhancement (TF)" existing under ID 5, but `GetEquipmentSetID`
+returning nil for it) before shipping -- confirms the automatic dump
+correctly surfaces the orphaned set's ID and item count.
+
+**Correction to my own process, logged rather than smoothed over**: my
+first attempt at this edit left a syntax error in the file (`core.lua:407:
+'<eof>' expected near 'end'`) -- a Python string-replace that assumed the
+old code block's closing structure without actually looking at it, leaving
+orphaned `end`s from the original code that my replacement didn't account
+for. Caught by running `luac5.1 -p` immediately after, before packaging or
+reporting anything -- exactly why that check happens on every edit this
+session, not just at the end. Fixed by viewing the actual resulting file
+and removing the leftover fragment properly rather than patching around it.

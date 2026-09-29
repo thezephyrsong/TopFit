@@ -358,8 +358,34 @@ function TopFit:SaveGearToEquipmentSet(setName, ignoredSlots, verbose)
         TopFit:Print(("Failed to %s equipment set '%s': %s"):format(created and "create" or "update", setName, tostring(err)))
         return false
     end
+    -- lists every equipment set on the character -- shared by the verbose option below and the
+    -- automatic dump on a silent create failure, so a failure is self-diagnosing without needing
+    -- a separate manual /topfit saveset call to see the same information after the fact
+    local function PrintAllSets(reason)
+        TopFit:Print(reason)
+        local okNum, numSets = pcall(C_EquipmentSet.GetNumEquipmentSets)
+        if okNum then TopFit:Print("C_EquipmentSet.GetNumEquipmentSets() = "..tostring(numSets)) end
+        local okIDs, ids = pcall(C_EquipmentSet.GetEquipmentSetIDs)
+        if okIDs and ids then
+            TopFit:Print("Equipment sets on this character ("..#ids.."):")
+            for _, id in ipairs(ids) do
+                local name, _, _, _, items, equipped = C_EquipmentSet.GetEquipmentSetInfo(id)
+                TopFit:Print(("  [%s] %s -- %s item(s), %s equipped"):format(tostring(id), tostring(name), tostring(items), tostring(equipped)))
+            end
+        else
+            TopFit:Print("(could not list equipment sets: "..tostring(ids)..")")
+        end
+    end
+
     if not setID then
-        TopFit:Print(("Equipment set '%s' was NOT created: CreateEquipmentSet raised no error, but no set with that name exists afterwards."):format(setName))
+        -- 2026-09-27: seen for real with setName "Enhancement (TF)" specifically, repeatedly,
+        -- while other names created fine in the same session -- a per-name failure, not a general
+        -- one. Leading theory: a set with this exact name already exists but GetEquipmentSetID
+        -- isn't finding it for some reason, so CreateEquipmentSet is being asked to make a
+        -- duplicate and silently refusing. Dumping the full set list here (rather than requiring
+        -- a separate manual /topfit saveset call) tests that theory on the next occurrence
+        -- instead of needing to ask for more information after the fact.
+        PrintAllSets(("Equipment set '%s' was NOT created: CreateEquipmentSet raised no error, but no set with that name exists afterwards."):format(setName))
         return false
     end
 
@@ -372,14 +398,7 @@ function TopFit:SaveGearToEquipmentSet(setName, ignoredSlots, verbose)
     end
 
     if verbose then
-        local okIDs, ids = pcall(C_EquipmentSet.GetEquipmentSetIDs)
-        if okIDs and ids then
-            TopFit:Print("Equipment sets on this character ("..#ids.."):")
-            for _, id in ipairs(ids) do
-                local name, _, _, _, items, equipped = C_EquipmentSet.GetEquipmentSetInfo(id)
-                TopFit:Print(("  [%s] %s -- %s item(s), %s equipped"):format(tostring(id), tostring(name), tostring(items), tostring(equipped)))
-            end
-        end
+        PrintAllSets("Equipment sets on this character:")
     end
     return true
 end
