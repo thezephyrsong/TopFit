@@ -291,20 +291,20 @@ local function GetDefaultEquipmentSetIcon()
     return 134400 -- INV_Misc_QuestionMark
 end
 
--- A wrapper around C_EquipmentSet.GetEquipmentSetID that never returns 0 as a "found" result.
--- The documented contract (warcraft.wiki.gg) is that this returns nil, never 0, when no set with
--- the given name exists. 2026-09-27: Dan's log showed a set being "updated (ID 0)" on what should
--- have been its first-ever save, and equipment sets started appearing to save across CHARACTERS
--- rather than per set -- both are exactly what would happen if this beta client's implementation
--- returns 0 (not nil) for "not found": in Lua, 0 is truthy, so `if existingSetID then` would take
--- the update-existing-set-0 branch instead of creating a real, distinct set, every single time.
--- Whether that is really what's happening on this client isn't confirmed, but treating 0 as "not
--- found" everywhere this is checked is strictly safer than not doing so: it changes nothing if
--- the documented contract holds, and fixes exactly this failure mode if it doesn't.
+-- 2026-09-27: this WAS a wrapper that treated 0 as equivalent to "not found" (matching the
+-- documented contract on warcraft.wiki.gg, which says GetEquipmentSetID returns nil, never 0,
+-- for a nonexistent set). REVERTED THE SAME DAY: confirmed live that 0 is a real, valid set ID on
+-- this beta client -- a set named "Retribution (TF)" existed with 8 items correctly saved under
+-- ID 0 (seen via the automatic set-list dump on a create failure, added specifically to test
+-- this). The 0-as-sentinel theory was wrong: this client hands out IDs starting from 0, not 1.
+-- Treating a real ID 0 as "doesn't exist" was actively causing the exact failure it was meant to
+-- prevent -- every save attempt on that set tried to CREATE a duplicate with an already-taken
+-- name, which the API correctly refused, over and over. Left as a passthrough (rather than
+-- deleted and every call site reverted to the bare API) so this reasoning stays in one place
+-- instead of being silently lost if someone is tempted to special-case 0 again later. Lua's
+-- `if x then` already treats 0 as truthy, which is exactly the correct behavior here.
 function TopFit:GetEquipmentSetIDSafe(setName)
-    local id = C_EquipmentSet.GetEquipmentSetID(setName)
-    if id and id ~= 0 then return id end
-    return nil
+    return C_EquipmentSet.GetEquipmentSetID(setName)
 end
 
 -- Saves the gear currently worn into a Blizzard equipment set called setName, creating the set if

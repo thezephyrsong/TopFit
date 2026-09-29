@@ -1105,3 +1105,46 @@ for. Caught by running `luac5.1 -p` immediately after, before packaging or
 reporting anything -- exactly why that check happens on every edit this
 session, not just at the end. Fixed by viewing the actual resulting file
 and removing the leftover fragment properly rather than patching around it.
+
+---
+
+## 11. The zero-ID theory was wrong -- reverted
+
+2026-09-27, same session, a fourth log. The automatic set-list dump added
+last round did exactly its job: "Retribution (TF)" was shown to already
+exist, with real ID **0**, 8 items, all equipped -- a perfectly valid,
+correctly-saved set. This disproves the zero-ID theory from section 10/the
+earlier turn: `0` is not a "not found" sentinel on this beta client, it's a
+legitimate ID this client hands out starting from 0 rather than 1. The
+`GetEquipmentSetIDSafe` wrapper that treated `0` as "doesn't exist" was
+therefore actively wrong -- it told the rest of the code a real set didn't
+exist, which made every save attempt try to `CreateEquipmentSet` a
+duplicate under an already-taken name, which the API correctly and
+silently refused every time. This also almost certainly explains the
+original "Enhancement (TF)" failures from two turns ago: very likely the
+same set, also legitimately sitting at ID 0.
+
+Reverted `GetEquipmentSetIDSafe` to a plain passthrough to
+`C_EquipmentSet.GetEquipmentSetID` -- Lua's `if x then` already treats `0`
+as truthy, which is exactly the correct behavior once `0` is known to be a
+real ID. Kept the function itself (rather than deleting it and reverting
+every call site to the bare API) purely so this whole chain of reasoning
+-- tried, disproven, reverted -- stays in one place instead of being lost,
+in case someone is tempted to special-case `0` again later without having
+seen this. Tested against a mock of the exact confirmed scenario (a set
+named "Retribution (TF)" already existing at ID 0) before shipping: it now
+correctly takes the update path instead of endlessly trying to create a
+duplicate.
+
+**Open question, not resolved by this**: what actually caused the original
+"equipment sets are being saved across characters rather than per
+character" observation that started this whole thread two turns ago. The
+zero-ID theory was my explanation for it, and that theory is now known to
+be wrong, so that report is unexplained again. Equipment sets are inherently
+per-character at the Blizzard API/data level (unrelated to anything in this
+addon), so a real cross-character leak would be a strange and significant
+finding if confirmed -- but it's also plausible the original observation
+was each character's own *first* set independently landing on the same
+local ID (0), which looks like sharing but isn't. Worth watching for on
+future characters rather than assuming either explanation without more
+evidence.
