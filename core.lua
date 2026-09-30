@@ -663,19 +663,23 @@ function TopFit:OnInitialize()
             [7] = "TOPFIT_DODGE_PARRY_REDUCTION",
         },
         ["Caster"] = {
+            -- ITEM_MOD_SPELL_POWER_SHORT removed 2026-09-27 (Dan): redundant with
+            -- TOPFIT_SPELL_DAMAGE_FLAT/TOPFIT_SPELL_HEALING_FLAT below, and unlike those two,
+            -- it's confirmed dead weight for Forever specifically -- GetItemStats() will never
+            -- return this key on Forever gear, since Forever itemizes spell damage/healing as
+            -- flat Equip: text (see procparser.lua), not as a WotLK-style unified rating stat.
             [1] = "ITEM_MOD_SPELL_PENETRATION_SHORT",
-            [2] = "ITEM_MOD_SPELL_POWER_SHORT",
-            [3] = "ITEM_MOD_MANA_REGENERATION_SHORT",
-            [4] = "TOPFIT_SPELL_DAMAGE_FLAT",
-            [5] = "TOPFIT_SPELL_HEALING_FLAT",
-            [6] = "TOPFIT_CRIT_CHANCE_SPELL",
-            [7] = "TOPFIT_HIT_CHANCE_SPELL",
-            [8] = "TOPFIT_ARCANE_DAMAGE_FLAT",
-            [9] = "TOPFIT_FIRE_DAMAGE_FLAT",
-            [10] = "TOPFIT_FROST_DAMAGE_FLAT",
-            [11] = "TOPFIT_HOLY_DAMAGE_FLAT",
-            [12] = "TOPFIT_NATURE_DAMAGE_FLAT",
-            [13] = "TOPFIT_SHADOW_DAMAGE_FLAT",
+            [2] = "ITEM_MOD_MANA_REGENERATION_SHORT",
+            [3] = "TOPFIT_SPELL_DAMAGE_FLAT",
+            [4] = "TOPFIT_SPELL_HEALING_FLAT",
+            [5] = "TOPFIT_CRIT_CHANCE_SPELL",
+            [6] = "TOPFIT_HIT_CHANCE_SPELL",
+            [7] = "TOPFIT_ARCANE_DAMAGE_FLAT",
+            [8] = "TOPFIT_FIRE_DAMAGE_FLAT",
+            [9] = "TOPFIT_FROST_DAMAGE_FLAT",
+            [10] = "TOPFIT_HOLY_DAMAGE_FLAT",
+            [11] = "TOPFIT_NATURE_DAMAGE_FLAT",
+            [12] = "TOPFIT_SHADOW_DAMAGE_FLAT",
         },
         ["Defensive"] = {
             [1] = "ITEM_MOD_BLOCK_RATING_SHORT",
@@ -691,13 +695,17 @@ function TopFit:OnInitialize()
             [11] = "TOPFIT_DODGE_CHANCE_ALL",
         },
         ["Hybrid"] = {
-            [1] = "ITEM_MOD_CRIT_RATING_SHORT",
-            [2] = "ITEM_MOD_DAMAGE_PER_SECOND_SHORT",
-            [3] = "ITEM_MOD_HASTE_RATING_SHORT",
-            [4] = "ITEM_MOD_HIT_RATING_SHORT",
-            [5] = "TOPFIT_HIT_CHANCE_ALL",
-            [6] = "TOPFIT_CRIT_CHANCE_ALL",
-            [7] = "TOPFIT_CRIT_CHANCE_PHYSICAL",
+            -- ITEM_MOD_HIT_RATING_SHORT/ITEM_MOD_CRIT_RATING_SHORT removed 2026-09-27, same
+            -- reasoning as ITEM_MOD_SPELL_POWER_SHORT above: confirmed dead weight for Forever.
+            -- GetItemStats() will never return these on Forever gear -- hit/crit are itemized as
+            -- flat "Improves your chance to..." percent text (confirmed against real gear
+            -- screenshots, procparser.lua), not WotLK-style rating stats. ITEM_MOD_HASTE_RATING_SHORT
+            -- left alone -- no equivalent flat-percent haste pattern has been confirmed either way.
+            [1] = "ITEM_MOD_DAMAGE_PER_SECOND_SHORT",
+            [2] = "ITEM_MOD_HASTE_RATING_SHORT",
+            [3] = "TOPFIT_HIT_CHANCE_ALL",
+            [4] = "TOPFIT_CRIT_CHANCE_ALL",
+            [5] = "TOPFIT_CRIT_CHANCE_PHYSICAL",
         },
         ["Misc."] = {
             [1] = "ITEM_MOD_HEALTH_SHORT",

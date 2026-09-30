@@ -1148,3 +1148,51 @@ was each character's own *first* set independently landing on the same
 local ID (0), which looks like sharing but isn't. Worth watching for on
 future characters rather than assuming either explanation without more
 evidence.
+
+**2026-09-27, confirmed fixed**: "Retribution (TF)" now correctly updates
+(ID 0) instead of failing to create a duplicate. The zero-ID revert
+(section 11) works. Equipment set saving is closed out as a checklist item
+-- both the original save failure and the "forgets contents on switch"
+symptom (section 9's preview rewrite) now have working, tested fixes
+behind them, not just instrumentation.
+
+One loose thread from the same logs, not yet investigated: the "talent
+config may not be loaded" warning appears on every single calculation seen
+so far, not just the expected one-time case before the Talent panel's
+first been opened. Worth checking whether this clears up after confirming
+the Talent panel has actually been opened this session -- if it persists
+even then, that's a real bug in `TopFit:GetRetailTalentRanks`/
+`C_ClassTalents.GetActiveConfigID()` worth its own investigation, not
+covered by anything fixed so far.
+
+---
+
+## 12. Stat list condensed: removed the dead ITEM_MOD_SPELL_POWER_SHORT
+
+2026-09-27 (Dan): "don't need spell power and spell damage at the same
+time." Removed `ITEM_MOD_SPELL_POWER_SHORT` from `core.lua`'s `Caster`
+statList category -- unlike `TOPFIT_SPELL_DAMAGE_FLAT`/
+`TOPFIT_SPELL_HEALING_FLAT` (confirmed populating from real gear, section
+8), this is the old WotLK-style unified-rating stat, and it's confirmed
+dead weight for Forever specifically: `GetItemStats()` will never return
+this key on Forever gear, since Forever itemizes spell damage/healing as
+flat `Equip:` text, not a rating stat.
+
+While in there, fixed the related loose end flagged back in section 8
+("NOTE (WoW: Forever): this fold assumes WotLK's unified-SpellPower
+itemization model... Revisit once Forever's actual stat model is
+confirmed" -- it now is). `import.lua`'s Pawn-import path used to fold
+Pawn's `SpellDamage`/`Healing` into one `SpellPower` number; now they map
+directly to `TOPFIT_SPELL_DAMAGE_FLAT`/`TOPFIT_SPELL_HEALING_FLAT` instead,
+so an imported Pawn scale's spell power is actually visible/editable in
+the UI rather than landing on a stat that's no longer shown there. The
+export direction (`GetInverseStat`) needed no separate fix -- it derives
+from the same table Pawn-import uses, so fixing one table fixed both
+directions.
+
+Left untouched, flagged rather than fixed: `enchant_ids.lua` still
+references `ITEM_MOD_SPELL_POWER_SHORT` extensively and looks like it has
+the same staleness problem `gem_ids.lua` had before its own cleanup
+(section 6/checklist) -- likely WotLK-era enchant data that may not match
+Forever's actual enchants. Bigger, separate task; not done as part of this
+request.

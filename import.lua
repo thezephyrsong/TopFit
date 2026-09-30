@@ -25,11 +25,16 @@ local statNameToKey = {
 	Spirit            = 'ITEM_MOD_SPIRIT_SHORT',
 
 	-- secondary / rating stats that exist in WotLK
-	CriticalStrike    = 'ITEM_MOD_CRIT_RATING_SHORT', -- AMR
-	CritRating        = 'ITEM_MOD_CRIT_RATING_SHORT', -- Pawn
+	-- CriticalStrike/CritRating/HitRating removed 2026-09-27, alongside removing
+	-- ITEM_MOD_CRIT_RATING_SHORT/ITEM_MOD_HIT_RATING_SHORT from core.lua's statList: unlike
+	-- SpellPower/SpellDamage/Healing above, there's no valid remap here, not just a missing one --
+	-- Pawn's Hit/Crit ratings are WotLK-scale rating POINTS, and Forever's real hit/crit stats are
+	-- flat PERCENTAGES (see TOPFIT_HIT_CHANCE_ALL etc.). There's no conversion constant between
+	-- those two systems for this client, so an imported Pawn scale's hit/crit weight is dropped
+	-- explicitly here (SanitizeScales already silently drops anything not in this table) rather
+	-- than silently mapped to a dead key that would never match real Forever gear anyway.
 	Haste             = 'ITEM_MOD_HASTE_RATING_SHORT', -- AMR
 	HasteRating       = 'ITEM_MOD_HASTE_RATING_SHORT', -- Pawn
-	HitRating         = 'ITEM_MOD_HIT_RATING_SHORT',
 	ExpertiseRating   = 'ITEM_MOD_EXPERTISE_RATING_SHORT',
 	ArmorPenetration  = 'ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT',
 	ResilienceRating  = 'ITEM_MOD_RESILIENCE_RATING_SHORT',
@@ -49,7 +54,12 @@ local statNameToKey = {
 	Dps               = 'ITEM_MOD_DAMAGE_PER_SECOND_SHORT',
 	Ap                = 'ITEM_MOD_ATTACK_POWER_SHORT', -- Pawn
 	AttackPower       = 'ITEM_MOD_ATTACK_POWER_SHORT', -- AMR
-	SpellPower        = 'ITEM_MOD_SPELL_POWER_SHORT',
+	-- SpellPower removed 2026-09-27, alongside removing ITEM_MOD_SPELL_POWER_SHORT from
+	-- core.lua's statList (see below): Forever confirmed to not itemize a unified spell
+	-- power stat at all, so Pawn's SpellDamage/Healing now map directly to TopFit's own
+	-- flat stats instead of folding into a stat this client never grants.
+	SpellDamage       = 'TOPFIT_SPELL_DAMAGE_FLAT',
+	Healing           = 'TOPFIT_SPELL_HEALING_FLAT',
 	Armor             = 'RESISTANCE0_NAME',
 	Health            = 'ITEM_MOD_HEALTH_SHORT',
 	Mana              = 'ITEM_MOD_MANA_SHORT',
@@ -175,22 +185,15 @@ local function SanitizeScales(scaleTable)
 	RenameStat(scaleTable, "MeleeDPS", "MeleeDps")
 	RenameStat(scaleTable, "RangedDPS", "RangedDps")
 
-	-- combine +healing and +damage into spell power
-	-- NOTE (WoW: Forever): this fold assumes WotLK's unified-SpellPower itemization model.
-	-- Forever's screenshot items (see MIGRATION_WOWFOREVER.md section 8) suggest healing-done
-	-- and damage-done may stay separate stats there, in which case folding a Forever-side
-	-- import into one SpellPower number would be wrong, not just imprecise. Left as-is for
-	-- now since this path only runs on values Pawn/AMR already computed as unified SpellPower
-	-- (matching Pawn's own SpellPower/SpellDamage/Healing keys, which fold identically on
-	-- Pawn's end) -- this is about values arriving FROM Pawn, not about how procparser.lua's
-	-- own TOPFIT_SPELL_HEALING_FLAT/TOPFIT_SPELL_DAMAGE_FLAT scan results get scored, which
-	-- are untouched by this function. Revisit once Forever's actual stat model is confirmed.
-	CombineStat(scaleTable, "SpellPower", "SpellDamage")
-	CombineStat(scaleTable, "SpellPower", "Healing")
+	-- RESOLVED 2026-09-27: the old SpellPower fold that used to live here is gone -- Forever
+	-- is confirmed to have no unified spell power stat, so SpellDamage/Healing now map
+	-- directly (see statNameToKey above) instead of folding into one that doesn't exist.
 
 	-- fold melee/ranged/spell hit, crit, haste into the unified ratings TopFit uses for everyone
-	CombineStat(scaleTable, "HitRating", "SpellHitRating")
-	CombineStat(scaleTable, "CritRating", "SpellCritRating")
+	-- HitRating/CritRating folds removed 2026-09-27 -- both destinations are gone now (see
+	-- statNameToKey above), so folding SpellHitRating/SpellCritRating into them would just
+	-- combine two values on their way to being dropped anyway. HasteRating's fold stays --
+	-- ITEM_MOD_HASTE_RATING_SHORT is still a live stat, unlike the other two.
 	CombineStat(scaleTable, "HasteRating", "SpellHasteRating")
 
 	-- turn "resist all" into individual resistances
