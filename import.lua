@@ -33,16 +33,21 @@ local statNameToKey = {
 	-- those two systems for this client, so an imported Pawn scale's hit/crit weight is dropped
 	-- explicitly here (SanitizeScales already silently drops anything not in this table) rather
 	-- than silently mapped to a dead key that would never match real Forever gear anyway.
-	Haste             = 'ITEM_MOD_HASTE_RATING_SHORT', -- AMR
-	HasteRating       = 'ITEM_MOD_HASTE_RATING_SHORT', -- Pawn
-	ExpertiseRating   = 'ITEM_MOD_EXPERTISE_RATING_SHORT',
-	ArmorPenetration  = 'ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT',
-	ResilienceRating  = 'ITEM_MOD_RESILIENCE_RATING_SHORT',
+	-- Haste/HasteRating/ExpertiseRating/ArmorPenetration/ResilienceRating/DefenseRating/
+	-- DodgeRating/ParryRating/BlockRating all removed 2026-09-27, alongside removing their
+	-- ITEM_MOD_*_RATING_SHORT destinations from core.lua's statList (Dan: convert ratings to
+	-- percentages). Same reasoning as HitRating/CritRating above for all of these except
+	-- DefenseRating: Pawn's numbers are WotLK-scale rating points, Forever's real stats are flat
+	-- percentages (dodge/parry/block chance) or not itemized with any confirmed phrasing at all
+	-- yet (armor pen, resilience, haste) -- no valid conversion either way, dropped explicitly.
+	-- DefenseRating is the one exception worth flagging specifically: Dan's own presets.lua
+	-- documents a REAL, known conversion for this client -- DEFENSE_RATING_TO_SKILL = 1.5 at
+	-- level 60 (1.5 rating per skill point) -- so a Pawn DefenseRating weight * 1.5 would be a
+	-- correct DefenseSkill weight, unlike the others where no such constant exists. Not
+	-- implemented here because RenameStat/CombineStat only rename/combine keys, they don't scale
+	-- values, and adding that machinery was out of scope for this pass -- left dropped rather
+	-- than silently wrong, but this one specifically has a clear, documented path to a real fix.
 	SpellPenetration  = 'ITEM_MOD_SPELL_PENETRATION_SHORT',
-	DefenseRating     = 'ITEM_MOD_DEFENSE_SKILL_RATING_SHORT',
-	DodgeRating       = 'ITEM_MOD_DODGE_RATING_SHORT',
-	ParryRating       = 'ITEM_MOD_PARRY_RATING_SHORT',
-	BlockRating       = 'ITEM_MOD_BLOCK_RATING_SHORT',
 	BlockValue        = 'ITEM_MOD_BLOCK_VALUE_SHORT',
 	FeralAp           = 'ITEM_MOD_FERAL_ATTACK_POWER_SHORT',
 	Hp5               = 'ITEM_MOD_HEALTH_REGENERATION_SHORT',
@@ -181,7 +186,9 @@ end
 -- cleans up known Pawn quirks and converts stat names into TopFit's internal weight keys
 local function SanitizeScales(scaleTable)
 	------------------ Pawn-specific quirks --------------------
-	RenameStat(scaleTable, "Resilience", "ResilienceRating")
+	-- Resilience->ResilienceRating rename removed 2026-09-27 -- ResilienceRating is no
+	-- longer in statNameToKey above, so this rename would just relabel a value that then
+	-- gets dropped anyway (see that table's comment for why).
 	RenameStat(scaleTable, "MeleeDPS", "MeleeDps")
 	RenameStat(scaleTable, "RangedDPS", "RangedDps")
 
@@ -189,12 +196,9 @@ local function SanitizeScales(scaleTable)
 	-- is confirmed to have no unified spell power stat, so SpellDamage/Healing now map
 	-- directly (see statNameToKey above) instead of folding into one that doesn't exist.
 
-	-- fold melee/ranged/spell hit, crit, haste into the unified ratings TopFit uses for everyone
-	-- HitRating/CritRating folds removed 2026-09-27 -- both destinations are gone now (see
-	-- statNameToKey above), so folding SpellHitRating/SpellCritRating into them would just
-	-- combine two values on their way to being dropped anyway. HasteRating's fold stays --
-	-- ITEM_MOD_HASTE_RATING_SHORT is still a live stat, unlike the other two.
-	CombineStat(scaleTable, "HasteRating", "SpellHasteRating")
+	-- HitRating/CritRating/HasteRating folds all removed 2026-09-27 -- all three
+	-- destinations are gone now (see statNameToKey above), so folding their Spell*
+	-- counterparts into them would just combine values on their way to being dropped.
 
 	-- turn "resist all" into individual resistances
 	RenameStat(scaleTable, "AllResist", "FireResist", true)

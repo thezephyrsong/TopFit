@@ -633,6 +633,15 @@ function TopFit:OnInitialize()
     -- would be wrong).
     _G["TOPFIT_CRIT_CHANCE_PHYSICAL"] = "Physical Critical Strike Chance"
     _G["TOPFIT_DODGE_CHANCE_ALL"] = "Dodge Chance"
+    -- Added 2026-09-27 (Dan: convert all remaining ratings to percentages except
+    -- weapon/defense skill). No confirmed or inferred item-tooltip pattern for any of
+    -- these three -- unlike hit/crit/dodge/parry/block, there is no established
+    -- "Equip: Increases your X by N%" precedent to extend for armor penetration,
+    -- resilience, or haste. Added so a weight CAN be assigned once real phrasing is
+    -- found/confirmed, not because any gear or talent has granted one of these yet.
+    _G["TOPFIT_ARMOR_PENETRATION_PERCENT"] = "Armor Penetration"
+    _G["TOPFIT_RESILIENCE_PERCENT"] = "Resilience"
+    _G["TOPFIT_HASTE_PERCENT"] = "Haste"
     -- Per-school flat spell damage -- CONFIRMED on real Forever gear 2026-09-27 (e.g. Filigreed
     -- Shadow Circlet). Tracked per school, unlike the generic hit/crit spell buckets above.
     _G["TOPFIT_ARCANE_DAMAGE_FLAT"] = "Arcane Damage"
@@ -654,13 +663,21 @@ function TopFit:OnInitialize()
             [5] = "ITEM_MOD_STRENGTH_SHORT",
         },
         ["Melee"] = {
-            [1] = "ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT",
+            -- ITEM_MOD_EXPERTISE_RATING_SHORT removed 2026-09-27 (Dan: convert ratings to
+            -- percentages) -- Expertise's real-world effect (reduce the chance your attacks are
+            -- dodged/parried) is already covered by TOPFIT_DODGE_PARRY_REDUCTION below, confirmed
+            -- from real gear ("Band of the Better Half": "Reduces chance to be Dodged or Parried
+            -- by 1.2%"). ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT replaced with
+            -- TOPFIT_ARMOR_PENETRATION_PERCENT -- stat key added, but NO item-tooltip pattern
+            -- added to procparser.lua, since there's no confirmed or even plausible-by-precedent
+            -- Forever phrasing to base one on (unlike parry/block/dodge, which could reasonably
+            -- extend the established "Increases your X chance by N%" family).
+            [1] = "TOPFIT_ARMOR_PENETRATION_PERCENT",
             [2] = "ITEM_MOD_ATTACK_POWER_SHORT",
-            [3] = "ITEM_MOD_EXPERTISE_RATING_SHORT",
-            [4] = "ITEM_MOD_FERAL_ATTACK_POWER_SHORT",
-            [5] = "TOPFIT_WEAPON_SPEED",
-            [6] = "TOPFIT_CRIT_CHANCE_MELEE",
-            [7] = "TOPFIT_DODGE_PARRY_REDUCTION",
+            [3] = "ITEM_MOD_FERAL_ATTACK_POWER_SHORT",
+            [4] = "TOPFIT_WEAPON_SPEED",
+            [5] = "TOPFIT_CRIT_CHANCE_MELEE",
+            [6] = "TOPFIT_DODGE_PARRY_REDUCTION",
         },
         ["Caster"] = {
             -- ITEM_MOD_SPELL_POWER_SHORT removed 2026-09-27 (Dan): redundant with
@@ -682,17 +699,23 @@ function TopFit:OnInitialize()
             [12] = "TOPFIT_SHADOW_DAMAGE_FLAT",
         },
         ["Defensive"] = {
-            [1] = "ITEM_MOD_BLOCK_RATING_SHORT",
-            [2] = "ITEM_MOD_BLOCK_VALUE_SHORT",
-            [3] = "ITEM_MOD_DEFENSE_SKILL_RATING_SHORT",
-            [4] = "ITEM_MOD_DODGE_RATING_SHORT",
-            [5] = "ITEM_MOD_PARRY_RATING_SHORT",
-            [6] = "ITEM_MOD_RESILIENCE_RATING_SHORT",
-            [7] = "RESISTANCE0_NAME",                   -- armor
-            [8] = "TOPFIT_DEFENSE_FLAT",
-            [9] = "TOPFIT_PARRY_CHANCE_ALL",
-            [10] = "TOPFIT_BLOCK_CHANCE_ALL",
-            [11] = "TOPFIT_DODGE_CHANCE_ALL",
+            -- ITEM_MOD_BLOCK_RATING_SHORT/DODGE_RATING_SHORT/PARRY_RATING_SHORT removed
+            -- 2026-09-27 (Dan: convert ratings to percentages) -- already replaced by
+            -- TOPFIT_BLOCK/DODGE/PARRY_CHANCE_ALL below. ITEM_MOD_DEFENSE_SKILL_RATING_SHORT
+            -- removed too, but per Dan's explicit exception for defense/weapon skill, it maps to
+            -- the already-flat TOPFIT_DEFENSE_FLAT below, NOT a new percent stat.
+            -- ITEM_MOD_BLOCK_VALUE_SHORT kept as-is -- it's a flat absolute amount (damage
+            -- reduced per block), not a chance/rating stat, so Dan's conversion request doesn't
+            -- apply to it. ITEM_MOD_RESILIENCE_RATING_SHORT replaced with
+            -- TOPFIT_RESILIENCE_PERCENT -- same caveat as armor penetration above: stat key
+            -- added, no item-tooltip pattern, no confirmed or plausible Forever phrasing yet.
+            [1] = "ITEM_MOD_BLOCK_VALUE_SHORT",
+            [2] = "RESISTANCE0_NAME",                   -- armor
+            [3] = "TOPFIT_DEFENSE_FLAT",
+            [4] = "TOPFIT_PARRY_CHANCE_ALL",
+            [5] = "TOPFIT_BLOCK_CHANCE_ALL",
+            [6] = "TOPFIT_DODGE_CHANCE_ALL",
+            [7] = "TOPFIT_RESILIENCE_PERCENT",
         },
         ["Hybrid"] = {
             -- ITEM_MOD_HIT_RATING_SHORT/ITEM_MOD_CRIT_RATING_SHORT removed 2026-09-27, same
@@ -701,8 +724,11 @@ function TopFit:OnInitialize()
             -- flat "Improves your chance to..." percent text (confirmed against real gear
             -- screenshots, procparser.lua), not WotLK-style rating stats. ITEM_MOD_HASTE_RATING_SHORT
             -- left alone -- no equivalent flat-percent haste pattern has been confirmed either way.
+            -- ITEM_MOD_HASTE_RATING_SHORT removed 2026-09-27 (Dan: convert ratings to
+            -- percentages), replaced with TOPFIT_HASTE_PERCENT -- same caveat as armor
+            -- penetration/resilience above: stat key added, no item-tooltip pattern yet.
             [1] = "ITEM_MOD_DAMAGE_PER_SECOND_SHORT",
-            [2] = "ITEM_MOD_HASTE_RATING_SHORT",
+            [2] = "TOPFIT_HASTE_PERCENT",
             [3] = "TOPFIT_HIT_CHANCE_ALL",
             [4] = "TOPFIT_CRIT_CHANCE_ALL",
             [5] = "TOPFIT_CRIT_CHANCE_PHYSICAL",

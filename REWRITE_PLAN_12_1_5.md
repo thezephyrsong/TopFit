@@ -1196,3 +1196,64 @@ the same staleness problem `gem_ids.lua` had before its own cleanup
 (section 6/checklist) -- likely WotLK-era enchant data that may not match
 Forever's actual enchants. Bigger, separate task; not done as part of this
 request.
+
+---
+
+## 14. Full rating-to-percentage sweep, per Dan's blanket instruction
+
+2026-09-27 (Dan): "all things that were ratings need to be converted to
+percentages except weapon/defense skill increase numbers." Swept every
+remaining `ITEM_MOD_*_RATING_SHORT`/`_VALUE_SHORT` stat in `core.lua`'s
+statList (sections 12-13 had already handled Spell Power and Hit/Crit):
+
+- **`ITEM_MOD_EXPERTISE_RATING_SHORT` removed, no new stat needed** --
+  Expertise's real effect (reduce chance your attacks are dodged/parried)
+  is already covered by the existing `TOPFIT_DODGE_PARRY_REDUCTION`,
+  confirmed from real gear ("Band of the Better Half").
+- **`ITEM_MOD_DEFENSE_SKILL_RATING_SHORT` removed**, mapped to the
+  already-existing flat `TOPFIT_DEFENSE_FLAT` -- per Dan's explicit
+  exception, this is NOT converted to a percentage, consistent with the
+  confirmed flat "Increased Defense +N" item/talent pattern.
+- **`ITEM_MOD_BLOCK_RATING_SHORT`/`DODGE_RATING_SHORT`/`PARRY_RATING_SHORT`
+  removed** -- already replaced by `TOPFIT_BLOCK/DODGE/PARRY_CHANCE_ALL`
+  from earlier sections, nothing new needed.
+- **`ITEM_MOD_BLOCK_VALUE_SHORT` kept as-is** -- it's a flat absolute
+  amount (damage reduced per block), not a chance/rating stat, so Dan's
+  "ratings" instruction doesn't apply to it.
+- **`ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT`/`RESILIENCE_RATING_SHORT`/
+  `HASTE_RATING_SHORT` removed, replaced with new stat keys
+  `TOPFIT_ARMOR_PENETRATION_PERCENT`/`TOPFIT_RESILIENCE_PERCENT`/
+  `TOPFIT_HASTE_PERCENT`** -- these three are different from everything
+  else converted so far: there is no confirmed, or even plausible-by-
+  precedent, Forever item-tooltip phrasing to extend `procparser.lua`'s
+  pattern table with. The stat keys exist now so a weight *can* be
+  assigned once real phrasing turns up, but nothing on real gear will
+  populate them yet. Flagged clearly in both the statList comment and the
+  display-name comment rather than left to look like a confirmed stat the
+  other converted ones are.
+
+**`import.lua` updated to match** -- removed
+`Haste`/`HasteRating`/`ExpertiseRating`/`ArmorPenetration`/
+`ResilienceRating`/`DefenseRating`/`DodgeRating`/`ParryRating`/
+`BlockRating` from `statNameToKey` (same unit-mismatch reasoning as
+Hit/Crit in section 13: Pawn's numbers are WotLK rating points, these
+destinations are now either flat/percent Forever stats or don't exist at
+all -- no valid conversion either way) and removed the now-pointless
+`Resilience`→`ResilienceRating` rename and `HasteRating` combine-fold.
+
+**One flagged exception worth highlighting**: `DefenseRating` is the one
+dropped stat with an actual known, usable conversion sitting in the
+codebase already -- `presets.lua` documents `DEFENSE_RATING_TO_SKILL =
+1.5` at level 60 (matching Forever's cap exactly), meaning a Pawn
+DefenseRating weight × 1.5 would be a correct DefenseSkill weight. Not
+implemented here: `RenameStat`/`CombineStat` only rename/combine keys,
+they don't scale values, and adding that machinery was out of scope for
+this pass. Documented clearly in `import.lua` as a real, specific,
+actionable improvement rather than lumped in with the others as "no valid
+conversion exists."
+
+All touched files re-verified with `luac5.1 -p` (reinstalled after a
+sandbox filesystem reset mid-session wiped it along with the working
+directory -- restored from the last synced `/mnt/user-data/outputs/
+TopFit_rewrite_wip.zip`, which is exactly why that zip gets kept in sync
+after every change rather than only at the end).
