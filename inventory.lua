@@ -392,7 +392,12 @@ function TopFit:CalculateItemScore(itemLink)
     TopFit.scoresCache[itemLink] = TopFit.scoresCache[itemLink] or {}
 
     for setCode, setTable in pairs(TopFit.db.profile.sets) do
-        local set = setTable.weights or {}
+        local rawSet = setTable.weights or {}
+        -- adds any stat-conversion talent credit (e.g. Hunter/Enhancement Shaman's Intellect ->
+        -- Attack Power) on top of the set's own saved weights -- see GetEffectiveWeights' own
+        -- comment (calculation.lua) for what this does and why. Returns rawSet itself, unchanged,
+        -- when there's nothing to add, so this is cheap for sets/classes with no conversions.
+        local set = TopFit:GetEffectiveWeights(rawSet)
         local caps = setTable.caps
         
         local itemScore = 0

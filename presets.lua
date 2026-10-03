@@ -33,6 +33,55 @@ function TopFit:GetPresets()
 		-- other class's preset in this file below is equally still WotLK-rating-based
 		-- and has NOT been rewritten for Forever's stat model yet -- flagged in
 		-- REWRITE_PLAN_12_1_5.md as separate outstanding work, not silently ignored.
+                        -- First real Forever EP preset, 2026-09-27 -- everything below this
+                        -- comment in this file is still the old WotLK/Triumvirate rating-based
+                        -- data flagged above; this one entry is the start of replacing it with
+                        -- real Forever numbers, not a continuation of the old pattern.
+                        ["HUNTER"] = {
+                                [1] = {
+                                        name = "Hunter EP",
+                                        -- Source: a live SixtyUpgrades export from Dan's own Forever Hunter
+                                        -- "Zae" (sixtyupgrades.com/forever/... links present -- confirmed
+                                        -- Forever-sourced, not a stand-in from another game mode), "points"
+                                        -- block named "Hunter EP". Values copied directly, not adjusted:
+                                        --   attackPower 1, rangedAttackPower 1, agility 2.79, crit 28.57,
+                                        --   hit 21.98, rangedDps 14, rangedSpeed 100, intellect 1
+                                        -- Two mapping decisions made converting SixtyUpgrades' field names to
+                                        -- TopFit's stat keys, flagged here rather than silently assumed:
+                                        --   "crit" -> TOPFIT_CRIT_CHANCE_PHYSICAL, not TOPFIT_CRIT_CHANCE_ALL,
+                                        --     matching the same judgment call already made for the Lethal
+                                        --     Attacks talent entry in talentbonuses.lua (a Hunter's crit stat
+                                        --     is ranged+melee, not spells) -- not independently confirmed this
+                                        --     is what SixtyUpgrades' own "crit" field actually represents.
+                                        --   "rangedSpeed" -> TOPFIT_WEAPON_SPEED at face value (100). This
+                                        --     number is far larger than every other value here (which are all
+                                        --     single or low double digits) -- possibly a different internal
+                                        --     scale/unit convention on SixtyUpgrades' side rather than a
+                                        --     directly comparable EP weight. Used as-is since there's no basis
+                                        --     to rescale it to something else, but worth treating with more
+                                        --     suspicion than the rest of this preset until checked.
+                                        -- "intellect" kept at its real value (1) rather than dropped -- now
+                                        -- meaningfully non-zero for a reason beyond mana, via Careful Aim's
+                                        -- Intellect->Attack Power conversion (see talentbonuses.lua and
+                                        -- calculation.lua's GetEffectiveWeights).
+                                        -- No caps included -- Forever's actual hit/crit cap target
+                                        -- percentages (how much hit/crit is "enough" vs. a level-appropriate
+                                        -- target) haven't been confirmed for this client, unlike the
+                                        -- meleeCap/spellCap rating-based constants computed at the top of
+                                        -- this file for the old WotLK model. Add caps once that's known
+                                        -- rather than guess a target percentage here.
+                                        weights = {
+                                                ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
+                                                ["ITEM_MOD_RANGED_ATTACK_POWER_SHORT"] = 1,
+                                                ["ITEM_MOD_AGILITY_SHORT"] = 2.79,
+                                                ["TOPFIT_CRIT_CHANCE_PHYSICAL"] = 28.57,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 21.98,
+                                                ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 14,
+                                                ["TOPFIT_WEAPON_SPEED"] = 100,
+                                                ["ITEM_MOD_INTELLECT_SHORT"] = 1,
+                                        },
+                                },
+                        },
                         ["DRUID"] = {
                                 [1] = {
                                         name = "Feral Tank",

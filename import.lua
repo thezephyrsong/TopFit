@@ -59,6 +59,7 @@ local statNameToKey = {
 	Dps               = 'ITEM_MOD_DAMAGE_PER_SECOND_SHORT',
 	Ap                = 'ITEM_MOD_ATTACK_POWER_SHORT', -- Pawn
 	AttackPower       = 'ITEM_MOD_ATTACK_POWER_SHORT', -- AMR
+	Rap               = 'ITEM_MOD_RANGED_ATTACK_POWER_SHORT', -- Pawn -- added 2026-09-27 alongside core.lua's new stat
 	-- SpellPower removed 2026-09-27, alongside removing ITEM_MOD_SPELL_POWER_SHORT from
 	-- core.lua's statList (see below): Forever confirmed to not itemize a unified spell
 	-- power stat at all, so Pawn's SpellDamage/Healing now map directly to TopFit's own

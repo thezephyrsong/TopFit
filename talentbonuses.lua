@@ -224,3 +224,83 @@ TopFit.talentRatingBonuses["WARLOCK"] = {
 -- so there is nothing to gather or add for them, not just "not yet confirmed." If any of these
 -- names show up again in a future data source, treat that source with suspicion rather than
 -- assuming Forever's class roster changed.
+
+-- ============================================================================
+-- Stat-conversion talents -- "X% of stat A becomes stat B"
+-- ============================================================================
+-- Different mechanic from TopFit.talentRatingBonuses above: these don't grant a flat amount of
+-- a stat, they make one of the character's OWN stats (usually Intellect or Spirit) partly count
+-- as a different stat (usually Attack Power, or spell damage/healing) for classes that wouldn't
+-- otherwise value it -- e.g. Hunter/Enhancement Shaman converting Intellect into Attack Power.
+-- Without this, TopFit would correctly score gear's own AP/spell-damage stats, but silently
+-- undervalue Intellect/Spirit on a character with one of these talents taken, since nothing
+-- credits the EXTRA value those stats carry once the conversion applies.
+--
+-- Source: same full class-data pass as the rest of this file (client-data-sourced via
+-- wago.tools, 2026-09-27) -- re-extracted specifically to get the exact per-rank progression
+-- rather than estimate it, since not all of these scale evenly per rank (see Spiritual Guidance
+-- below). Confirm against "/topfit talentdebug" the same as everything else in this file.
+--
+-- Entry fields:
+--   name            talent name, matched the same way as talentRatingBonuses above
+--   spellID         optional, same semantics as talentRatingBonuses above (none confirmed yet)
+--   fromStat        the stat that partly becomes toStat (e.g. ITEM_MOD_INTELLECT_SHORT)
+--   toStat          the stat it becomes (e.g. ITEM_MOD_ATTACK_POWER_SHORT)
+--   percentPerRank  percent of fromStat converted, PER RANK -- use when the talent scales evenly
+--                    (confirm this is actually true per rank before using it; several of these
+--                    LOOK evenly-scaled from rank 1 alone but aren't once every rank is checked)
+--   ranks           {[rank] = totalPercent, ...} -- use instead of percentPerRank when the talent
+--                    does NOT scale evenly per rank (confirmed by checking every rank's tooltip
+--                    text individually, not assumed from the formula implied by rank 1)
+--
+-- Consumed by TopFit:GetEffectiveWeights (calculation.lua), which resolves these against live
+-- talent ranks once per calculation pass and adds the converted value to the source stat's
+-- effective weight -- see that function's own comment for how caps interact with this.
+
+TopFit.talentStatConversions = {}
+
+TopFit.talentStatConversions["HUNTER"] = {
+	-- Careful Aim (Marksmanship): confirmed evenly-scaled 20%/rank, 5 ranks (20,40,60,80,100%
+	-- checked per rank, not assumed from rank 1 alone).
+	{ name = "Careful Aim", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "ITEM_MOD_ATTACK_POWER_SHORT", percentPerRank = 20 },
+}
+
+TopFit.talentStatConversions["SHAMAN"] = {
+	-- Mental Dexterity (Enhancement): displayed per-rank text reads 33%/67%/100% (whole-number
+	-- rounding in the tooltip) -- true value is almost certainly 100/3 = 33.33.../rank, used here
+	-- rather than the rounded display values so 3 ranks sums to exactly 100%, not 99%.
+	{ name = "Mental Dexterity", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "ITEM_MOD_ATTACK_POWER_SHORT", percentPerRank = 100/3 },
+	-- Mental Quickness (Enhancement): confirmed evenly-scaled 15%/rank, 2 ranks (15%, 30%),
+	-- applies to BOTH spell damage and spell healing simultaneously -- two entries, same source.
+	{ name = "Mental Quickness", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "TOPFIT_SPELL_DAMAGE_FLAT", percentPerRank = 15 },
+	{ name = "Mental Quickness", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "TOPFIT_SPELL_HEALING_FLAT", percentPerRank = 15 },
+}
+
+TopFit.talentStatConversions["PALADIN"] = {
+	-- Champion of the Light (Retribution): same 33/66/100% rounded-display pattern as Mental
+	-- Dexterity above -- true value 100/3 per rank. Applies to both spell damage and healing.
+	{ name = "Champion of the Light", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "TOPFIT_SPELL_DAMAGE_FLAT", percentPerRank = 100/3 },
+	{ name = "Champion of the Light", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "TOPFIT_SPELL_HEALING_FLAT", percentPerRank = 100/3 },
+}
+
+TopFit.talentStatConversions["PRIEST"] = {
+	-- Spiritual Guidance (Holy), healing component: confirmed evenly-scaled 5%/rank, 5 ranks
+	-- (5,10,15,20,25% checked per rank).
+	{ name = "Spiritual Guidance", fromStat = "ITEM_MOD_SPIRIT_SHORT", toStat = "TOPFIT_SPELL_HEALING_FLAT", percentPerRank = 5 },
+	-- Spiritual Guidance, damage component: NOT evenly scaled -- checked every rank individually
+	-- (1%, 3%, 5%, 6%, 8%), a genuinely non-uniform progression, not a rounding artifact like
+	-- Mental Dexterity/Champion of the Light above. Using percentPerRank here would be wrong at
+	-- every rank except rank 5 (1x5=5, not 1; nor does any single multiplier produce 1,3,5,6,8).
+	{ name = "Spiritual Guidance", fromStat = "ITEM_MOD_SPIRIT_SHORT", toStat = "TOPFIT_SPELL_DAMAGE_FLAT",
+	  ranks = { [1] = 1, [2] = 3, [3] = 5, [4] = 6, [5] = 8 } },
+}
+
+-- Mage's Arcane Resilience (Intellect -> Armor, 25%/rank at rank 2 max per the same data pass)
+-- and Priest's Mental Strength (straight +3%/rank TOTAL Intellect, not a cross-stat conversion)
+-- were both found during this same pass but deliberately NOT added: Arcane Resilience converts
+-- into Armor, which none of this addon's scoring treats as an EP-relevant stat the way AP/spell
+-- damage are (armor matters for mitigation, not DPS/HPS throughput, and isn't itemized as a
+-- primary stat casters weight); Mental Strength is a different mechanic entirely (a stat
+-- multiplying ITSELF, not converting into a different one) and doesn't fit this table's
+-- fromStat/toStat shape at all. Noted here so neither gets "rediscovered" and force-fit in later
+-- without this context.

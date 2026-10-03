@@ -1257,3 +1257,128 @@ sandbox filesystem reset mid-session wiped it along with the working
 directory -- restored from the last synced `/mnt/user-data/outputs/
 TopFit_rewrite_wip.zip`, which is exactly why that zip gets kept in sync
 after every change rather than only at the end).
+
+---
+
+## 15. Stat-conversion talents (Int->AP etc.), and the first real EP preset
+
+2026-09-27 (Dan): "need to start working on EPs now and also recognise when
+characters have talents that make stats like Int = AP like for hunter and
+shaman." Two substantial pieces of new work, not bug fixes.
+
+### Stat-conversion talents
+
+Different mechanic from everything in `talentbonuses.lua` so far: these
+talents don't grant a flat amount of a stat, they make one stat partly
+count as a *different* stat (Hunter/Enhancement Shaman's Intellect
+becoming Attack Power is the example Dan gave). These were specifically
+excluded from the earlier 9-class talent sweep (section 5/13) as "too
+complex for this table's model" -- this is that complexity finally being
+addressed, not a new discovery.
+
+Re-extracted the exact per-rank wording for every one from the original
+class-data pass (`classdata.zip`, still in `/mnt/user-data/uploads/` after
+the sandbox reset -- see below) rather than trust my own prior summary
+from memory. Found something important doing this properly: **not every
+one of these scales evenly per rank**. Shaman's Mental Dexterity and
+Paladin's Champion of the Light display as 33/67/100% and 33/66/100%
+respectively -- rounding artifacts of a true 100/3-per-rank value, fine to
+treat as `percentPerRank`. But Priest's Spiritual Guidance's damage
+component is 1/3/5/6/8% across its 5 ranks -- a genuinely non-uniform
+progression, not a rounding artifact. Using a single `percentPerRank`
+multiplier for that one would have been wrong at every rank except one.
+
+Added `TopFit.talentStatConversions` to `talentbonuses.lua` (new section,
+separate table from `talentRatingBonuses`) supporting both a uniform
+`percentPerRank` and an explicit `ranks = {[rank] = percent}` table for
+non-uniform cases. Five real entries: Hunter's Careful Aim (Int->AP),
+Shaman's Mental Dexterity (Int->AP) and Mental Quickness (Int->spell
+damage AND healing, two entries), Paladin's Champion of the Light (same
+shape as Mental Quickness), Priest's Spiritual Guidance (Spirit->healing,
+evenly scaled; Spirit->damage, the non-uniform one). Also found and
+deliberately excluded, with reasons on record: Mage's Arcane Resilience
+(Int->Armor -- Armor isn't scored as an EP-relevant stat anywhere in this
+addon) and Priest's Mental Strength (a stat multiplying itself, not
+converting into a different one -- doesn't fit this table's shape at all).
+
+New consuming function `TopFit:GetEffectiveWeights(weights)`
+(`calculation.lua`, next to `GetTalentRatingBonuses`): given a set's saved
+weights, resolves any active conversion talents against live ranks and
+returns an effective weights table with the converted credit added to the
+source stat -- e.g. a Hunter with Careful Aim at rank 5 and an Attack
+Power weight of 1.0 gets an effective Intellect weight of +1.0 (100% of
+the AP weight), even if Intellect itself was never explicitly weighted.
+Returns the ORIGINAL table, unmodified and unallocated, whenever there's
+nothing to add (the common case for the 5 of 9 classes with zero
+conversion entries) -- cheap fast path, and never mutates the caller's
+real saved weights even when there is something to add.
+
+Wired into `inventory.lua`'s `CalculateItemScore` -- the actual per-item,
+per-set scoring function (found by tracing from `GetEffectiveCapValue`'s
+only real caller forward, through `pairs(set)`, not a function named
+anything with "score" in `calculation.lua` where it might be expected).
+Both the capped and uncapped score loops, and the gem-potential scoring
+call, now go through the effective weights automatically since they all
+already shared the same local `set` variable.
+
+Tested against four scenarios in a Lua mock before shipping: an
+unweighted source stat still gets correct derived credit; a source stat
+that's *also* separately weighted for its own reasons gets the two values
+added, not replaced; the fast path correctly returns the same table
+object (no allocation) when a class has no conversions or the toStat
+isn't weighted; and the non-uniform `ranks` table resolves correctly
+rather than through a wrong linear formula.
+
+Caps interaction is a deliberate simplification, flagged in
+`GetEffectiveWeights`'s own comment: a conversion's value is gated by
+whether the FROM stat is capped, not the TO stat, since that's what falls
+out of adding the credit to the from-stat's weight before the existing
+cap check runs. Not confirmed to be the most correct behavior in every
+case -- revisit if it produces surprising results in testing.
+
+### First real EP preset
+
+Added a Hunter preset to `presets.lua` using the one confirmed
+Forever-sourced EP data point available: Dan's own live SixtyUpgrades
+export (Zae, `sixtyupgrades.com/forever/...` links present). Values
+copied directly: `attackPower 1, rangedAttackPower 1, agility 2.79,
+crit 28.57, hit 21.98, rangedDps 14, rangedSpeed 100, intellect 1`.
+
+Two mapping judgment calls flagged in the preset's own comment rather
+than silently assumed: `crit` mapped to `TOPFIT_CRIT_CHANCE_PHYSICAL`
+(matching the same call already made for the Lethal Attacks talent
+entry, not independently re-confirmed here), and `rangedSpeed`'s value
+of 100 kept at face value despite being an order of magnitude larger
+than every other number in the same preset -- worth treating with more
+suspicion than the rest until checked, possibly a different internal
+scale on SixtyUpgrades' side. No caps included at all: Forever's actual
+hit/crit cap target percentages aren't confirmed for this client, and
+guessing a target number would be worse than leaving it empty.
+
+Needed one new stat (`ITEM_MOD_RANGED_ATTACK_POWER_SHORT`, a real
+Blizzard itemMod global not previously registered anywhere in this
+addon) added to `core.lua`'s Melee category and `import.lua`'s Pawn
+mapping table (`Rap`).
+
+**Found and fixed a real bug building this**: `options.lua`'s
+`AddSet(preset)` iterated `preset.caps` with no nil-guard -- harmless
+until now because every existing preset happened to always include a
+(possibly empty) caps table, but the new Hunter preset is deliberately
+caps-less, and applying it would have thrown immediately. Fixed with a
+nil-guard rather than just adding an empty caps table to the preset,
+since any future caps-less preset would hit the identical crash
+otherwise.
+
+Remaining 8 classes still need the same treatment -- gather a
+SixtyUpgrades "points" export the same way Dan's Hunter one was obtained,
+per spec, and they can go in the same way.
+
+All touched files re-verified with `luac5.1 -p`. `luac5.1` and the
+working directory had to be restored again this session after another
+sandbox filesystem reset -- same recovery path as before (reinstall the
+package, `unzip` the last-synced `/mnt/user-data/outputs/
+TopFit_rewrite_wip.zip`), and the original `classdata.zip`/`warrior`
+uploads were confirmed to still be available under `/mnt/user-data/
+uploads/` even though `/home/claude` itself was wiped -- worth knowing
+uploads persist independently of the working directory if this happens
+again.

@@ -131,12 +131,19 @@ function TopFit:AddSet(preset)
         for key, value in pairs(preset.weights) do
             weights[key] = value
         end
-        for key, capList in pairs(preset.caps) do
-            caps[key] = {}
-            for i, capEntry in ipairs(capList) do
-                caps[key][i] = {}
-                for key2, value2 in pairs(capEntry) do
-                    caps[key][i][key2] = value2
+        -- 2026-09-27: guarded against preset.caps being nil -- it used to be accessed
+        -- unconditionally, which would throw ("bad argument #1 to 'pairs'") for any preset with
+        -- no caps at all. The new Hunter EP preset (below) is deliberately caps-less (Forever's
+        -- real hit/crit cap target percentages aren't confirmed yet), which is exactly the case
+        -- this was never tested against until now.
+        if preset.caps then
+            for key, capList in pairs(preset.caps) do
+                caps[key] = {}
+                for i, capEntry in ipairs(capList) do
+                    caps[key][i] = {}
+                    for key2, value2 in pairs(capEntry) do
+                        caps[key][i][key2] = value2
+                    end
                 end
             end
         end

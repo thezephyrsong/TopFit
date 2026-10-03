@@ -674,10 +674,14 @@ function TopFit:OnInitialize()
             -- extend the established "Increases your X chance by N%" family).
             [1] = "TOPFIT_ARMOR_PENETRATION_PERCENT",
             [2] = "ITEM_MOD_ATTACK_POWER_SHORT",
-            [3] = "ITEM_MOD_FERAL_ATTACK_POWER_SHORT",
-            [4] = "TOPFIT_WEAPON_SPEED",
-            [5] = "TOPFIT_CRIT_CHANCE_MELEE",
-            [6] = "TOPFIT_DODGE_PARRY_REDUCTION",
+            -- ITEM_MOD_RANGED_ATTACK_POWER_SHORT added 2026-09-27, needed by the real Hunter EP
+            -- weight set below (presets.lua) -- a real Blizzard itemMod global, no custom display
+            -- name needed (Blizzard's own client localization already provides one).
+            [3] = "ITEM_MOD_RANGED_ATTACK_POWER_SHORT",
+            [4] = "ITEM_MOD_FERAL_ATTACK_POWER_SHORT",
+            [5] = "TOPFIT_WEAPON_SPEED",
+            [6] = "TOPFIT_CRIT_CHANCE_MELEE",
+            [7] = "TOPFIT_DODGE_PARRY_REDUCTION",
         },
         ["Caster"] = {
             -- ITEM_MOD_SPELL_POWER_SHORT removed 2026-09-27 (Dan): redundant with

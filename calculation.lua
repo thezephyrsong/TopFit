@@ -106,6 +106,67 @@ function TopFit:CalculateRecommendations()
 	TopFit:InitSemiRecursiveCalculations()
 end
 
+-- Given a set's own weights table, returns an EFFECTIVE weights table that also credits
+-- stat-conversion talents configured in talentbonuses.lua's TopFit.talentStatConversions (e.g.
+-- Hunter/Enhancement Shaman's Intellect->Attack Power talents). Returns the ORIGINAL table
+-- unmodified -- never a copy -- whenever there's nothing to add, so this is cheap for the (most
+-- common) case of a class/weight-set combination with no active conversions to apply; only
+-- allocates a new table when it actually has something to add to it, and never mutates the
+-- caller's real saved weights table even then.
+--
+-- Caps: deliberately NOT caps-aware on its own -- it just adds to the FROM stat's effective
+-- weight, and the caller (inventory.lua's CalculateItemScore) applies its own existing cap check
+-- against that same FROM stat afterward, same as it already does for every other weighted stat.
+-- This means a conversion's value is gated by whether the FROM stat (e.g. Intellect) itself is
+-- capped, not whether the TO stat (e.g. Attack Power) is -- a deliberate simplification for this
+-- first implementation, not confirmed to be the most correct behavior in every case.
+--
+-- Performance note: resolves live talent ranks via TopFit:GetRetailTalentRanks() internally,
+-- same as GetTalentRatingBonuses below, but unlike that function (called once per calculation
+-- pass) this is called once per set PER ITEM from CalculateItemScore, so it does more live API
+-- traversal in total. Not optimized further here since most classes (everything except Hunter/
+-- Shaman/Paladin/Priest, which are the only ones with any talentStatConversions entries at all)
+-- hit the free fast-path below and never reach that call. Worth revisiting if scoring a large
+-- bag/bank on one of those four classes turns out to be slow in practice.
+function TopFit:GetEffectiveWeights(weights)
+	local playerClass = select(2, UnitClass("player"))
+	local entries = TopFit.talentStatConversions and TopFit.talentStatConversions[playerClass]
+	if not entries or #entries == 0 then
+		return weights
+	end
+	if not (C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_Traits) then
+		return weights
+	end
+
+	local ranksBySpellID, ranksByName = TopFit:GetRetailTalentRanks()
+	if not next(ranksBySpellID) and not next(ranksByName) then
+		return weights
+	end
+
+	local effective = nil -- allocated lazily, only once we know there's something to add
+	for _, entry in ipairs(entries) do
+		local rank = (entry.spellID and ranksBySpellID[entry.spellID]) or (entry.name and ranksByName[entry.name]) or 0
+		if rank > 0 then
+			local percent
+			if entry.ranks then
+				percent = entry.ranks[rank]
+			elseif entry.percentPerRank then
+				percent = entry.percentPerRank * rank
+			end
+			local toWeight = percent and weights[entry.toStat]
+			if percent and percent > 0 and toWeight and toWeight ~= 0 then
+				if not effective then
+					effective = {}
+					for stat, value in pairs(weights) do effective[stat] = value end
+				end
+				effective[entry.fromStat] = (effective[entry.fromStat] or 0) + (percent / 100) * toWeight
+			end
+		end
+	end
+
+	return effective or weights
+end
+
 -- Sums the percent stat bonuses granted by talents configured in talentbonuses.lua.
 -- Forever's talents are read via TopFit:GetRetailTalentRanks() (core.lua) -- the modern
 -- C_ClassTalents/C_Traits node system, addressed by spellID/name, not (tab, index). See
