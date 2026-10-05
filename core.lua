@@ -855,7 +855,15 @@ function TopFit:OnInitialize()
     -- container for plugin information and frames
     TopFit.plugins = {}
     
-    -- Dynamically anchors the button to the right of the last VISIBLE sidebar tab
+    -- Dynamically anchors the button to the right of the last VISIBLE sidebar tab.
+    -- 2026-09-28: was hardcoded to only check PaperDollSidebarTab1-3, which overlapped
+    -- PaperDollSidebarTab4 ("Pet") on this client -- that tab simply wasn't accounted for, not
+    -- a positioning bug in the anchor math itself. Confirmed via an in-game Frame Stack dump
+    -- showing TopFit_toggleProgressFrameButton sitting directly on top of PaperDollSidebarTab4.
+    -- Rewritten to probe however many tabs actually exist (1..10, generous upper bound) instead
+    -- of a hardcoded count, so this can't silently break again if a 5th/6th tab is ever added --
+    -- exactly the kind of "no compat layer, but also don't hardcode a number you had to guess"
+    -- fix this project has preferred elsewhere.
     local function UpdateTopFitButtonAnchor()
         local button = TopFit.toggleProgressFrameButton
         if not button then return end
@@ -864,12 +872,11 @@ function TopFit:OnInitialize()
 
         -- Find the highest-numbered sidebar tab that is currently visible
         local anchorTab = nil
-        if PaperDollSidebarTab3 and PaperDollSidebarTab3:IsShown() then
-            anchorTab = PaperDollSidebarTab3
-        elseif PaperDollSidebarTab2 and PaperDollSidebarTab2:IsShown() then
-            anchorTab = PaperDollSidebarTab2
-        elseif PaperDollSidebarTab1 and PaperDollSidebarTab1:IsShown() then
-            anchorTab = PaperDollSidebarTab1
+        for i = 1, 10 do
+            local tab = _G["PaperDollSidebarTab" .. i]
+            if tab and tab:IsShown() then
+                anchorTab = tab
+            end
         end
 
         if anchorTab then

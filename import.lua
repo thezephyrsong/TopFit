@@ -280,12 +280,16 @@ function TopFit:GenerateExportString(pawnFormat)
 	return (' ( TopFit: v1: "%s": %s ) '):format(set.name, stats or '')
 end
 
+-- EditBox (capital E) confirmed 2026-09-27 via an in-game crash: this client's StaticPopup
+-- frames use PascalCase field names (EditBox, not the old lowercase editBox this codebase used
+-- to reference), part of the same UI modernization as the Settings namespace / BackdropTemplate
+-- requirement found elsewhere in this project.
 StaticPopupDialogs['TOPFIT_IMPORT'] = {
 	text = 'Paste a Pawn, AskMrRobot, or TopFit string below to import it as a new set:',
 	button1 = 'Import',
 	button2 = CANCEL,
 	OnAccept = function(self)
-		local text = self.editBox:GetText()
+		local text = self.EditBox:GetText()
 		if text and text:trim() ~= '' then
 			TopFit:ImportString(text)
 		end
@@ -307,9 +311,9 @@ StaticPopupDialogs['TOPFIT_EXPORT'] = {
 	text = '%s',
 	button1 = CLOSE,
 	OnShow = function(self, data)
-		self.editBox:SetText(data or '')
-		self.editBox:HighlightText()
-		self.editBox:SetFocus()
+		self.EditBox:SetText(data or '')
+		self.EditBox:HighlightText()
+		self.EditBox:SetFocus()
 	end,
 	EditBoxOnEnterPressed = function(self) self:GetParent():Hide() end,
 	EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
