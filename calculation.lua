@@ -453,7 +453,7 @@ function TopFit:ReduceItemList()
 					local betterItemExists = 0
 					local numBetterItemsNeeded = 1
 					
-					if (slotID == 17) or (slotID == 12) or (slotID == 14) then
+					if (slotID == 17) or (slotID == 12) or (slotID == 14) or (slotID == 13) or (slotID == 11) or (slotID == 9) then
 						numBetterItemsNeeded = 2
 					end
 					
@@ -921,17 +921,38 @@ function TopFit:IsOnehandedWeapon(item)
 	end
 
 	if equipSlot == "INVTYPE_2HWEAPON" or equipSlot == "INVTYPE_RANGED" or equipSlot == "INVTYPE_RANGEDRIGHT" then
-		if TopFit.playerCanTitansGrip and equipSlot == "INVTYPE_2HWEAPON" then
-			if itemSubType then
-				local sub = itemSubType:lower()
-				if sub:find("polearm") or sub:find("staff") or sub:find("staves") or sub:find("fishing") then
+			if equipSlot == "INVTYPE_2HWEAPON" or equipSlot == "INVTYPE_RANGED" or equipSlot == "INVTYPE_RANGEDRIGHT" then
+				-- New class-specific exclusions for specialized ranged weapon types
+				local class = select(2, UnitClass("player"))
+				local isRanged = equipSlot == "INVTYPE_RANGED"
+				
+				-- Apply class restrictions for ranged weapons
+				if isRanged then
+					local isExcluded = false
+					-- Druid exclusion (Idol)
+					if (class == "DRUID") then isExcluded = true end
+					-- Shaman exclusion (Totem)
+					if (class == "SHAMAN") then isExcluded = true end
+					-- Paladin exclusion (Library)
+					if (class == "PALADIN") then isExcluded = true end
+					
+					if isExcluded then
+						return false
+					end
+				end
+
+				if TopFit.playerCanTitansGrip and equipSlot == "INVTYPE_2HWEAPON" then
+					if itemSubType then
+						local sub = itemSubType:lower()
+						if sub:find("polearm") or sub:find("staff") or sub:find("staves") or sub:find("fishing") then
+							return false
+						end
+					end
+					return true
+				else
 					return false
 				end
 			end
-			return true
-		else
-			return false
-		end
 	end
 
 	return true
