@@ -79,11 +79,14 @@ function TopFit:createOptions()
                 local info = UIDropDownMenu_CreateInfo()
                 info.text = setTable.name
                 info.value = setCode
-                info.func = function()
-                    UIDropDownMenu_SetSelectedValue(autoUpdateSet, this.value)
-                    autoUpdateSetText:SetText(TopFit.db.profile.sets[this.value].name)
-                    TopFit.db.profile.defaultUpdateSet = this.value
-                end
+info.func = function(self)
+    if self and self.value then
+        local selectedValue = self.value
+        UIDropDownMenu_SetSelectedValue(autoUpdateSet, selectedValue)
+        autoUpdateSetText:SetText(TopFit.db.profile.sets[selectedValue].name)
+        TopFit.db.profile.defaultUpdateSet = selectedValue
+    end
+end
                 UIDropDownMenu_AddButton(info)
             end
         end)
