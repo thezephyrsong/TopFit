@@ -854,105 +854,70 @@ function TopFit:OnInitialize()
     
     -- container for plugin information and frames
     TopFit.plugins = {}
-    
-    -- Dynamically anchors the button to the right of the last VISIBLE sidebar tab.
-    -- 2026-09-28: was hardcoded to only check PaperDollSidebarTab1-3, which overlapped
-    -- PaperDollSidebarTab4 ("Pet") on this client -- that tab simply wasn't accounted for, not
-    -- a positioning bug in the anchor math itself. Confirmed via an in-game Frame Stack dump
-    -- showing TopFit_toggleProgressFrameButton sitting directly on top of PaperDollSidebarTab4.
-    -- Rewritten to probe however many tabs actually exist (1..10, generous upper bound) instead
-    -- of a hardcoded count, so this can't silently break again if a 5th/6th tab is ever added --
-    -- exactly the kind of "no compat layer, but also don't hardcode a number you had to guess"
-    -- fix this project has preferred elsewhere.
-    local function UpdateTopFitButtonAnchor()
-        local button = TopFit.toggleProgressFrameButton
-        if not button then return end
 
-        button:ClearAllPoints()
+    -- 2026-09-28: replaced the floating PaperDollSidebarTab-anchored button (kept overlapping
+    -- native tabs whenever Blizzard's own tab count/layout changed -- see git history) with a
+    -- real CharacterFrame mode tab, matching the native "Statistics" tab. Verified against the
+    -- actual Camelot CharacterFrame.lua/.xml source (Gethe/wow-ui-source, "forever" branch) before
+    -- building this, not guessed -- see REWRITE_PLAN_12_1_5.md section 7 for the full research.
+    --
+    -- Key facts that make this safe:
+    --   - CharacterFrameModeTabs.Tabs is a plain Lua array (populated from XML's parentArray for
+    --     the 6 built-in tabs); UpdateTabLayout() iterates it generically and stacks whatever is
+    --     currently shown, so appending a 7th entry and calling UpdateTabLayout() positions it
+    --     below Statistics with no need to touch the container's nominal size.
+    --   - CharacterFrameMixin:OnModeTabClicked(tab) already has a dedicated branch for a tab with
+    --     no tab.frameName set: it just visually checks/unchecks tabs and returns, WITHOUT calling
+    --     Blizzard's internal ToggleCharacter(frameName, true) dispatcher at all. Leaving our tab's
+    --     frameName unset routes every click through that safe branch -- nothing here depends on
+    --     knowing how ToggleCharacter itself works, and nothing is hooked destructively into it.
+    --   - The actual toggle behavior is wired via hooksecurefunc on OnModeTabClicked itself (a
+    --     function read directly from Blizzard's own source, not assumed), checking whether our
+    --     tab was the one clicked -- not a script hook on the button, which would have meant
+    --     guessing how SidePanelTabButtonMixin's custom click handler plumbing works internally.
+    function TopFit:SetupCharacterModeTab()
+        if TopFit.characterModeTab then return end
+        if not CharacterFrame or not CharacterFrame.ModeTabs or not CharacterFrame.ModeTabs.Tabs then return end
 
-        -- Find the highest-numbered sidebar tab that is currently visible
-        local anchorTab = nil
-        for i = 1, 10 do
-            local tab = _G["PaperDollSidebarTab" .. i]
-            if tab and tab:IsShown() then
-                anchorTab = tab
-            end
+        local tab = CreateFrame("Frame", "TopFit_CharacterModeTab", CharacterFrame.ModeTabs, "CharacterFrameModeSideTabTemplate")
+        TopFit.characterModeTab = tab
+        tab:SetID(#CharacterFrame.ModeTabs.Tabs + 1)
+        -- frameName deliberately left nil -- see the big comment above for why
+        tinsert(CharacterFrame.ModeTabs.Tabs, tab)
+
+        if tab.Icon then
+            tab.Icon:SetTexture("Interface\\Icons\\Achievement_BG_trueAVshutout")
         end
 
-        if anchorTab then
-            button:SetPoint("LEFT", anchorTab, "RIGHT", 4, 0)
-            button:SetSize(anchorTab:GetSize())
-        else
-            button:SetPoint("TOPRIGHT", PaperDollFrame, "TOPRIGHT", -40, -40)
-            button:SetSize(30, 30)
-        end
-    end
+        -- Not using the template's tooltipText KeyValue mechanism (the 6 built-in tabs set it to a
+        -- FrameXML global-string-table KEY, e.g. CHARACTER_FRAME_TAB_STATISTICS -- TopFit has no
+        -- such registered global, and it wasn't confirmed whether literal text works there too).
+        -- A plain OnEnter/OnLeave avoids relying on that mechanism at all.
+        tab:HookScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText("TopFit Gear Optimizer", 1, 1, 1)
+            GameTooltip:AddLine("Click to open calculation settings and recommendations.", 0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end)
+        tab:HookScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
 
-    -- Attach TopFit button to PaperDollSidebarTabs
-    hooksecurefunc("ToggleCharacter", function(...)
-        if not TopFit.toggleProgressFrameButton then
-            local parent = PaperDollSidebarTabs or PaperDollFrame
-            local button = CreateFrame("Button", "TopFit_toggleProgressFrameButton", parent)
-            TopFit.toggleProgressFrameButton = button
-
-            -- Icon Texture (Golden Sword)
-            local icon = button:CreateTexture(nil, "ARTWORK")
-            icon:SetTexture("Interface\\Icons\\Achievement_BG_trueAVshutout")
-            icon:SetAllPoints()
-            button.icon = icon
-
-            -- Mouseover Highlight
-            local highlight = button:CreateTexture(nil, "HIGHLIGHT")
-            highlight:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
-            highlight:SetBlendMode("ADD")
-            highlight:SetAllPoints()
-            button:SetHighlightTexture(highlight)
-
-            -- Click Handler
-            button:SetScript("OnClick", function()
-                if not TopFit.ProgressFrame or not TopFit.ProgressFrame:IsShown() then
-                    TopFit:CreateProgressFrame()
-                else
-                    TopFit:HideProgressFrame()
-                end
-            end)
-
-            -- Mouse Down/Up feedback
-            button:SetScript("OnMouseDown", function()
-                icon:SetVertexColor(0.6, 0.6, 0.6)
-            end)
-            button:SetScript("OnMouseUp", function()
-                icon:SetVertexColor(1, 1, 1)
-            end)
-
-            -- Tooltip
-            button:SetScript("OnEnter", function(self)
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetText("TopFit Gear Optimizer", 1, 1, 1)
-                GameTooltip:AddLine("Click to open calculation settings and recommendations.", 0.8, 0.8, 0.8, true)
-                GameTooltip:Show()
-            end)
-            button:SetScript("OnLeave", function()
-                GameTooltip:Hide()
-            end)
-        end
-
-        -- Update anchor position based on current tab visibility
-        UpdateTopFitButtonAnchor()
-
-        -- Sync visibility with PaperDollSidebarTabs
-        if TopFit.toggleProgressFrameButton then
-            if PaperDollSidebarTabs and PaperDollSidebarTabs:IsShown() then
-                TopFit.toggleProgressFrameButton:Show()
+        hooksecurefunc(CharacterFrame, "OnModeTabClicked", function(_, clickedTab)
+            if clickedTab ~= tab then return end
+            if not TopFit.ProgressFrame or not TopFit.ProgressFrame:IsShown() then
+                TopFit:CreateProgressFrame()
             else
-                TopFit.toggleProgressFrameButton:Hide()
+                TopFit:HideProgressFrame()
             end
-        end
-    end)
+        end)
 
-    if PaperDollFrame_UpdateSidebarTabs then
-        hooksecurefunc("PaperDollFrame_UpdateSidebarTabs", UpdateTopFitButtonAnchor)
+        CharacterFrame:UpdateTabLayout()
     end
+
+    hooksecurefunc("ToggleCharacter", function(...)
+        TopFit:SetupCharacterModeTab()
+    end)
 
     -- create default plugin frames
     TopFit:CreateStatsPlugin()
