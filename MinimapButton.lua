@@ -147,17 +147,31 @@ local function CreateMinimapButton()
             round = not (cos > 0 and sin < 0)
         end
 
+        -- Radius is taken from the minimap's real size, plus the same 5px LibDBIcon uses, so this
+        -- button sits on the outer ring with every other minimap button. It was a fixed 80, which
+        -- is only right for the stock 140px minimap; this client's minimap is bigger, so the
+        -- button ended up inside the map.
+        local w = ((Minimap:GetWidth() or 0) / 2)
+        local h = ((Minimap:GetHeight() or 0) / 2)
+        if w <= 0 then w = 70 end
+        if h <= 0 then h = 70 end
+        w = w + 5
+        h = h + 5
+
         local x, y
         if round then
-            x = cos * 80
-            y = sin * 80
+            x = cos * w
+            y = sin * h
         else
-            x = math.max(-82, math.min(110 * cos, 84))
-            y = math.max(-86, math.min(110 * sin, 82))
+            -- square-ish corner: push out along the diagonal, clamped to the minimap's edge
+            local diagW = math.sqrt(2 * w * w) - 10
+            local diagH = math.sqrt(2 * h * h) - 10
+            x = math.max(-w, math.min(cos * diagW, w))
+            y = math.max(-h, math.min(sin * diagH, h))
         end
 
         self:ClearAllPoints()
-        self:SetPoint("CENTER", x, y)
+        self:SetPoint("CENTER", Minimap, "CENTER", x, y)
     end
 
     -- Setup frame visual properties
