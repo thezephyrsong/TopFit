@@ -17,6 +17,19 @@ end
 -- create Addon object
 TopFit = LibStub("AceAddon-3.0"):NewAddon("TopFit", "AceConsole-3.0")
 
+-- Safe accessors for the classic-style 3-tab talent API (GetNumTalentTabs/GetTalentInfo/
+-- GetTalentTabInfo/GetNumTalents). Confirmed present on Classic-family client builds (TBC/
+-- Wrath Classic -- see REWRITE_PLAN_12_1_5.md's generalwrex/wowsimsexporter finding),
+-- confirmed ABSENT on unified retail 12.1.5 (see the same doc's AutoGear finding). Whether
+-- WoW: Forever has it is the single biggest open question in this whole rewrite, unresolved
+-- until there's a beta client to check against -- these wrappers exist so that uncertainty
+-- degrades gracefully (talent-based bonuses/detection silently read as "no data") instead of
+-- hard-erroring the entire calculation pipeline the moment a Shaman/Warrior tries to
+-- calculate a set. Every direct call to the four functions above elsewhere in the codebase
+-- should go through these instead.
+-- MUST stay below the TopFit = NewAddon(...) line above -- putting this block before TopFit
+-- exists is exactly what caused "attempt to perform indexed assignment on global 'TopFit'
+-- (a nil value)" on 2026-09-18. Do not move it back above the creation line.
 TopFit.hasClassicTalentAPI = (type(GetNumTalentTabs) == "function") and (type(GetTalentInfo) == "function")
 
 function TopFit:GetNumTalentTabsSafe()
@@ -34,6 +47,8 @@ function TopFit:GetTalentTabNameSafe(tab)
     return GetTalentTabInfo(tab)
 end
 
+-- returns rank, name, maxRank (rank defaults to 0, not nil, so `> 0` comparisons at call
+-- sites are always safe without an extra nil check)
 function TopFit:GetTalentRankSafe(tab, index)
     if not TopFit.hasClassicTalentAPI then return 0, nil, nil end
     local name, _, _, _, currentRank, maxRank = GetTalentInfo(tab, index)
@@ -95,9 +110,10 @@ end
 -- debug function
 function TopFit:Warning(text)
     --TODO: create table of warnings and dont print any multiples
+    --TopFit:Print("|cffff0000Warning: "..text)
 end
 
--- joins any number of tables together
+-- joins any number of tables together, one after the other. elements within the input-tables will get mixed, though
 function TopFit:JoinTables(...)
     local result = {}
     local tab
@@ -115,29 +131,37 @@ function TopFit:JoinTables(...)
 end
 
 function TopFit:EquipRecommendedItems()
+    -- skip equipping if virtual items were included
     if (not TopFit.db.profile.sets[TopFit.ProgressFrame.selectedSet].skipVirtualItems) and TopFit.db.profile.sets[TopFit.setCode].virtualItems and #(TopFit.db.profile.sets[TopFit.setCode].virtualItems) > 0 then
         TopFit:Print("No items will be equipped because virtual items were included in the set calculation.")
         
+        -- reenable options and quit
         TopFit.ProgressFrame:StoppedCalculation()
         TopFit.isBlocked = false
+        
+        -- reset relevant score field
         TopFit.ignoreCapsForCalculation = nil
         
+        -- initiate next calculation if necessary
         if (#TopFit.workSetList > 0) then
             TopFit:CalculateSets()
         end
         return
     end
     
+    -- equip them
     TopFit.updateEquipmentCounter = 10000
     TopFit.equipRetries = 0
     TopFit.updateFrame:SetScript("OnUpdate", TopFit.onUpdateForEquipment)
 end
 
 function TopFit:onUpdateForEquipment()
+    -- don't try equipping in combat or while dead
     if UnitAffectingCombat("player") or UnitIsDeadOrGhost("player") then
         return
     end
 
+    -- see if all items already fit
     local allDone = true
     for slotID, recTable in pairs(TopFit.itemRecommendations) do
         if (TopFit:GetItemScore(recTable.locationTable.itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) > 0) then
@@ -150,10 +174,12 @@ function TopFit:onUpdateForEquipment()
     
     TopFit.updateEquipmentCounter = TopFit.updateEquipmentCounter + 1
     
+    -- try equipping the items every 100 frames (some weird ring positions might stop us from correctly equipping items on the first try, for example)
     if (TopFit.updateEquipmentCounter > 100) then
         for slotID, recTable in pairs(TopFit.itemRecommendations) do
             local slotItemLink = GetInventoryItemLink("player", slotID)
             if (slotItemLink ~= recTable.locationTable.itemLink) then
+                -- find itemLink in bags
                 local found = false
                 local foundBag, foundSlot
                 for bag = 0, 4 do
@@ -170,6 +196,7 @@ function TopFit:onUpdateForEquipment()
                 end
                 
                 if not found then
+                    -- try to find item in equipped items
                     for _, invSlot in pairs(TopFit.slots) do
                         local itemLink = GetInventoryItemLink("player", invSlot)
                         
@@ -186,6 +213,8 @@ function TopFit:onUpdateForEquipment()
                     TopFit:Print(recTable.locationTable.itemLink.." could not be found in your inventory for equipping! Did you remove it during calculation?")
                     TopFit.itemRecommendations[slotID] = nil
                 else
+                    -- try equipping the item again
+                    --TODO: if we try to equip offhand, and mainhand is two-handed, and no titan's grip, unequip mainhand first
                     ClearCursor()
                     if foundBag then
                         C_Container.PickupContainerItem(foundBag, foundSlot)
@@ -201,6 +230,8 @@ function TopFit:onUpdateForEquipment()
         TopFit.equipRetries = TopFit.equipRetries + 1
     end
     
+    -- if all items have been equipped, save equipment set and unregister script
+    -- also abort if it takes to long, just save the items that _have_ been equipped
     if ((allDone) or (TopFit.equipRetries > 5)) then
         if (not allDone) then
             TopFit:Print("Oh. I am sorry, but I must have made a mistake. I cannot equip all the items I chose:")
@@ -218,6 +249,9 @@ function TopFit:onUpdateForEquipment()
         TopFit.updateFrame:SetScript("OnUpdate", nil)
         TopFit.ProgressFrame:StoppedCalculation()
         
+        -- save equipment set (see TopFit:SaveGearToEquipmentSet for what it does and why)
+        -- slots TopFit had no recommendation for are excluded from the saved set, as they were
+        -- in the original implementation
         local ignoredSlots = {}
         for _, slotID in pairs(TopFit.slots) do
             if not TopFit.itemRecommendations[slotID] then
@@ -226,17 +260,25 @@ function TopFit:onUpdateForEquipment()
         end
         TopFit:SaveGearToEquipmentSet(TopFit:GenerateSetName(TopFit.currentSetName), ignoredSlots)
     
+        -- we are done with this set
         TopFit.isBlocked = false
+        
+        -- reset relevant score field
         TopFit.ignoreCapsForCalculation = nil
         
+        -- initiate next calculation if necessary
         if (#TopFit.workSetList > 0) then
             TopFit:CalculateSets()
         end
     end
 end
 
+-- A numeric icon fileID guaranteed to be valid: the icon of something the player is wearing (the
+-- same approach the AskMrRobot addon uses when it creates sets). The API documents file IDs and
+-- bare texture names as accepted icon values, not full "Interface\\Icons\\..." paths, which is
+-- what the earlier version of this code passed.
 local function GetDefaultEquipmentSetIcon()
-    for _, slotID in ipairs({ 16, 1, 5, 17, 3 }) do
+    for _, slotID in ipairs({ 16, 1, 5, 17, 3 }) do -- main hand, head, chest, off hand, shoulder
         local icon
         if GetInventoryItemTexture then icon = GetInventoryItemTexture("player", slotID) end
         if not icon then
@@ -245,19 +287,48 @@ local function GetDefaultEquipmentSetIcon()
         end
         if icon then return icon end
     end
-    return 134400
+    return 134400 -- INV_Misc_QuestionMark
 end
 
+-- 2026-09-27: this WAS a wrapper that treated 0 as equivalent to "not found" (matching the
+-- documented contract on warcraft.wiki.gg, which says GetEquipmentSetID returns nil, never 0,
+-- for a nonexistent set). REVERTED THE SAME DAY: confirmed live that 0 is a real, valid set ID on
+-- this beta client -- a set named "Retribution (TF)" existed with 8 items correctly saved under
+-- ID 0 (seen via the automatic set-list dump on a create failure, added specifically to test
+-- this). The 0-as-sentinel theory was wrong: this client hands out IDs starting from 0, not 1.
+-- Treating a real ID 0 as "doesn't exist" was actively causing the exact failure it was meant to
+-- prevent -- every save attempt on that set tried to CREATE a duplicate with an already-taken
+-- name, which the API correctly refused, over and over. Left as a passthrough (rather than
+-- deleted and every call site reverted to the bare API) so this reasoning stays in one place
+-- instead of being silently lost if someone is tempted to special-case 0 again later. Lua's
+-- `if x then` already treats 0 as truthy, which is exactly the correct behavior here.
 function TopFit:GetEquipmentSetIDSafe(setName)
     return C_EquipmentSet.GetEquipmentSetID(setName)
 end
 
+-- Saves the gear currently worn into a Blizzard equipment set called setName, creating the set if
+-- it doesn't exist yet. ignoredSlots (optional list of inventory slot IDs) are left out of the set,
+-- so slots TopFit had no recommendation for don't get baked in. Returns true on success.
+--
+-- Rewritten 2026-09-27 after equipment sets were reported as not persisting. What changed, and why:
+--   * The outcome is ALWAYS printed. Success used to be reported through TopFit:Debug (off unless
+--     debug mode is enabled), so a save that worked and one that silently didn't looked identical.
+--   * The result is read back with GetEquipmentSetInfo and reported (items saved / ignored slots)
+--     instead of trusting that the Create/Save call did what was asked.
+--   * Per-slot exclusion is restored through C_EquipmentSet.IgnoreSlotForSave. An earlier FIXME in
+--     this file claimed that API might not exist; it does (it is one of the 23 documented
+--     C_EquipmentSet functions), so that note was wrong.
+--   * The default icon is a numeric fileID (see GetDefaultEquipmentSetIcon above).
+--   * CreateEquipmentSet's return value is not relied on; the set ID is looked up by name after.
+--   * Existing sets are updated without passing an icon, which keeps their current one.
+-- verbose additionally lists every equipment set on the character, for the /topfit saveset command.
 function TopFit:SaveGearToEquipmentSet(setName, ignoredSlots, verbose)
     if not C_EquipmentSet.CanUseEquipmentSets() then
         TopFit:Print("Could not save equipment set '"..setName.."': C_EquipmentSet.CanUseEquipmentSets() returned false.")
         return false
     end
 
+    -- per-slot exclusion; failures here are reported but don't stop the save
     pcall(C_EquipmentSet.ClearIgnoredSlotsForSave)
     local ignoreFailed = false
     if ignoredSlots then
@@ -279,13 +350,16 @@ function TopFit:SaveGearToEquipmentSet(setName, ignoredSlots, verbose)
         setID = TopFit:GetEquipmentSetIDSafe(setName)
     end
 
+    -- don't leave TopFit's exclusions active for the player's own manual saves in the game UI
     pcall(C_EquipmentSet.ClearIgnoredSlotsForSave)
 
     if not ok then
         TopFit:Print(("Failed to %s equipment set '%s': %s"):format(created and "create" or "update", setName, tostring(err)))
         return false
     end
-
+    -- lists every equipment set on the character -- shared by the verbose option below and the
+    -- automatic dump on a silent create failure, so a failure is self-diagnosing without needing
+    -- a separate manual /topfit saveset call to see the same information after the fact
     local function PrintAllSets(reason)
         TopFit:Print(reason)
         local okNum, numSets = pcall(C_EquipmentSet.GetNumEquipmentSets)
@@ -303,6 +377,13 @@ function TopFit:SaveGearToEquipmentSet(setName, ignoredSlots, verbose)
     end
 
     if not setID then
+        -- 2026-09-27: seen for real with setName "Enhancement (TF)" specifically, repeatedly,
+        -- while other names created fine in the same session -- a per-name failure, not a general
+        -- one. Leading theory: a set with this exact name already exists but GetEquipmentSetID
+        -- isn't finding it for some reason, so CreateEquipmentSet is being asked to make a
+        -- duplicate and silently refusing. Dumping the full set list here (rather than requiring
+        -- a separate manual /topfit saveset call) tests that theory on the next occurrence
+        -- instead of needing to ask for more information after the fact.
         PrintAllSets(("Equipment set '%s' was NOT created: CreateEquipmentSet raised no error, but no set with that name exists afterwards."):format(setName))
         return false
     end
@@ -322,6 +403,8 @@ function TopFit:SaveGearToEquipmentSet(setName, ignoredSlots, verbose)
 end
 
 function TopFit:GenerateSetName(name)
+    -- using substr because blizzard interface only allows 16 characters
+    -- although technically SaveEquipmentSet & co allow more ;)
     return (((name ~= nil) and string.sub(name.." ", 1, 12).."(TF)") or "TopFit")
 end
 
@@ -344,6 +427,9 @@ function TopFit:ChatCommand(input)
         elseif command == "talentdebug" then
             TopFit:DebugTalentCounts()
         elseif command == "saveset" then
+            -- tests equipment set saving on its own, without running a calculation: saves the
+            -- gear you are wearing right now into a set (default name "TopFit Test") and reports
+            -- exactly what happened, including a list of every set on the character
             local testName = (rest and rest ~= "") and rest or "TopFit Test"
             TopFit:SaveGearToEquipmentSet(testName, nil, true)
         elseif command == "weapondebug" then
@@ -356,10 +442,14 @@ function TopFit:ChatCommand(input)
     end
 end
 
+-- Finds the ITEM_MOD_* (or other) stat token matching a human-typed name, e.g. "Hit Rating" or
+-- the raw token itself. Used by the /topfit caps command, since caps[stat] is keyed by the raw
+-- Blizzard constant name, which nobody wants to type out by hand in chat.
 function TopFit:ResolveStatToken(input)
     if not input or input == "" then
         return nil
     end
+    -- exact token match first (e.g. "ITEM_MOD_HIT_RATING_SHORT")
     if _G[input] and TopFit.statList then
         for _, tokens in pairs(TopFit.statList) do
             for _, token in ipairs(tokens) do
@@ -369,6 +459,7 @@ function TopFit:ResolveStatToken(input)
             end
         end
     end
+    -- otherwise match against the human-readable display name, case-insensitively
     local lowerInput = input:lower()
     if TopFit.statList then
         for _, tokens in pairs(TopFit.statList) do
@@ -395,6 +486,7 @@ function TopFit:CapsCommand(rest)
     subcommand = subcommand and subcommand:lower()
     
     if subcommand == "" then
+        -- list mode
         TopFit:Print("Cap entries for \"" .. TopFit.db.profile.sets[setCode].name .. "\":")
         local any = false
         for stat, capList in pairs(caps) do
@@ -456,6 +548,27 @@ function TopFit:CapsCommand(rest)
     TopFit:Print("Usage: /topfit caps [add|remove|toggle] ...")
 end
 
+-- Adds a TopFit tab below the native tabs on the character frame (Character/Reputation/.../
+-- Statistics). 2026-09-28. This is Dan's in-game-tested version; my first attempt (appending to
+-- CharacterFrame.ModeTabs.Tabs and hooking CharacterFrameMixin:OnModeTabClicked) was replaced by
+-- this simpler one after testing. Verified against the real Camelot CharacterFrame.lua/.xml
+-- source (Gethe/wow-ui-source, "forever" branch) -- see REWRITE_PLAN_12_1_5.md section 7.
+--
+-- The tab is deliberately NOT inserted into Blizzard's Tabs array -- it is anchored under the
+-- last native tab and handles its own click. That keeps it out of Blizzard's own bookkeeping:
+-- SetupModeTabs() (which would set the icon of any array entry beyond index 6 to nil),
+-- UpdateTabLayout(), and the gamepad TabIndicators never see it.
+-- Created as a "Button" (not "Frame", which is how the template is declared in XML) so that
+-- SetScript("OnClick") is available. Called from OnEnable, once CharacterFrame exists.
+--
+-- Known possible cosmetic quirk, not confirmed in-game: CharacterModeTabButtonMixin:OnLoad (run
+-- on every tab built from this template) wires a left-click handler that calls
+-- CharacterFrame:OnModeTabClicked(self). For a tab with no frameName that function unchecks all
+-- six native tabs and sets selectedTab to this tab's ID (0), without changing the pane shown --
+-- so the active native tab may lose its highlight after clicking TopFit's tab. If that happens,
+-- the likely fix is replacing that default handler via the mixin's SetCustomOnMouseUpHandler
+-- with one that toggles TopFit's frame (not verified: SidePanelTabButtonMixin's source hasn't
+-- been read, so whether it replaces or appends the handler is unknown).
 function TopFit:SetupCharacterModeTab()
     if TopFit.characterModeTab then return end
     if not CharacterFrame or not CharacterFrame.ModeTabs or not CharacterFrame.ModeTabs.Tabs then return end
@@ -495,17 +608,28 @@ function TopFit:SetupCharacterModeTab()
 end
 
 function TopFit:OnInitialize()
+    -- load saved variables
     self.db = LibStub("AceDB-3.0"):New("TopFitDB")
 
+    -- Invalidate the persisted item-scan cache whenever what a scan PRODUCES changes. Scans are
+    -- cached in SavedVariables (db.global.itemCache, see inventory.lua), so without this, a
+    -- parser fix never reaches items the client has already seen -- they keep their old (wrong)
+    -- stats forever. Bump ITEM_CACHE_VERSION any time procparser.lua/inventory.lua change which
+    -- stats a scan extracts. Version 2 (2026-09-27): short-form hit/crit, flat Defense/weapon
+    -- skill, combined and per-school spell damage were all missed by version 1.
     self.ITEM_CACHE_VERSION = 2
     if self.db.global.itemCacheVersion ~= self.ITEM_CACHE_VERSION then
         self.db.global.itemCache = {}
         self.db.global.itemCacheVersion = self.ITEM_CACHE_VERSION
     end
     
+    -- set callback handler
     TopFit.eventHandler = TopFit.eventHandler or LibStub("CallbackHandler-1.0"):New(TopFit)
+    
+    -- create gametooltip for scanning
     TopFit.scanTooltip = CreateFrame('GameTooltip', 'TFScanTooltip', UIParent, 'GameTooltipTemplate')
 
+    -- check if any set is saved already, if not, create default
     if (not self.db.profile.sets) then
         self.db.profile.sets = {
             set_1 = {
@@ -517,11 +641,13 @@ function TopFit:OnInitialize()
         }
     end
     
+    -- for savedvariable updates: check if each set has a forced table
     for set, table in pairs(self.db.profile.sets) do
         if table.forced == nil then
             table.forced = {}
         end
         
+        -- also set if all stat and cap values are numbers
         for stat, value in pairs(table.weights) do
             table.weights[stat] = tonumber(value) or nil
         end
@@ -545,14 +671,37 @@ function TopFit:OnInitialize()
     _G["TOPFIT_CRIT_CHANCE_RANGED"] = "Ranged Critical Strike Chance"
     _G["TOPFIT_CRIT_CHANCE_SPELL"] = "Spell Critical Strike Chance"
     _G["TOPFIT_DODGE_PARRY_REDUCTION"] = "Dodge/Parry Reduction"
+    -- Added 2026-09-26, confirmed via WoW: Forever beta client trait data (Warrior's Deflection
+    -- and Shield Specialization talents grant these directly) -- gear may itemize these the same
+    -- way it itemizes hit/crit/dodge-parry-reduction (see procparser.lua's matching patterns).
     _G["TOPFIT_PARRY_CHANCE_ALL"] = "Parry Chance"
     _G["TOPFIT_BLOCK_CHANCE_ALL"] = "Block Chance"
+    -- Added 2026-09-26, from full class talent data (client-data-sourced via wago.tools).
+    -- TOPFIT_HIT_CHANCE_SPELL/TOPFIT_CRIT_CHANCE_SPELL are deliberately generic, single "spell"
+    -- buckets rather than split per school (Holy/Shadow/Fire/Frost/etc.) -- nearly every caster
+    -- class has its own school-specific hit/crit talent (Paladin/Priest's Holy, Mage's Arcane/
+    -- Frost/Fire, Priest's Shadow, ...), but a given character only has one relevant casting
+    -- school in practice, so tracking 6+ separate school buckets wasn't worth the complexity.
+    -- Flagged here rather than silently decided.
     _G["TOPFIT_HIT_CHANCE_SPELL"] = "Spell Hit Chance"
+    -- "chance to [get a critical strike/crit] with all attacks" (no spell mention) -- distinct
+    -- from TOPFIT_CRIT_CHANCE_ALL (which specifically means spells+attacks combined) and from
+    -- TOPFIT_CRIT_CHANCE_MELEE (Hunter's version of this phrase, e.g. Lethal Attacks, needs to
+    -- include ranged too, since Hunter is a ranged-primary class -- mapping it to MELEE alone
+    -- would be wrong).
     _G["TOPFIT_CRIT_CHANCE_PHYSICAL"] = "Physical Critical Strike Chance"
     _G["TOPFIT_DODGE_CHANCE_ALL"] = "Dodge Chance"
+    -- Added 2026-09-27 (Dan: convert all remaining ratings to percentages except
+    -- weapon/defense skill). No confirmed or inferred item-tooltip pattern for any of
+    -- these three -- unlike hit/crit/dodge/parry/block, there is no established
+    -- "Equip: Increases your X by N%" precedent to extend for armor penetration,
+    -- resilience, or haste. Added so a weight CAN be assigned once real phrasing is
+    -- found/confirmed, not because any gear or talent has granted one of these yet.
     _G["TOPFIT_ARMOR_PENETRATION_PERCENT"] = "Armor Penetration"
     _G["TOPFIT_RESILIENCE_PERCENT"] = "Resilience"
     _G["TOPFIT_HASTE_PERCENT"] = "Haste"
+    -- Per-school flat spell damage -- CONFIRMED on real Forever gear 2026-09-27 (e.g. Filigreed
+    -- Shadow Circlet). Tracked per school, unlike the generic hit/crit spell buckets above.
     _G["TOPFIT_ARCANE_DAMAGE_FLAT"] = "Arcane Damage"
     _G["TOPFIT_FIRE_DAMAGE_FLAT"] = "Fire Damage"
     _G["TOPFIT_FROST_DAMAGE_FLAT"] = "Frost Damage"
@@ -572,8 +721,20 @@ function TopFit:OnInitialize()
             [5] = "ITEM_MOD_STRENGTH_SHORT",
         },
         ["Melee"] = {
+            -- ITEM_MOD_EXPERTISE_RATING_SHORT removed 2026-09-27 (Dan: convert ratings to
+            -- percentages) -- Expertise's real-world effect (reduce the chance your attacks are
+            -- dodged/parried) is already covered by TOPFIT_DODGE_PARRY_REDUCTION below, confirmed
+            -- from real gear ("Band of the Better Half": "Reduces chance to be Dodged or Parried
+            -- by 1.2%"). ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT replaced with
+            -- TOPFIT_ARMOR_PENETRATION_PERCENT -- stat key added, but NO item-tooltip pattern
+            -- added to procparser.lua, since there's no confirmed or even plausible-by-precedent
+            -- Forever phrasing to base one on (unlike parry/block/dodge, which could reasonably
+            -- extend the established "Increases your X chance by N%" family).
             [1] = "TOPFIT_ARMOR_PENETRATION_PERCENT",
             [2] = "ITEM_MOD_ATTACK_POWER_SHORT",
+            -- ITEM_MOD_RANGED_ATTACK_POWER_SHORT added 2026-09-27, needed by the real Hunter EP
+            -- weight set below (presets.lua) -- a real Blizzard itemMod global, no custom display
+            -- name needed (Blizzard's own client localization already provides one).
             [3] = "ITEM_MOD_RANGED_ATTACK_POWER_SHORT",
             [4] = "ITEM_MOD_FERAL_ATTACK_POWER_SHORT",
             [5] = "TOPFIT_WEAPON_SPEED",
@@ -581,6 +742,11 @@ function TopFit:OnInitialize()
             [7] = "TOPFIT_DODGE_PARRY_REDUCTION",
         },
         ["Caster"] = {
+            -- ITEM_MOD_SPELL_POWER_SHORT removed 2026-09-27 (Dan): redundant with
+            -- TOPFIT_SPELL_DAMAGE_FLAT/TOPFIT_SPELL_HEALING_FLAT below, and unlike those two,
+            -- it's confirmed dead weight for Forever specifically -- GetItemStats() will never
+            -- return this key on Forever gear, since Forever itemizes spell damage/healing as
+            -- flat Equip: text (see procparser.lua), not as a WotLK-style unified rating stat.
             [1] = "ITEM_MOD_SPELL_PENETRATION_SHORT",
             [2] = "ITEM_MOD_MANA_REGENERATION_SHORT",
             [3] = "TOPFIT_SPELL_DAMAGE_FLAT",
@@ -595,8 +761,18 @@ function TopFit:OnInitialize()
             [12] = "TOPFIT_SHADOW_DAMAGE_FLAT",
         },
         ["Defensive"] = {
+            -- ITEM_MOD_BLOCK_RATING_SHORT/DODGE_RATING_SHORT/PARRY_RATING_SHORT removed
+            -- 2026-09-27 (Dan: convert ratings to percentages) -- already replaced by
+            -- TOPFIT_BLOCK/DODGE/PARRY_CHANCE_ALL below. ITEM_MOD_DEFENSE_SKILL_RATING_SHORT
+            -- removed too, but per Dan's explicit exception for defense/weapon skill, it maps to
+            -- the already-flat TOPFIT_DEFENSE_FLAT below, NOT a new percent stat.
+            -- ITEM_MOD_BLOCK_VALUE_SHORT kept as-is -- it's a flat absolute amount (damage
+            -- reduced per block), not a chance/rating stat, so Dan's conversion request doesn't
+            -- apply to it. ITEM_MOD_RESILIENCE_RATING_SHORT replaced with
+            -- TOPFIT_RESILIENCE_PERCENT -- same caveat as armor penetration above: stat key
+            -- added, no item-tooltip pattern, no confirmed or plausible Forever phrasing yet.
             [1] = "ITEM_MOD_BLOCK_VALUE_SHORT",
-            [2] = "RESISTANCE0_NAME",
+            [2] = "RESISTANCE0_NAME",                   -- armor
             [3] = "TOPFIT_DEFENSE_FLAT",
             [4] = "TOPFIT_PARRY_CHANCE_ALL",
             [5] = "TOPFIT_BLOCK_CHANCE_ALL",
@@ -604,6 +780,15 @@ function TopFit:OnInitialize()
             [7] = "TOPFIT_RESILIENCE_PERCENT",
         },
         ["Hybrid"] = {
+            -- ITEM_MOD_HIT_RATING_SHORT/ITEM_MOD_CRIT_RATING_SHORT removed 2026-09-27, same
+            -- reasoning as ITEM_MOD_SPELL_POWER_SHORT above: confirmed dead weight for Forever.
+            -- GetItemStats() will never return these on Forever gear -- hit/crit are itemized as
+            -- flat "Improves your chance to..." percent text (confirmed against real gear
+            -- screenshots, procparser.lua), not WotLK-style rating stats. ITEM_MOD_HASTE_RATING_SHORT
+            -- left alone -- no equivalent flat-percent haste pattern has been confirmed either way.
+            -- ITEM_MOD_HASTE_RATING_SHORT removed 2026-09-27 (Dan: convert ratings to
+            -- percentages), replaced with TOPFIT_HASTE_PERCENT -- same caveat as armor
+            -- penetration/resilience above: stat key added, no item-tooltip pattern yet.
             [1] = "ITEM_MOD_DAMAGE_PER_SECOND_SHORT",
             [2] = "TOPFIT_HASTE_PERCENT",
             [3] = "TOPFIT_HIT_CHANCE_ALL",
@@ -616,15 +801,16 @@ function TopFit:OnInitialize()
             [3] = "ITEM_MOD_HEALTH_REGENERATION_SHORT",
         },
         ["Resistances"] = {
-            [1] = "RESISTANCE1_NAME",
-            [2] = "RESISTANCE2_NAME",
-            [3] = "RESISTANCE3_NAME",
-            [4] = "RESISTANCE4_NAME",
-            [5] = "RESISTANCE5_NAME",
-            [6] = "RESISTANCE6_NAME",
+            [1] = "RESISTANCE1_NAME",                   -- holy
+            [2] = "RESISTANCE2_NAME",                   -- fire
+            [3] = "RESISTANCE3_NAME",                   -- nature
+            [4] = "RESISTANCE4_NAME",                   -- frost
+            [5] = "RESISTANCE5_NAME",                   -- shadow
+            [6] = "RESISTANCE6_NAME",                   -- arcane
         },
     }
     
+    -- list of inventory slot names
     TopFit.slotList = {
         "BackSlot",
         "ChestSlot",
@@ -647,6 +833,7 @@ function TopFit:OnInitialize()
         "WristSlot",
     }
     
+    -- create list of slot names with corresponding slot IDs
     TopFit.slots = {}
     TopFit.slotNames = {}
     for _, slotName in pairs(TopFit.slotList) do
@@ -655,19 +842,26 @@ function TopFit:OnInitialize()
         TopFit.slotNames[slotID] = slotName;
     end
     
+    -- create frame for OnUpdate
     TopFit.updateFrame = CreateFrame("Frame")
+    
+    -- create options
     TopFit:createOptions()
 
+    -- register Slash command
     self:RegisterChatCommand("topfit", "ChatCommand")
     self:RegisterChatCommand("tf", "ChatCommand")
     
+    -- cache tables
     TopFit.itemsCache = {}
     TopFit.scoresCache = {}
     
+    -- table for equippable item list
     TopFit.equippableItems = {}
     TopFit:collectEquippableItems()
     TopFit.loginDelay = 150
     
+    -- frame for eventhandling
     TopFit.eventFrame = CreateFrame("Frame")
     TopFit.eventFrame:RegisterEvent("BAG_UPDATE")
     TopFit.eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
@@ -675,9 +869,12 @@ function TopFit:OnInitialize()
     TopFit.eventFrame:SetScript("OnEvent", TopFit.FrameOnEvent)
     TopFit.eventFrame:SetScript("OnUpdate", TopFit.delayCalculationOnLogin)
     
+    -- frame for calculation function
     TopFit.calculationsFrame = CreateFrame("Frame");
     
+    -- heirloom info
     local isPlateWearer, isMailWearer = false, false
+    -- Death Knight removed 2026-09-26 (Dan confirmed): doesn't exist in WoW: Forever.
     if (select(2, UnitClass("player")) == "WARRIOR") or (select(2, UnitClass("player")) == "PALADIN") then
         isPlateWearer = true
     end
@@ -685,6 +882,7 @@ function TopFit:OnInitialize()
         isMailWearer = true
     end
     
+    -- tables of itemIDs for heirlooms which change armor type
     TopFit.heirloomInfo = {
         plateHeirlooms = {
             [3] = {
@@ -712,12 +910,20 @@ function TopFit:OnInitialize()
         isMailWearer = isMailWearer
     }
     
+    -- container for plugin information and frames
     TopFit.plugins = {}
+
+    -- create default plugin frames
+    TopFit:CreateStatsPlugin()
+    TopFit:CreateVirtualItemsPlugin()
+
+    TopFit:collectItems()
 end
 
 function TopFit:collectEquippableItems()
     local newItem = false
     
+    -- check bags
     for bag = 0, 4 do
         local numSlots = C_Container.GetContainerNumSlots(bag) or 0
         for slot = 1, numSlots do
@@ -740,6 +946,7 @@ function TopFit:collectEquippableItems()
         end
     end
     
+    -- check equipment
     for _, invSlot in pairs(TopFit.slots) do
         local item = GetInventoryItemLink("player", invSlot)
         
@@ -813,6 +1020,7 @@ end
 
 function TopFit:OnEnable()
     TopFit:SetupCharacterModeTab()
+    -- Called when the addon is enabled
 end
 
 function TopFit:OnDisable()

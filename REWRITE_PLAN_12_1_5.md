@@ -307,7 +307,7 @@ does before acting on it.
 
 ---
 
-## 7. UI: sidebar button overlap, and a flagged idea needing more research
+## 7. UI: the TopFit tab on the character frame
 
 2026-09-28 (Dan, with screenshots): TopFit's character-pane toggle button
 (`TopFit_toggleProgressFrameButton`, anchored next to the native
@@ -319,30 +319,56 @@ tab. Fixed by probing `PaperDollSidebarTab1` through `10` for whichever
 is the highest-numbered currently-shown one, instead of a hardcoded
 count -- won't silently break again if a 5th/6th tab is ever added.
 
-**Flagged, not implemented**: Dan suggested the more robust long-term fix
--- give TopFit its own real sidebar tab (like the native "Statistics"
-tab shown in the second screenshot) instead of a floating button that has
-to chase wherever the last tab happens to be. Agreed this is the better
-design, but **not attempted yet**, for two reasons found while checking
-how to do it correctly:
-1. The "Statistics" tab in Dan's screenshot is `CharacterFrameModeTab6`
-   -- part of a "Mode Tabs" system (`CharacterFrameModeTabs`) distinct
-   from the `PaperDollSidebarTabN` icons the current button anchors to.
-   No confirmed, reliable documentation found for how to register a new
-   entry in this specific modern system -- what's findable online
-   describes an older `PanelTemplates_SetNumTabs`/
-   `CharacterFrameTabTemplate` pattern that doesn't match what the
-   screenshot shows at all.
-2. Multiple real reports (including one from a Classic Era author,
-   Oct 2025) of this exact kind of custom-tab addition **tainting**
-   `CharacterFrame`, breaking the ability to open Character/Reputation/
-   Currency panels in combat. That's a much worse regression than a
-   cosmetic overlap, and not a risk worth taking on unconfirmed
-   information.
+**Implemented, 2026-09-28 — and the shipped version is Dan's, not
+mine.** Dan found and supplied the real source (Gethe/wow-ui-source's
+`forever` branch: `Interface/AddOns/Blizzard_UIPanels_Game/Camelot/
+CharacterFrame.xml` and `.lua` — "Camelot" is Blizzard's internal
+codename for this UI, confirmed not Forever-specific via a real retail
+bug report hitting the same path). Reading it resolved the original
+"no docs, tainting risk" caution:
+- `CharacterFrameModeTabs.Tabs` is a plain Lua array (the 6 native tabs
+  come from XML `parentArray`); `CHARACTER_MODE_TAB_FRAMES` and
+  `CHARACTER_MODE_TAB_ICONS` are hardcoded 6-entry tables, and
+  `SetupModeTabs()` (called once, from `OnLoad`) sets each array entry's
+  `frameName`/icon from them by index. There is no registration API.
+- `CharacterFrameMixin:OnModeTabClicked(tab)` has a dedicated branch for a
+  tab with no `frameName`: it just re-checks tabs and returns, never
+  calling Blizzard's `ToggleCharacter` dispatcher.
 
-Revisit once there's reliable documentation for `CharacterFrameModeTabs`
-specifically, or a working reference addon that does this safely on a
-client close enough to this one to trust.
+My first attempt appended a 7th tab to that array and hooked
+`OnModeTabClicked`. **Dan tested in-game and replaced it** with a simpler
+design, now in `TopFit:SetupCharacterModeTab` (`core.lua`, called from
+`OnEnable`): a `Button` created from `CharacterFrameModeSideTabTemplate`,
+anchored `TOPLEFT` below the last native tab, with its own `OnClick`/
+`OnEnter`/`OnLeave`, and **not** inserted into Blizzard's array. That is
+the safer design: Blizzard's `SetupModeTabs` (which would blank the icon of
+any array entry past index 6), `UpdateTabLayout`, and the gamepad tab
+indicators never see it. (The reason it needs to be a `Button` rather than
+a `Frame`, as the template is declared in XML, is that `OnClick` isn't
+available on plain frames.)
+
+**Possible cosmetic quirk, unconfirmed:** the template's mixin `OnLoad`
+wires a left-click handler calling `CharacterFrame:OnModeTabClicked(self)`
+on every tab built from it, including this one. For a tab with no
+`frameName` that unchecks all six native tabs and sets `selectedTab = 0`
+(without changing the pane shown). The only other reader of `selectedTab`
+is a gamepad enchanting check, so nothing functional depends on it, but the
+active native tab may lose its highlight after clicking TopFit's tab. If
+seen, the likely fix is swapping the default handler via the mixin's
+`SetCustomOnMouseUpHandler` (unverified whether that replaces or appends —
+`SidePanelTabButtonMixin` hasn't been read).
+
+**A regression caught while merging Dan's file:** his version had lost the
+three calls that followed the old mode-tab block in `OnInitialize` —
+`CreateStatsPlugin()`, `CreateVirtualItemsPlugin()`, and the initial
+`collectItems()` — whose only call sites were there. Without them the
+Weights & Caps panel and virtual-items plugin are never built. Restored,
+and verified by diffing comment-stripped copies: the merged file differs
+from Dan's by exactly those three lines. Dan's other changes (leaked
+globals `allDone`/`slotItemLink` made local, an unused `itemTable` local
+removed) were kept. His file also had its comments stripped wholesale
+(12 comment lines vs 224); the merge kept the commented version, since
+those comments carry the API lessons — easy to swap back if intended.
 
 ---
 
@@ -404,3 +430,13 @@ play-by-play.
   an initial misreading (`160001`) to the real value (`16001`) after
   Dan's correction. EP-preset gathering strategy pivoted to wait for the
   WowSims Forever branch rather than continue manual per-spec gathering.
+- **09-28**: Character-pane button overlapped the native "Pet" tab
+  (anchor logic only knew about 3 sidebar tabs, not 4) — fixed, then
+  superseded by a real tab built from Blizzard's own `CharacterFrame`
+  source, which Dan located; the version Dan tested in-game is what's
+  shipped (section 7). Merging his file caught three dropped
+  `OnInitialize` calls (plugin construction and initial item collection),
+  restored. StaticPopup dialogs found to use PascalCase fields
+  (`self.EditBox`), fixed in `import.lua`. Checked the upstream
+  wowsims/exporter repo again: still no Forever branch. Plan doc reorganized
+  from a 1450-line chronological log into a current-state reference.
