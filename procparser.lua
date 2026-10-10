@@ -520,6 +520,27 @@ function TopFit:StripRatingStats(stats)
 	return stats
 end
 
+-- Weapon DPS arrives from GetItemStats() as one generic ITEM_MOD_DAMAGE_PER_SECOND_SHORT, so a set
+-- can't weight a ranged weapon's DPS differently from a melee weapon's (a Hunter's RangedDps and
+-- MeleeDps weights are very different numbers). This copies the same DPS onto a second key chosen
+-- by slot type: TOPFIT_RANGED_DPS for ranged-slot weapons, TOPFIT_MELEE_DPS for hand weapons. The
+-- generic key is left untouched, so existing sets that use it behave exactly as before; a set
+-- should weight EITHER the generic key OR the split pair, not both (that would count DPS twice).
+local RANGED_WEAPON_LOCS = { INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
+local MELEE_WEAPON_LOCS = { INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true,
+	INVTYPE_WEAPONMAINHAND = true, INVTYPE_WEAPONOFFHAND = true }
+
+function TopFit:AddSplitWeaponDps(stats, equipLoc)
+	local dps = stats and stats["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"]
+	if not dps or dps <= 0 then return stats end
+	if RANGED_WEAPON_LOCS[equipLoc] then
+		stats["TOPFIT_RANGED_DPS"] = dps
+	elseif MELEE_WEAPON_LOCS[equipLoc] then
+		stats["TOPFIT_MELEE_DPS"] = dps
+	end
+	return stats
+end
+
 -- /topfit unrecognized [clear]
 function TopFit:PrintUnrecognizedLog(clear)
 	local log = TopFit.db and TopFit.db.global and TopFit.db.global.unrecognized

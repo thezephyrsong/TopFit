@@ -66,6 +66,14 @@ local statNameToKey = {
 	-- flat stats instead of folding into a stat this client never grants.
 	SpellDamage       = 'TOPFIT_SPELL_DAMAGE_FLAT',
 	Healing           = 'TOPFIT_SPELL_HEALING_FLAT',
+	-- per-school spell damage (Pawn's own names) -- added 2026-10-10, matching the per-school flat
+	-- stats confirmed on real Forever gear (procparser.lua)
+	ArcaneSpellDamage = 'TOPFIT_ARCANE_DAMAGE_FLAT',
+	FireSpellDamage   = 'TOPFIT_FIRE_DAMAGE_FLAT',
+	FrostSpellDamage  = 'TOPFIT_FROST_DAMAGE_FLAT',
+	HolySpellDamage   = 'TOPFIT_HOLY_DAMAGE_FLAT',
+	NatureSpellDamage = 'TOPFIT_NATURE_DAMAGE_FLAT',
+	ShadowSpellDamage = 'TOPFIT_SHADOW_DAMAGE_FLAT',
 	Armor             = 'RESISTANCE0_NAME',
 	Health            = 'ITEM_MOD_HEALTH_SHORT',
 	Mana              = 'ITEM_MOD_MANA_SHORT',
@@ -77,6 +85,13 @@ local statNameToKey = {
 	FrostResist       = 'RESISTANCE4_NAME',
 	ShadowResist      = 'RESISTANCE5_NAME',
 	ArcaneResist      = 'RESISTANCE6_NAME',
+	-- "...Resistance" spelling used by WowSims-style exports (same stats as the "...Resist" names)
+	HolyResistance    = 'RESISTANCE1_NAME',
+	FireResistance    = 'RESISTANCE2_NAME',
+	NatureResistance  = 'RESISTANCE3_NAME',
+	FrostResistance   = 'RESISTANCE4_NAME',
+	ShadowResistance  = 'RESISTANCE5_NAME',
+	ArcaneResistance  = 'RESISTANCE6_NAME',
 
 	-- armor types
 	IsCloth           = 'TOPFIT_ARMORTYPE_CLOTH',
@@ -115,7 +130,7 @@ local function ParsePawn(importString)
 	if not found or not version or (setName or '') == '' or (weights or '') == '' then return end
 
 	local scaleTable = {}
-	weights:gsub('([^ =]+)=([^ ,]+)', function(stat, weight)
+	weights:gsub('([^ =,]+)=([^ ,]+)', function(stat, weight)
 		scaleTable[stat] = tonumber(weight)
 	end)
 	return setName, scaleTable
@@ -146,12 +161,12 @@ local function ParseTopFit(importString)
 	end
 
 	local scaleTable = {}
-	weights:gsub('([^ =]+)=([^ ,]+)', function(stat, weight)
+	weights:gsub('([^ =,]+)=([^ ,]+)', function(stat, weight)
 		scaleTable[stat] = tonumber(weight)
 	end)
 
 	local capTable = {}
-	caps:gsub('([^ =]+)=([^ ,;]+)%s*;%s*([^ ,;]+)%s*', function(stat, amount, capType)
+	caps:gsub('([^ =,;]+)=([^ ,;]+)%s*;%s*([^ ,;]+)%s*', function(stat, amount, capType)
 		local statKey = statNameToKey[stat]
 		if statKey then
 			capTable[statKey] = capTable[statKey] or {}

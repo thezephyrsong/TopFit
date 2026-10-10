@@ -337,6 +337,9 @@ function TopFit:GetItemInfoTable(item)
         itemBonus["SET: " .. setName] = 1
     end
 
+    -- split weapon DPS into ranged / melee keys (see AddSplitWeaponDps in procparser.lua)
+    TopFit:AddSplitWeaponDps(itemBonus, itemEquipLoc)
+
     -- Mana Regen Consolidation
     itemBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] = ((itemBonus["ITEM_MOD_POWER_REGEN0_SHORT"] or 0) + (itemBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] or 0))
     itemBonus["ITEM_MOD_POWER_REGEN0_SHORT"] = nil

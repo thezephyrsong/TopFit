@@ -625,7 +625,8 @@ function TopFit:OnInitialize()
     -- block value patterns added; also starts the unrecognized-data discovery log.
     -- Version 4 (2026-10-10): all ITEM_MOD_*_RATING_SHORT keys from GetItemStats() are now
     -- stripped at scan time (percent text is the only source).
-    self.ITEM_CACHE_VERSION = 4
+    -- Version 5 (2026-10-10): split TOPFIT_RANGED_DPS / TOPFIT_MELEE_DPS added alongside the generic DPS key.
+    self.ITEM_CACHE_VERSION = 5
     if self.db.global.itemCacheVersion ~= self.ITEM_CACHE_VERSION then
         self.db.global.itemCache = {}
         self.db.global.itemCacheVersion = self.ITEM_CACHE_VERSION
@@ -708,6 +709,8 @@ function TopFit:OnInitialize()
     _G["TOPFIT_ARMOR_PENETRATION_PERCENT"] = "Armor Penetration"
     _G["TOPFIT_RESILIENCE_PERCENT"] = "Resilience"
     _G["TOPFIT_HASTE_PERCENT"] = "Haste"
+    _G["TOPFIT_RANGED_DPS"] = "Ranged Weapon DPS"
+    _G["TOPFIT_MELEE_DPS"] = "Melee Weapon DPS"
     -- Per-school flat spell damage -- CONFIRMED on real Forever gear 2026-09-27 (e.g. Filigreed
     -- Shadow Circlet). Tracked per school, unlike the generic hit/crit spell buckets above.
     _G["TOPFIT_ARCANE_DAMAGE_FLAT"] = "Arcane Damage"
@@ -753,6 +756,8 @@ function TopFit:OnInitialize()
             [6] = "TOPFIT_CRIT_CHANCE_MELEE",
             [7] = "TOPFIT_DODGE_PARRY_REDUCTION",
 			[8] = "TOPFIT_FLAT_DAMAGE_MELEE",
+			[9] = "TOPFIT_MELEE_DPS",
+			[10] = "TOPFIT_RANGED_DPS",
         },
         ["Caster"] = {
             -- ITEM_MOD_SPELL_POWER_SHORT removed 2026-09-27 (Dan): redundant with
