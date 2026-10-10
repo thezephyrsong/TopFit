@@ -711,6 +711,10 @@ function TopFit:OnInitialize()
     _G["TOPFIT_DEFENSE_FLAT"] = "Defense"
     _G["TOPFIT_SPELL_HEALING_FLAT"] = "Healing Power"
     _G["TOPFIT_SPELL_DAMAGE_FLAT"] = "Spell Damage"
+	_G["TOPFIT_FLAT_DAMAGE_ALL"] = "On Hit Damage (All)"
+	_G["TOPFIT_FLAT_DAMAGE_MELEE"] = "On Hit Damage (Melee)"
+	_G["TOPFIT_BLOCK_DAMAGE_FLAT"] = "Block Damage"
+	_G["TOPFIT_THORNS_DAMAGE_FLAT"] = "Thorns Damage"
 
     TopFit.statList = {
         ["Basic Attributes"] = {
@@ -740,6 +744,7 @@ function TopFit:OnInitialize()
             [5] = "TOPFIT_WEAPON_SPEED",
             [6] = "TOPFIT_CRIT_CHANCE_MELEE",
             [7] = "TOPFIT_DODGE_PARRY_REDUCTION",
+			[8] = "TOPFIT_FLAT_DAMAGE_MELEE",
         },
         ["Caster"] = {
             -- ITEM_MOD_SPELL_POWER_SHORT removed 2026-09-27 (Dan): redundant with
@@ -778,6 +783,8 @@ function TopFit:OnInitialize()
             [5] = "TOPFIT_BLOCK_CHANCE_ALL",
             [6] = "TOPFIT_DODGE_CHANCE_ALL",
             [7] = "TOPFIT_RESILIENCE_PERCENT",
+			[8] = "TOPFIT_BLOCK_DAMAGE_FLAT",
+			[9] = "TOPFIT_THORNS_DAMAGE_FLAT",
         },
         ["Hybrid"] = {
             -- ITEM_MOD_HIT_RATING_SHORT/ITEM_MOD_CRIT_RATING_SHORT removed 2026-09-27, same
@@ -794,6 +801,7 @@ function TopFit:OnInitialize()
             [3] = "TOPFIT_HIT_CHANCE_ALL",
             [4] = "TOPFIT_CRIT_CHANCE_ALL",
             [5] = "TOPFIT_CRIT_CHANCE_PHYSICAL",
+			[6] = "TOPFIT_FLAT_DAMAGE_ALL",
         },
         ["Misc."] = {
             [1] = "ITEM_MOD_HEALTH_SHORT",
