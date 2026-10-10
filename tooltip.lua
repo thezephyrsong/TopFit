@@ -196,6 +196,12 @@ local function TooltipAddLines(tt, link)
     
     if TopFit.db and TopFit.db.profile and TopFit.db.profile.debugMode then
         tt:AddLine("Item stats as seen by TopFit:", 0.5, 0.9, 1)
+        if TopFit.GetItemUsability then
+            local usable, reasons = TopFit:GetItemUsability(link)
+            if not usable then
+                tt:AddLine("  Not usable by your class (" .. table.concat(reasons, "; ") .. ") -- ignored by calculations", 1, 0.4, 0.4)
+            end
+        end
         if itemTable["itemBonus"] then
             for stat, value in pairs(itemTable["itemBonus"]) do
                 if not string.find(stat, "SET: ") then
