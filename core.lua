@@ -436,8 +436,12 @@ function TopFit:ChatCommand(input)
             TopFit:DebugWeaponSlots()
         elseif command == "caps" then
             TopFit:CapsCommand(rest)
+        elseif command == "unrecognized" then
+            TopFit:PrintUnrecognizedLog(rest and rest:lower())
+        elseif command == "itemdump" then
+            TopFit:DumpItemData(rest)
         else
-            TopFit:Print("Available Options:\n  show - shows the calculations frame\n  options - shows TopFit's options\n  import - import a Pawn/AskMrRobot/TopFit weight string as a new set\n  export [pawn] - export the selected set as a string (add 'pawn' for Pawn format)\n  simc - export your currently equipped gear as a .simc profile\n  talentdebug - print raw talent tab/count info for debugging\n  saveset [name] - save your worn gear into an equipment set and report exactly what happened (for testing)\n  weapondebug - print weapon slot subType/speed/damage scan results for debugging\n  caps - list/add/remove/toggle cap entries for the selected set (type 'caps' alone for help)")
+            TopFit:Print("Available Options:\n  show - shows the calculations frame\n  options - shows TopFit's options\n  import - import a Pawn/AskMrRobot/TopFit weight string as a new set\n  export [pawn] - export the selected set as a string (add 'pawn' for Pawn format)\n  simc - export your currently equipped gear as a .simc profile\n  talentdebug - print raw talent tab/count info for debugging\n  saveset [name] - save your worn gear into an equipment set and report exactly what happened (for testing)\n  weapondebug - print weapon slot subType/speed/damage scan results for debugging\n  caps - list/add/remove/toggle cap entries for the selected set (type 'caps' alone for help)\n  unrecognized [clear] - list stat keys and Equip: lines TopFit has seen but cannot score yet\n  itemdump <link> - show the raw stats and parsed tooltip stats TopFit sees for one item")
         end
     end
 end
@@ -617,7 +621,11 @@ function TopFit:OnInitialize()
     -- stats forever. Bump ITEM_CACHE_VERSION any time procparser.lua/inventory.lua change which
     -- stats a scan extracts. Version 2 (2026-09-27): short-form hit/crit, flat Defense/weapon
     -- skill, combined and per-school spell damage were all missed by version 1.
-    self.ITEM_CACHE_VERSION = 2
+    -- Version 3 (2026-10-10): item-side parry/dodge/block chance, combined haste, and shield
+    -- block value patterns added; also starts the unrecognized-data discovery log.
+    -- Version 4 (2026-10-10): all ITEM_MOD_*_RATING_SHORT keys from GetItemStats() are now
+    -- stripped at scan time (percent text is the only source).
+    self.ITEM_CACHE_VERSION = 4
     if self.db.global.itemCacheVersion ~= self.ITEM_CACHE_VERSION then
         self.db.global.itemCache = {}
         self.db.global.itemCacheVersion = self.ITEM_CACHE_VERSION
@@ -731,7 +739,7 @@ function TopFit:OnInitialize()
             -- from real gear ("Band of the Better Half": "Reduces chance to be Dodged or Parried
             -- by 1.2%"). ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT replaced with
             -- TOPFIT_ARMOR_PENETRATION_PERCENT -- stat key added, but NO item-tooltip pattern
-            -- added to procparser.lua, since there's no confirmed or even plausible-by-precedent
+            -- added to procparser.lua (STILL true 2026-10-10: no item seen; use /topfit unrecognized), since there's no confirmed or even plausible-by-precedent
             -- Forever phrasing to base one on (unlike parry/block/dodge, which could reasonably
             -- extend the established "Increases your X chance by N%" family).
             [1] = "TOPFIT_ARMOR_PENETRATION_PERCENT",
@@ -792,7 +800,7 @@ function TopFit:OnInitialize()
             -- GetItemStats() will never return these on Forever gear -- hit/crit are itemized as
             -- flat "Improves your chance to..." percent text (confirmed against real gear
             -- screenshots, procparser.lua), not WotLK-style rating stats. ITEM_MOD_HASTE_RATING_SHORT
-            -- left alone -- no equivalent flat-percent haste pattern has been confirmed either way.
+            -- left alone -- (2026-10-10: the combined "attack speed and casting speed" line is now confirmed and parsed to TOPFIT_HASTE_PERCENT).
             -- ITEM_MOD_HASTE_RATING_SHORT removed 2026-09-27 (Dan: convert ratings to
             -- percentages), replaced with TOPFIT_HASTE_PERCENT -- same caveat as armor
             -- penetration/resilience above: stat key added, no item-tooltip pattern yet.

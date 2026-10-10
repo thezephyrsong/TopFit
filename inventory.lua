@@ -139,6 +139,18 @@ function TopFit:GetItemInfoTable(item)
     local GetStats = (C_Item and C_Item.GetItemStats) or GetItemStats
     local itemBonus = (GetStats and GetStats(itemLink)) or {}
 
+    -- discovery log for stats/wording TopFit does not recognise yet (see procparser.lua); must
+    -- run on the raw GetItemStats() result, before parsed percent stats are merged into it
+    if TopFit.LogUnrecognizedItemData then
+        TopFit:LogUnrecognizedItemData(itemLink, itemBonus)
+    end
+
+    -- Forever is percent-based: drop the rating keys GetItemStats() still reports so they can't
+    -- double-count the tooltip's percent lines (see StripRatingStats in procparser.lua)
+    if TopFit.StripRatingStats then
+        TopFit:StripRatingStats(itemBonus)
+    end
+
     if TopFit.ScanItemPermanentPercentStats then
         local permanentStats = TopFit:ScanItemPermanentPercentStats(itemLink)
         for statKey, amount in pairs(permanentStats) do

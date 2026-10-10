@@ -245,14 +245,39 @@ TopFit.PermanentPercentStatPatterns =
 	  statKey = "TOPFIT_DODGE_PARRY_REDUCTION" },
 	{ pattern = "reduces chance to be dodged or parried by ([%d%.]+)%%",
 	  statKey = "TOPFIT_DODGE_PARRY_REDUCTION" },
-	-- parry / block chance -- added 2026-09-26, phrasing inferred by consistency with the
-	-- confirmed beta-client talent text ("Increases your Parry chance by N%.", Warrior's
-	-- Deflection/Shield Specialization) and the established Equip: phrasing family above, NOT
-	-- yet confirmed against a real item tooltip. Flag and correct if actual gear text differs.
+	-- parry / block chance -- added 2026-09-26 from TALENT text only. SUPERSEDED 2026-10-10:
+	-- real item phrasing is different (see the confirmed entries further down); these two
+	-- never matched a real item and are kept only as fallbacks.
 	{ pattern = "increases your parry chance by ([%d%.]+)%%",
 	  statKey = "TOPFIT_PARRY_CHANCE_ALL" },
 	{ pattern = "increases your chance to block by ([%d%.]+)%%",
 	  statKey = "TOPFIT_BLOCK_CHANCE_ALL" },
+	-- CONFIRMED ITEM PHRASING for parry / dodge / block / haste -- real Forever gear tooltips,
+	-- 2026-10-10 (Stronghold Gauntlets: "Increases your chance to Parry an attack by 1.0%.",
+	-- Arena Grand Master: "Increases your chance to Dodge an attack by 1.0%.", Quillord Mail
+	-- Leggings: "Increases your chance to Block attacks with a shield by 2.0%.", Dawnstalker Belt:
+	-- "Increases your attack speed and casting speed by 1.0%."). The older inferred entries below
+	-- ("increases your parry chance by" etc.) came from TALENT text and never matched a real item;
+	-- they are kept only as harmless fallbacks. Before these entries existed, the chance
+	-- lines went down the proc path (the generic "chance" check in LooksLikeTriggeredEffect),
+	-- found no stat there, and were silently dropped -- i.e. unscored, not mis-scored.
+	{ pattern = "increases your chance to parry an attack by ([%d%.]+)%%",
+	  statKey = "TOPFIT_PARRY_CHANCE_ALL" },
+	{ pattern = "increases your chance to dodge an attack by ([%d%.]+)%%",
+	  statKey = "TOPFIT_DODGE_CHANCE_ALL" },
+	{ pattern = "increases your chance to block attacks with a shield by ([%d%.]+)%%",
+	  statKey = "TOPFIT_BLOCK_CHANCE_ALL" },
+	-- One line covers melee, ranged and casting haste, so it maps to the single combined
+	-- TOPFIT_HASTE_PERCENT key. If Forever also has split variants (melee-only, spell-only),
+	-- they have not been seen yet and are deliberately not guessed at.
+	{ pattern = "increases your attack speed and casting speed by ([%d%.]+)%%",
+	  statKey = "TOPFIT_HASTE_PERCENT" },
+	-- Block VALUE is a flat amount, not a chance, and already has a stat key
+	-- (ITEM_MOD_BLOCK_VALUE_SHORT, Defensive group). Written by assignment, so if GetItemStats()
+	-- already reports the same number it is simply overwritten, never doubled. The shield's own
+	-- base "15 Block" line is a different thing and is intentionally NOT matched.
+	{ pattern = "increases the block value of your shield by (%d+)",
+	  statKey = "ITEM_MOD_BLOCK_VALUE_SHORT" },
 	-- dodge chance, spell hit chance, "physical" (all-attacks-no-spell) crit -- added 2026-09-26
 	-- from the same full class talent data pass. Same caveat as parry/block above: phrasing
 	-- inferred by consistency with confirmed talent text, not yet seen on a real item tooltip.
@@ -407,6 +432,145 @@ function TopFit:ScanItemPermanentPercentStats(itemLink)
 	TopFit.scanTooltip:Hide()
 
 	return result
+end
+
+-- ============================================================================
+-- Discovery log: surfaces item data TopFit does not recognise yet (added 2026-10-10)
+--
+-- Armor penetration, resilience (and any haste phrasing other than the combined attack/casting
+-- speed line) have never been seen on a real Forever item, so there is nothing to write a
+-- pattern against. Rather than guess, every item scan records two things in
+-- db.global.unrecognized, to be read back with `/topfit unrecognized`:
+--   keys  - GetItemStats() keys that are not in TopFit.statList (so an ITEM_MOD_*_RATING key for
+--           ArP/resilience would show up here even if the tooltip wording is unknown)
+--   lines - "Equip:" lines that no permanent-stat pattern matched (digits collapsed to N so the
+--           same wording at different values is one entry); lines with a duration are skipped
+--           as they are procs, not permanent stats
+-- Each entry keeps a count and one example item link. Only runs on a cache miss, so the
+-- item cache version bump is what makes a full re-scan (and therefore a full log) happen.
+-- ============================================================================
+local IGNORED_STAT_KEY_PREFIXES = { "EMPTY_SOCKET", "ITEM_MOD_POWER_REGEN0" }
+
+local function IsKnownStatKey(key)
+	if not TopFit.statList then return false end
+	for _, sTable in pairs(TopFit.statList) do
+		for _, statKey in pairs(sTable) do
+			if statKey == key then return true end
+		end
+	end
+	return false
+end
+
+function TopFit:LogUnrecognizedItemData(itemLink, rawStats)
+	if not itemLink or not TopFit.db or not TopFit.db.global then return end
+	local log = TopFit.db.global.unrecognized
+	if not log then
+		log = { keys = {}, lines = {} }
+		TopFit.db.global.unrecognized = log
+	end
+
+	local function bump(bucket, name)
+		local entry = bucket[name]
+		if not entry then
+			entry = { n = 0, example = itemLink }
+			bucket[name] = entry
+		end
+		entry.n = entry.n + 1
+	end
+
+	for key in pairs(rawStats or {}) do
+		local ignored = false
+		for _, prefix in ipairs(IGNORED_STAT_KEY_PREFIXES) do
+			if key:sub(1, #prefix) == prefix then ignored = true break end
+		end
+		if not ignored and not IsKnownStatKey(key) then
+			bump(log.keys, key)
+		end
+	end
+
+	if not EQUIP_PREFIX then return end
+	TopFit.scanTooltip:SetOwner(UIParent, 'ANCHOR_NONE')
+	TopFit.scanTooltip:SetHyperlink(itemLink)
+	for i = 1, TopFit.scanTooltip:NumLines() do
+		local leftLine = getglobal("TFScanTooltip" .. "TextLeft" .. i)
+		local text = leftLine and leftLine:GetText()
+		if text and text:find(EQUIP_PREFIX, 1, true)
+			and not TopFit:ParsePermanentStatLine(text)
+			and not text:match("for%s+%d+%s*sec") then
+			bump(log.lines, (text:gsub("%d+%.%d+", "N"):gsub("%d+", "N")))
+		end
+	end
+	TopFit.scanTooltip:Hide()
+end
+
+-- Forever itemizes everything as flat percent / flat numbers (Dan's decision, 2026-10-10), yet
+-- GetItemStats() still reports the item's underlying rating (e.g. Stronghold Gauntlets: parry
+-- rating 15, crit rating 14) next to the "+1.0%" tooltip line it renders from the same data.
+-- Keeping both scores the same stat twice on different scales, so every *_RATING_SHORT key is
+-- removed here and the tooltip text is the only source. Call AFTER LogUnrecognizedItemData so the
+-- discovery log still records which rating keys exist (e.g. a first ArP/resilience item).
+-- Returns the table it was given.
+function TopFit:StripRatingStats(stats)
+	if not stats then return stats end
+	for key in pairs(stats) do
+		if type(key) == "string" and key:match("^ITEM_MOD_.+_RATING_SHORT$") then
+			stats[key] = nil
+		end
+	end
+	return stats
+end
+
+-- /topfit unrecognized [clear]
+function TopFit:PrintUnrecognizedLog(clear)
+	local log = TopFit.db and TopFit.db.global and TopFit.db.global.unrecognized
+	if clear == "clear" then
+		if TopFit.db and TopFit.db.global then TopFit.db.global.unrecognized = nil end
+		TopFit:Print("Unrecognized-data log cleared.")
+		return
+	end
+	if not log then
+		TopFit:Print("Nothing logged yet -- items are logged as they are scanned.")
+		return
+	end
+	local function sorted(bucket)
+		local list = {}
+		for name, entry in pairs(bucket) do tinsert(list, { name = name, n = entry.n, example = entry.example }) end
+		table.sort(list, function(a, b) if a.n ~= b.n then return a.n > b.n end return a.name < b.name end)
+		return list
+	end
+	local keys, lines = sorted(log.keys), sorted(log.lines)
+	TopFit:Print("Stat keys from GetItemStats() not in TopFit's stat list: " .. #keys)
+	for i = 1, math.min(#keys, 30) do
+		print(string.format("  %s x%d  e.g. %s", keys[i].name, keys[i].n, keys[i].example))
+	end
+	TopFit:Print("Unmatched Equip: lines: " .. #lines .. " (showing up to 40, most common first)")
+	for i = 1, math.min(#lines, 40) do
+		print(string.format("  %s x%d  e.g. %s", lines[i].name, lines[i].n, lines[i].example))
+	end
+end
+
+-- /topfit itemdump <item link>: shows exactly what TopFit sees for one item
+function TopFit:DumpItemData(itemLink)
+	if not itemLink or itemLink == "" then
+		TopFit:Print("Usage: /topfit itemdump [shift-click an item link]")
+		return
+	end
+	local GetStats = (C_Item and C_Item.GetItemStats) or GetItemStats
+	local raw = (GetStats and GetStats(itemLink)) or {}
+	TopFit:Print("GetItemStats() for " .. itemLink .. ":")
+	local any = false
+	for key, value in pairs(raw) do
+		any = true
+		print(string.format("  %s = %s%s", key, tostring(value), IsKnownStatKey(key) and "" or "   (not in stat list)"))
+	end
+	if not any then print("  (nothing returned)") end
+	TopFit:Print("Permanent stats parsed from tooltip text:")
+	any = false
+	for key, value in pairs(TopFit:ScanItemPermanentPercentStats(itemLink)) do
+		any = true
+		print(string.format("  %s = %s", key, tostring(value)))
+	end
+	if not any then print("  (none)") end
 end
 
 -- distinguishes an actual chance/triggered effect line from an ordinary flat, always-on

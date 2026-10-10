@@ -178,8 +178,10 @@ for these — extracted from tooltip text by `procparser.lua`):
 | `TOPFIT_DEFENSE_FLAT`, `TOPFIT_WEAPON_SKILL_<TYPE>` | Confirmed on real gear (flat `Increased X +N` form) |
 | `TOPFIT_WEAPON_SPEED` | Pre-existing, stable |
 | `TOPFIT_CRIT_CHANCE_MELEE/RANGED/SPELL`, `TOPFIT_HIT_CHANCE_SPELL`, `TOPFIT_CRIT_CHANCE_PHYSICAL`, `TOPFIT_DODGE_CHANCE_ALL` | Confirmed via real **talent** text, not yet seen on an item |
-| `TOPFIT_PARRY_CHANCE_ALL`, `TOPFIT_BLOCK_CHANCE_ALL` | Confirmed via real talent text; item-tooltip pattern in `procparser.lua` is inferred by phrasing consistency, unconfirmed |
-| `TOPFIT_ARMOR_PENETRATION_PERCENT`, `TOPFIT_RESILIENCE_PERCENT`, `TOPFIT_HASTE_PERCENT` | **No confirmed source at all**, neither item nor talent — exist so a weight can be assigned once real phrasing turns up, nothing populates them yet |
+| `TOPFIT_PARRY_CHANCE_ALL`, `TOPFIT_DODGE_CHANCE_ALL`, `TOPFIT_BLOCK_CHANCE_ALL` | **Confirmed on real gear 2026-10-10**: "Increases your chance to Parry an attack by N%." / "...to Dodge an attack by N%." / "...to Block attacks with a shield by N%." (Stronghold Gauntlets, Arena Grand Master, Quillord Mail Leggings). The older talent-derived patterns ("increases your parry chance by") never matched an item and are kept as fallbacks only |
+| `TOPFIT_HASTE_PERCENT` | **Confirmed on real gear 2026-10-10**, one combined line: "Increases your attack speed and casting speed by N%." (Dawnstalker Belt). No split melee/spell variants seen yet |
+| `ITEM_MOD_BLOCK_VALUE_SHORT` (item text) | "Increases the Block Value of your shield by N." (Bonepile Gaze) is now parsed from text too, by assignment, so it can't double up with `GetItemStats()`. The shield's base "N Block" line is not matched |
+| `TOPFIT_ARMOR_PENETRATION_PERCENT`, `TOPFIT_RESILIENCE_PERCENT` | **No confirmed source at all**, neither item nor talent — exist so a weight can be assigned once real phrasing turns up, nothing populates them yet. `/topfit unrecognized` logs any unknown `GetItemStats()` key or unmatched `Equip:` line seen during scans, so the first real ArP/resilience item will surface there |
 
 ---
 
@@ -282,9 +284,20 @@ Genuinely open, pulled together in one place:
       currently depends on this value
 - [ ] `GetItemStats()` key names on a few real Forever items — expected
       to match, not independently confirmed
-- [ ] Item-tooltip phrasing for parry/block/dodge chance (talent-side
-      confirmed, item-side still inferred-only) and for armor
-      penetration/resilience/haste (no source at all yet, item or talent)
+- [x] Item-tooltip phrasing for parry/block/dodge chance and haste —
+      confirmed from real gear and implemented 2026-10-10 (section 3)
+- [ ] Item-tooltip phrasing for armor penetration/resilience — still no
+      source; no such item seen yet. Run `/topfit unrecognized` after a
+      full scan; `/topfit itemdump <link>` shows one item's raw stats
+- [x] **`GetItemStats()` DOES return rating keys on Forever gear**
+      (Stronghold Gauntlets: `ITEM_MOD_PARRY_RATING_SHORT = 15`,
+      `ITEM_MOD_CRIT_RATING_SHORT = 14`, alongside the parsed 1% lines) —
+      resolved 2026-10-10 (Dan: everything on Forever is handled as
+      percent numbers, no ratings). `TopFit:StripRatingStats` removes every
+      `ITEM_MOD_*_RATING_SHORT` key at scan time, after the discovery log
+      has recorded it. Consequence: saved set weights on old rating keys
+      now score 0 and must be re-entered on the percent keys (cache
+      version 4)
 - [ ] "Talent config may not be loaded" warning firing every calculation,
       not just once per session — not yet investigated (section 4)
 - [ ] `enchant_ids.lua` — extensively references the now-removed
@@ -440,3 +453,5 @@ play-by-play.
   (`self.EditBox`), fixed in `import.lua`. Checked the upstream
   wowsims/exporter repo again: still no Forever branch. Plan doc reorganized
   from a 1450-line chronological log into a current-state reference.
+- **10-10**: Item-side parry/dodge/block chance, combined haste and shield block value patterns added from real tooltips (previously unscored); item cache version 2→3 so existing scans refresh; `/topfit unrecognized` discovery log and `/topfit itemdump` added. Found `GetItemStats()` still returns rating keys (see section 6).
+- **10-10 (later)**: Rating keys from `GetItemStats()` stripped at scan time; cache version 3→4.
