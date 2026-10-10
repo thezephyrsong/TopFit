@@ -494,7 +494,7 @@ function TopFit:GetEquippableItems(requestedSlotID)
     -- Initialize empty lists for both numeric IDs and string names
     for slotName, slotID in pairs(TopFit.slots or {}) do
         itemListBySlot[slotID] = itemListBySlot[slotID] or {}
-        itemListBySlot[slotName] = itemListBySlot[slotID]
+        -- itemListBySlot[slotName] = itemListBySlot[slotID]
     end
 
     local processedKeys = {}

@@ -290,6 +290,31 @@ TopFit.PermanentPercentStatPatterns =
 		frost = "TOPFIT_FROST_DAMAGE_FLAT", holy = "TOPFIT_HOLY_DAMAGE_FLAT",
 		nature = "TOPFIT_NATURE_DAMAGE_FLAT", shadow = "TOPFIT_SHADOW_DAMAGE_FLAT",
 	  } },
+	-- FLAT on-hit damage (Spells and Attacks)
+	{ pattern = "spells and attacks deal (%d+) %a+ damage",
+	  statKey = "TOPFIT_FLAT_DAMAGE_ALL" },
+	{ pattern = "spells and attacks deal (%d+) damage",
+	  statKey = "TOPFIT_FLAT_DAMAGE_ALL" },
+	-- FLAT on-hit damage (Melee Weapon Attacks Only)
+	{ pattern = "melee weapon attacks deal (%d+) %a+ damage",
+	  statKey = "TOPFIT_FLAT_DAMAGE_MELEE" },
+	{ pattern = "melee weapon attacks deal (%d+) damage",
+	  statKey = "TOPFIT_FLAT_DAMAGE_MELEE" },
+	-- THORNS / REFLECT DAMAGE
+	{ pattern = "inflicts (%d+) %a+ damage to the attacker",
+	  statKey = "TOPFIT_THORNS_DAMAGE_FLAT" },
+	{ pattern = "inflicts (%d+) damage to the attacker",
+	  statKey = "TOPFIT_THORNS_DAMAGE_FLAT" },
+	-- BLOCK DAMAGE (Ranged)
+	{ pattern = "deals (%d+) to (%d+) %a+ damage every time you block",
+	  rangeStatKey = "TOPFIT_BLOCK_DAMAGE_FLAT" },
+	{ pattern = "deals (%d+) to (%d+) damage every time you block",
+	  rangeStatKey = "TOPFIT_BLOCK_DAMAGE_FLAT" },
+	-- BLOCK DAMAGE (Flat)
+	{ pattern = "deals (%d+) %a+ damage every time you block",
+	  statKey = "TOPFIT_BLOCK_DAMAGE_FLAT" },
+	{ pattern = "deals (%d+) damage every time you block",
+	  statKey = "TOPFIT_BLOCK_DAMAGE_FLAT" },
 }
 
 -- flat "Increased <WeaponType/Defense> +N" lines -- no % sign, no "chance" word, so these
@@ -319,6 +344,11 @@ function TopFit:ParsePermanentStatLine(text)
 				local result = {}
 				for _, key in ipairs(entry.sameValueKeys) do result[key] = tonumber(value) end
 				return result
+			end
+		elseif entry.rangeStatKey then
+			local minVal, maxVal = lower:match(entry.pattern)
+			if minVal and maxVal then
+				return { [entry.rangeStatKey] = (tonumber(minVal) + tonumber(maxVal)) / 2 }
 			end
 		elseif entry.schoolKeys then
 			local school, value = lower:match(entry.pattern)
