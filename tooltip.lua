@@ -257,7 +257,10 @@ local function TooltipAddLines(tt, link)
         end
     end
     
-    if TopFit.db and TopFit.db.profile and TopFit.db.profile.showTooltip then
+    if TopFit.db and TopFit.db.profile and TopFit.db.profile.showTooltip
+        and TopFit.IsItemUsableByPlayer and not TopFit:IsItemUsableByPlayer(link) then
+        tt:AddLine("TopFit: not usable by your class, ignored", 0.6, 0.6, 0.6)
+    elseif TopFit.db and TopFit.db.profile and TopFit.db.profile.showTooltip then
         local first = true
         for setCode, setTable in pairs(TopFit.db.profile.sets or {}) do
             if not setTable.excludeFromTooltip then
@@ -285,7 +288,8 @@ if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall then
         if link and IsEquippableItemSafe(link) then
             TooltipAddLines(tt, link)
             
-            if (tt == GameTooltip or tt == ItemRefTooltip) and TopFit and TopFit.db and TopFit.db.profile and TopFit.db.profile.showComparisonTooltip and not TopFit.isBlocked then
+            if (tt == GameTooltip or tt == ItemRefTooltip) and TopFit and TopFit.db and TopFit.db.profile and TopFit.db.profile.showComparisonTooltip and not TopFit.isBlocked
+                and (not TopFit.IsItemUsableByPlayer or TopFit:IsItemUsableByPlayer(link)) then
                 TooltipAddCompareLines(tt, link)
             end
         end

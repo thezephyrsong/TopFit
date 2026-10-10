@@ -318,6 +318,20 @@ community and aren't always right — bring anything that sounds like a
 real client behavior change here to check against what TopFit actually
 does before acting on it.
 
+### Class usability filter (2026-10-10)
+
+Candidates the class can't use are removed in `ReduceItemList` (`calculation.lua`) before scoring:
+`TopFit:GetItemUsability` (`inventory.lua`) reads the tooltip and treats a RED right-hand type
+column ("Shield", "Mail", "Plate", "Wand", "Idol"...) or a red `Classes:` line as unusable. Red
+`Requires Level`, profession, reputation and race lines are ignored on purpose. Fails open (an
+unreadable tooltip counts as usable), is cached per session for 60s and never stored in the
+persistent item cache (account-wide, so a class-specific flag would be wrong on another
+character). Forced slots and virtual items are exempt. Tooltips show a grey "not usable" line
+instead of scores for such items. **Unverified in-game**: that this client's scan tooltip
+reports red on the right-hand column; `/topfit itemdump <link>` prints the result to check.
+Consequence: a proficiency the character hasn't trained yet (e.g. mail before level 40) also
+counts as unusable until trained.
+
 ---
 
 ## 7. UI: the TopFit tab on the character frame
@@ -455,3 +469,4 @@ play-by-play.
   from a 1450-line chronological log into a current-state reference.
 - **10-10**: Item-side parry/dodge/block chance, combined haste and shield block value patterns added from real tooltips (previously unscored); item cache version 2→3 so existing scans refresh; `/topfit unrecognized` discovery log and `/topfit itemdump` added. Found `GetItemStats()` still returns rating keys (see section 6).
 - **10-10 (later)**: Rating keys from `GetItemStats()` stripped at scan time; cache version 3→4.
+- **10-10 (class filter)**: Unusable item types/class-restricted items excluded from calculation; stale `UnpackLocation` warning removed.

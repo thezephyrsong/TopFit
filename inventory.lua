@@ -654,3 +654,63 @@ function TopFit:GetCachedItem(itemLink)
 
     return nil
 end
+
+-- ============================================================================
+-- Class usability (added 2026-10-10)
+--
+-- Nothing used to stop an item the class can't use (a wand for a Hunter, an Idol for anyone but a
+-- Druid, plate for a Rogue) from competing for its slot. The client already knows: an unusable
+-- item type is drawn in RED on the right-hand side of the tooltip's type line ("Shield", "Mail",
+-- "Plate", "Wand", "Idol"...), and a class-restricted item has a red "Classes: ..." line when the
+-- player's class isn't listed. Reading that is server-accurate and needs no hand-written class
+-- proficiency table (which would be a guess for Forever). Deliberately NOT treated as unusable:
+-- red "Requires Level N" (the level check is separate, see CalculateBestInSlot) and red
+-- profession/reputation/race requirements, which aren't about class.
+--
+-- Fails OPEN: if the tooltip can't be read, the item counts as usable -- "unknown" must never
+-- remove a real item from consideration. Not stored in the persistent item cache on purpose: the
+-- result depends on the scanning character's class and on which proficiencies it has trained, and
+-- that cache is shared account-wide. Cached per session for 60 seconds only.
+-- ============================================================================
+TopFit.usabilityCache = TopFit.usabilityCache or {}
+
+local function IsRedFontString(fontString)
+    if not fontString or not fontString.GetTextColor then return false end
+    local r, g, b = fontString:GetTextColor()
+    return r and g and b and r > 0.9 and g < 0.35 and b < 0.35
+end
+
+-- returns usable (boolean), list of human-readable reasons it is not
+function TopFit:GetItemUsability(itemLink)
+    if not itemLink then return true, {} end
+    local classesPrefix = _G["ITEM_CLASSES_ALLOWED"] and _G["ITEM_CLASSES_ALLOWED"]:match("^(.-)%%s")
+
+    TopFit.scanTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+    TopFit.scanTooltip:SetHyperlink(itemLink)
+    local reasons = {}
+    for i = 1, TopFit.scanTooltip:NumLines() do
+        local left = _G["TFScanTooltipTextLeft" .. i]
+        local right = _G["TFScanTooltipTextRight" .. i]
+        local rightText = right and right:GetText()
+        if rightText and rightText ~= "" and IsRedFontString(right) then
+            tinsert(reasons, "cannot use item type: " .. rightText)
+        end
+        local leftText = left and left:GetText()
+        if leftText and classesPrefix and classesPrefix ~= "" and leftText:sub(1, #classesPrefix) == classesPrefix
+            and IsRedFontString(left) then
+            tinsert(reasons, leftText)
+        end
+    end
+    TopFit.scanTooltip:Hide()
+    return #reasons == 0, reasons
+end
+
+function TopFit:IsItemUsableByPlayer(itemLink)
+    if not itemLink then return true end
+    local cached = TopFit.usabilityCache[itemLink]
+    local now = GetTime and GetTime() or 0
+    if cached and (now - cached.time) < 60 then return cached.usable end
+    local usable = TopFit:GetItemUsability(itemLink)
+    TopFit.usabilityCache[itemLink] = { usable = usable, time = now }
+    return usable
+end

@@ -571,6 +571,8 @@ function TopFit:DumpItemData(itemLink)
 		print(string.format("  %s = %s", key, tostring(value)))
 	end
 	if not any then print("  (none)") end
+	local usable, reasons = TopFit:GetItemUsability(itemLink)
+	TopFit:Print("Usable by your class: " .. (usable and "yes" or ("NO -- " .. table.concat(reasons, "; "))))
 end
 
 -- distinguishes an actual chance/triggered effect line from an ordinary flat, always-on

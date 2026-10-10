@@ -2,17 +2,12 @@ local minimalist = [=[Interface\AddOns\TopFit\media\minimalist]=]
 
 local GetItemInfo = C_Item.GetItemInfo or GetItemInfo
 
--- 2026-09-27: C_EquipmentSet.UnpackLocation does NOT appear in any documented list of
--- C_EquipmentSet's functions found for this project (see REWRITE_PLAN_12_1_5.md) -- every
--- historical source names the plain global EquipmentManager_UnpackLocation instead, a FrameXML
--- Lua function (not an engine-level C_ API), which is exactly the kind of legacy global that's
--- been removed outright elsewhere this session (GetSpellInfo, IsEquippableItem,
--- InterfaceOptions_AddCategory). Whether it still exists on 12.1.5 is unconfirmed either way.
--- This is suspected as the actual cause of "switch to another set and back, it forgets the
--- original set": this function's only call site (below) rebuilds a saved set's item preview for
--- TopFit's own dropdown, and if it silently returns all nil, that preview comes back empty --
--- which is exactly the reported symptom, not a guess about unrelated behavior.
-local warnedNoUnpackLocation = false
+-- CONFIRMED ABSENT on this client (REWRITE_PLAN.md section 2): neither C_EquipmentSet.UnpackLocation
+-- nor the old global EquipmentManager_UnpackLocation exists. The set-preview code below does not
+-- depend on this function; it tries the equipped slot, then a bag scan by itemID, then a bare
+-- itemID link. This wrapper is kept as a harmless no-op (returns nothing) in case a future client
+-- adds one back. It used to print a warning every session when neither existed; that warning was
+-- removed 2026-10-10 because the missing function is expected and already handled.
 local function UnpackLocationSafe(location)
     if not location then return nil end
     local a1, a2, a3, a4, a5, a6
@@ -20,9 +15,6 @@ local function UnpackLocationSafe(location)
         a1, a2, a3, a4, a5, a6 = C_EquipmentSet.UnpackLocation(location)
     elseif EquipmentManager_UnpackLocation then
         a1, a2, a3, a4, a5, a6 = EquipmentManager_UnpackLocation(location)
-    elseif not warnedNoUnpackLocation then
-        warnedNoUnpackLocation = true
-        TopFit:Print("Neither C_EquipmentSet.UnpackLocation nor EquipmentManager_UnpackLocation exist on this client -- saved-set item previews will appear empty. This is a known suspect for sets 'forgetting' their contents; please report this message if you see it.")
     end
 
     if type(a4) == "boolean" then

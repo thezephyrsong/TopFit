@@ -368,6 +368,20 @@ function TopFit:ReduceItemList()
 		end
 	end
 	
+	-- remove items this class cannot use (wand for a Hunter, Idol for a non-Druid, plate for a
+	-- Rogue...) -- see GetItemUsability in inventory.lua. Forced slots and virtual (user-added)
+	-- items are left alone.
+	TopFit.usabilityCache = {}
+	for slotID, itemList in pairs(TopFit.itemListBySlot) do
+		if not forcedTable[slotID] then
+			for i = #itemList, 1, -1 do
+				if not itemList[i].isVirtual and not TopFit:IsItemUsableByPlayer(itemList[i].itemLink) then
+					tremove(itemList, i)
+				end
+			end
+		end
+	end
+	
 	-- "Force Two-Handed" filter
 	if TopFit.playerForceTwoHanded then
 		if TopFit.itemListBySlot[16] and not forcedTable[16] then
