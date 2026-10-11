@@ -629,8 +629,9 @@ function TopFit:OnInitialize()
     -- Basis: in-game tooltip percent vs the item's rating from wowsims/gamedata items.txt.
     -- hit: 3 rating = 0.3% at levels 20 and 30, 10 rating = 1.0% on two items (the best-tested
     -- value); the others each rest on a single reading and match TBC/WotLK's level-60 table.
-    -- NOT used by scoring, which reads the tooltip's percent text; for converting rating-based
-    -- weights or data (e.g. a Pawn import) to percent if ever needed.
+    -- NOT used by scoring, which reads the tooltip's percent text, and NOT used by the Pawn
+    -- import: Pawn's Classic convention already puts these stats at 1 point per 1%, so Pawn weights
+    -- map straight onto the percent stats (import.lua). Reference data only.
     self.RATING_PER_PERCENT = {
         hit = 10, haste = 10, expertise = 10,
         crit = 14, parry = 15, dodge = 12, block = 5,

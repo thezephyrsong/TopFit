@@ -24,29 +24,26 @@ local statNameToKey = {
 	Strength          = 'ITEM_MOD_STRENGTH_SHORT',
 	Spirit            = 'ITEM_MOD_SPIRIT_SHORT',
 
-	-- secondary / rating stats that exist in WotLK
-	-- CriticalStrike/CritRating/HitRating removed 2026-09-27, alongside removing
-	-- ITEM_MOD_CRIT_RATING_SHORT/ITEM_MOD_HIT_RATING_SHORT from core.lua's statList: unlike
-	-- SpellPower/SpellDamage/Healing above, there's no valid remap here, not just a missing one --
-	-- Pawn's Hit/Crit ratings are WotLK-scale rating POINTS, and Forever's real hit/crit stats are
-	-- flat PERCENTAGES (see TOPFIT_HIT_CHANCE_ALL etc.). There's no conversion constant between
-	-- those two systems for this client, so an imported Pawn scale's hit/crit weight is dropped
-	-- explicitly here (SanitizeScales already silently drops anything not in this table) rather
-	-- than silently mapped to a dead key that would never match real Forever gear anyway.
-	-- Haste/HasteRating/ExpertiseRating/ArmorPenetration/ResilienceRating/DefenseRating/
-	-- DodgeRating/ParryRating/BlockRating all removed 2026-09-27, alongside removing their
-	-- ITEM_MOD_*_RATING_SHORT destinations from core.lua's statList (Dan: convert ratings to
-	-- percentages). Same reasoning as HitRating/CritRating above for all of these except
-	-- DefenseRating: Pawn's numbers are WotLK-scale rating points, Forever's real stats are flat
-	-- percentages (dodge/parry/block chance) or not itemized with any confirmed phrasing at all
-	-- yet (armor pen, resilience, haste) -- no valid conversion either way, dropped explicitly.
-	-- DefenseRating is the one exception worth flagging specifically: Dan's own presets.lua
-	-- documents a REAL, known conversion for this client -- DEFENSE_RATING_TO_SKILL = 1.5 at
-	-- level 60 (1.5 rating per skill point) -- so a Pawn DefenseRating weight * 1.5 would be a
-	-- correct DefenseSkill weight, unlike the others where no such constant exists. Not
-	-- implemented here because RenameStat/CombineStat only rename/combine keys, they don't scale
-	-- values, and adding that machinery was out of scope for this pass -- left dropped rather
-	-- than silently wrong, but this one specifically has a clear, documented path to a real fix.
+	-- Pawn's rating-named stats, mapped 1:1 onto TopFit's percent stats (Dan, 2026-10-10: stay
+	-- compatible with Pawn so imports/exports keep working with Pawn on Forever). This is Pawn's own
+	-- Classic convention: it parses a "+1.0%" tooltip line straight into 1 point of the rating-named
+	-- stat (CritPercent -> CritRating, Hit -> HitRating, DodgePercent -> DodgeRating, ParryPercent ->
+	-- ParryRating, BlockPercent -> BlockRating, HasteClassic -> HasteRating, ExpertiseClassic ->
+	-- ExpertiseRating, DefenseSkill -> DefenseRating; see Pawn's TooltipParsing.lua). So a Pawn
+	-- weight is already "per 1%" and needs NO rating conversion -- TopFit.RATING_PER_PERCENT must not
+	-- be applied here. (This replaces the 2026-09-27 decision to drop these, which assumed
+	-- WotLK-scale rating points.) Armor penetration and resilience stay unmapped: no Forever item
+	-- has either. Spell* variants (SpellHitRating etc.) are left unmapped on purpose: Pawn folds them
+	-- into the plain names for non-casters, and mapping two Pawn names onto one TopFit key would make
+	-- the winner depend on table order.
+	HitRating         = 'TOPFIT_HIT_CHANCE_ALL',
+	CritRating        = 'TOPFIT_CRIT_CHANCE_ALL',
+	HasteRating       = 'TOPFIT_HASTE_PERCENT',
+	DodgeRating       = 'TOPFIT_DODGE_CHANCE_ALL',
+	ParryRating       = 'TOPFIT_PARRY_CHANCE_ALL',
+	BlockRating       = 'TOPFIT_BLOCK_CHANCE_ALL',
+	ExpertiseRating   = 'TOPFIT_DODGE_PARRY_REDUCTION',
+	DefenseRating     = 'TOPFIT_DEFENSE_FLAT',
 	SpellPenetration  = 'ITEM_MOD_SPELL_PENETRATION_SHORT',
 	BlockValue        = 'ITEM_MOD_BLOCK_VALUE_SHORT',
 	FeralAp           = 'ITEM_MOD_FERAL_ATTACK_POWER_SHORT',
@@ -116,12 +113,23 @@ local statNameToKey = {
 	TopfitDefenseFlat       = 'TOPFIT_DEFENSE_FLAT',
 }
 
+-- Several names can map to one key (Pawn's HitRating and TopFit's own TopfitHitChanceAll both mean
+-- TOPFIT_HIT_CHANCE_ALL). On export prefer Pawn's name so the string stays importable by Pawn, and
+-- break ties alphabetically so the result never depends on table iteration order.
 local function GetInverseStat(key)
+	local best
 	for pawnStat, statKey in pairs(statNameToKey) do
 		if statKey == key then
-			return pawnStat
+			local isTopfitName = pawnStat:sub(1, 6) == "Topfit"
+			local bestIsTopfit = best and best:sub(1, 6) == "Topfit"
+			if not best
+				or (bestIsTopfit and not isTopfitName)
+				or (bestIsTopfit == isTopfitName and pawnStat < best) then
+				best = pawnStat
+			end
 		end
 	end
+	return best
 end
 
 -- e.g. ( Pawn: v1: "SetName": Intellect=A, RangedDps=B )
@@ -212,7 +220,7 @@ local function SanitizeScales(scaleTable)
 	-- is confirmed to have no unified spell power stat, so SpellDamage/Healing now map
 	-- directly (see statNameToKey above) instead of folding into one that doesn't exist.
 
-	-- HitRating/CritRating/HasteRating folds all removed 2026-09-27 -- all three
+	-- HitRating/CritRating/HasteRating folds removed 2026-09-27 (see the Spell* note above); all three
 	-- destinations are gone now (see statNameToKey above), so folding their Spell*
 	-- counterparts into them would just combine values on their way to being dropped.
 

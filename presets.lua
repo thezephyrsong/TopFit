@@ -3,26 +3,24 @@ function TopFit:GetPresets()
         local playerRace = select(2,UnitRace("player"))
         
         if not TopFit.presets then -- don't want to create new tables every time this function is called
-                -- Rating-per-percent conversion for hit rating scales with player level. 26.23 (spell)
-                -- and 32.79 (melee) are the retail level-80 constants; Triumvirate is a level-60 cap
-                -- server, where the confirmed conversions (cross-checked against simc-triumvirate and
-                -- in-game tooltips) are 8 rating/1% spell hit and 10 rating/1% melee hit. The target
-                -- percentages themselves (17/14/11 spell, 27/8/24/5 melee) come from the fixed +3-level
-                -- boss/player level-difference mechanic and are unaffected by the level-60 cap, so only
-                -- the conversion constants change here.
-                local spellCap = math.ceil(8 * (17 - (playerRace == "Draenei" and 1 or 0) - ((playerClass == "PRIEST" or playerClass == "DRUID") and 3 or 0)))
-                local spellCapMinus3 = math.ceil(8 * (14 - (playerRace == "Draenei" and 1 or 0) - ((playerClass == "PRIEST" or playerClass == "DRUID") and 3 or 0)))
-                local spellCapMinus6 = math.ceil(8 * (11 - (playerRace == "Draenei" and 1 or 0) - ((playerClass == "PRIEST" or playerClass == "DRUID") and 3 or 0)))
-                local meleeCap = math.ceil(10 * ((TopFit.playerCanDualWield and 27 or 8) - (playerRace == "Draenei" and 1 or 0)))
-                local meleeCapMinus3 = math.ceil(10 * (((TopFit.playerCanDualWield and playerClass ~= "HUNTER") and 24 or 5) - (playerRace == "Draenei" and 1 or 0)))
-                local meleeCapDW = math.ceil(10 * 24)
-                -- "Uncrittable" defense cap: tanks need enough Defense Skill above their base
-                -- (level*5) to reach the fixed 5.6% reduced-crit-chance threshold against a +3-level
-                -- boss -- that 140-skill-point requirement is level-independent (a flat 0.04%-per-point
-                -- mechanic), but the rating-per-skill-point conversion scales with level. Confirmed
-                -- against Triumvirate's own DBC-derived rating table (source: "triumvirate-dbc",
-                -- level 60): DEFENSE_RATING_TO_SKILL = 1.5, i.e. 1.5 rating per skill point.
-                local defenseCap = math.ceil(140 * 1.5)
+                -- Hit/defense cap targets, in PERCENT (and Defense skill points), to match Forever's
+                -- percent-based stat model (TOPFIT_HIT_CHANCE_ALL, TOPFIT_DEFENSE_FLAT; see
+                -- procparser.lua). These were rating-based (8/10 rating per 1%, 1.5 rating per Defense
+                -- skill) until 2026-10-10. The target percentages below are the old WotLK/Triumvirate
+                -- boss-miss figures (17/14/11 spell, 27/24/8/5 melee, 140 skill for "uncrittable") and
+                -- are NOT confirmed for Forever (Classic's tables differ, e.g. 9% rather than 8% for
+                -- a two-hander), so every cap that uses them ships with active = false: present and
+                -- editable (/topfit caps) but not applied until real Forever targets are known, the
+                -- same call the Hunter preset below makes by having no caps at all.
+                local spellCap = 17 - (playerRace == "Draenei" and 1 or 0) - ((playerClass == "PRIEST" or playerClass == "DRUID") and 3 or 0)
+                local spellCapMinus3 = 14 - (playerRace == "Draenei" and 1 or 0) - ((playerClass == "PRIEST" or playerClass == "DRUID") and 3 or 0)
+                local spellCapMinus6 = 11 - (playerRace == "Draenei" and 1 or 0) - ((playerClass == "PRIEST" or playerClass == "DRUID") and 3 or 0)
+                local meleeCap = (TopFit.playerCanDualWield and 27 or 8) - (playerRace == "Draenei" and 1 or 0)
+                local meleeCapMinus3 = ((TopFit.playerCanDualWield and playerClass ~= "HUNTER") and 24 or 5) - (playerRace == "Draenei" and 1 or 0)
+                local meleeCapDW = 24
+                -- "Uncrittable" Defense target in skill points (a flat 0.04%-per-point mechanic in the
+                -- WotLK model; unconfirmed for Forever, see above).
+                local defenseCap = 140
         
                 TopFit.presets = {
 		-- Death Knight preset removed 2026-09-26 (Dan confirmed): Death Knight does not
@@ -76,9 +74,84 @@ function TopFit:GetPresets()
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 2.79,
                                                 ["TOPFIT_CRIT_CHANCE_PHYSICAL"] = 28.57,
                                                 ["TOPFIT_HIT_CHANCE_ALL"] = 21.98,
-                                                ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 14,
+                                                ["TOPFIT_RANGED_DPS"] = 14, -- SixtyUpgrades "rangedDps": ranged weapons only (the generic DPS key would score melee weapons too)
                                                 ["TOPFIT_WEAPON_SPEED"] = 100,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 1,
+                                        },
+                                },
+                                -- [2]-[4] below are the pre-Forever WotLK-model Hunter presets that used to live in a
+                                -- second ["HUNTER"] = { ... } block further down this table. A duplicate key in a Lua
+                                -- table constructor silently keeps only the LAST one, so that block overwrote "Hunter EP"
+                                -- above and it never loaded. Merged here 2026-10-10 (not deleted: still stale, rating-era
+                                -- numbers, kept until replaced with real Forever data like [1]).
+                                [2] = {
+                                        name = "Beastmastery",
+                                        weights = {
+                                                ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 12.5,
+                                                ["ITEM_MOD_AGILITY_SHORT"] = 2.5,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 24.5,
+                                                ["TOPFIT_HASTE_PERCENT"] = 17.5,
+                                                ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
+                                                ["ITEM_MOD_INTELLECT_SHORT"] = 1,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
+                                                ["RESISTANCE0_NAME"] = 0.001,
+                                        },
+                                        caps = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
+                                                    {
+                                                        ["value"] = meleeCapMinus3,
+                                                        ["soft"] = false,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
+                                                },
+                                        },
+                                },
+                                [3] = {
+                                        name = "Marksmanship",
+                                        weights = {
+                                                ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 12.5,
+                                                ["ITEM_MOD_AGILITY_SHORT"] = 2.19,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 23.1,
+                                                ["TOPFIT_HASTE_PERCENT"] = 15.3,
+                                                ["ITEM_MOD_INTELLECT_SHORT"] = 1.22,
+                                                ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
+                                                ["RESISTANCE0_NAME"] = 0.001,
+                                        },
+                                        caps = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
+                                                    {
+                                                        ["value"] = meleeCapMinus3,
+                                                        ["soft"] = false,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
+                                                },
+                                        },
+                                },
+                                [4] = {
+                                        name = "Survival",
+                                        weights = {
+                                                ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 12.5,
+                                                ["ITEM_MOD_AGILITY_SHORT"] = 2.7,
+                                                ["TOPFIT_HASTE_PERCENT"] = 17,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 22.4,
+                                                ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
+                                                ["ITEM_MOD_INTELLECT_SHORT"] = 1,
+                                                ["ITEM_MOD_STAMINA_SHORT"] = 1,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
+                                                ["RESISTANCE0_NAME"] = 0.001,
+                                        },
+                                        caps = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
+                                                    {
+                                                        ["value"] = meleeCapMinus3,
+                                                        ["soft"] = false,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
+                                                        ["label"] = "Melee/Ability Hit Cap",
+                                                    },
+                                                },
                                         },
                                 },
                         },
@@ -90,21 +163,20 @@ function TopFit:GetPresets()
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 2.5,
                                                 ["ITEM_MOD_STRENGTH_SHORT"] = 2.1,
                                                 ["ITEM_MOD_FERAL_ATTACK_POWER_SHORT"] = 1.2,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 1,
                                                 ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_DODGE_RATING_SHORT"] = 1,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.5,
-                                                ["ITEM_MOD_EXPERTISE_RATING_SHORT"] = 0.5,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 0.5,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_DODGE_CHANCE_ALL"] = 12,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 7,
+                                                ["TOPFIT_DODGE_PARRY_REDUCTION"] = 5,
+                                                ["TOPFIT_HASTE_PERCENT"] = 5,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["RESISTANCE0_NAME"] = 0.5,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = true,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Melee/Ability Hit Cap",
                                                     },
                                                 },
@@ -114,23 +186,22 @@ function TopFit:GetPresets()
                                         name = "Feral DPS",
                                         weights = {
                                                 ["ITEM_MOD_STRENGTH_SHORT"] = 2.379,
-                                                ["ITEM_MOD_EXPERTISE_RATING_SHORT"] = 2.28,
+                                                ["TOPFIT_DODGE_PARRY_REDUCTION"] = 22.8,
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 2.15,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 2,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.67,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 1.66,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 28,
+                                                ["TOPFIT_HASTE_PERCENT"] = 16.7,
                                                 ["ITEM_MOD_FERAL_ATTACK_POWER_SHORT"] = 1.2,
                                                 ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = true,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Melee/Ability Hit Cap",
                                                     },
                                                 },
@@ -140,20 +211,20 @@ function TopFit:GetPresets()
                                         name = "Balance",
                                         weights = {
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.7,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 0.7,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 9.8,
+                                                ["TOPFIT_HASTE_PERCENT"] = 7,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 0.41,
                                                 ["ITEM_MOD_SPIRIT_SHORT"] = 0.34,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = spellCap,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Spell Hit Cap",
                                                     },
                                                 },
@@ -163,90 +234,15 @@ function TopFit:GetPresets()
                                         name = "Restoration",
                                         weights = {
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 2,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1,
+                                                ["TOPFIT_HASTE_PERCENT"] = 10,
                                                 ["ITEM_MOD_MANA_REGENERATION_SHORT"] = 0.5,
                                                 ["ITEM_MOD_SPIRIT_SHORT"] = 0.396,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 0.285,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.1,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 1.4,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {},
-                                },
-                        },
-                        ["HUNTER"] = {
-                                [1] = {
-                                        name = "Beastmastery",
-                                        weights = {
-                                                ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 12.5,
-                                                ["ITEM_MOD_AGILITY_SHORT"] = 2.5,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 1.75,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.75,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 1.5,
-                                                ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_INTELLECT_SHORT"] = 1,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
-                                                ["RESISTANCE0_NAME"] = 0.001,
-                                        },
-                                        caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
-                                                    {
-                                                        ["value"] = meleeCapMinus3,
-                                                        ["soft"] = false,
-                                                        ["active"] = true,
-                                                        ["label"] = "Melee/Ability Hit Cap",
-                                                    },
-                                                },
-                                        },
-                                },
-                                [2] = {
-                                        name = "Marksmanship",
-                                        weights = {
-                                                ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 12.5,
-                                                ["ITEM_MOD_AGILITY_SHORT"] = 2.19,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 1.65,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.53,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 1.52,
-                                                ["ITEM_MOD_INTELLECT_SHORT"] = 1.22,
-                                                ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
-                                                ["RESISTANCE0_NAME"] = 0.001,
-                                        },
-                                        caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
-                                                    {
-                                                        ["value"] = meleeCapMinus3,
-                                                        ["soft"] = false,
-                                                        ["active"] = true,
-                                                        ["label"] = "Melee/Ability Hit Cap",
-                                                    },
-                                                },
-                                        },
-                                },
-                                [3] = {
-                                        name = "Survival",
-                                        weights = {
-                                                ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 12.5,
-                                                ["ITEM_MOD_AGILITY_SHORT"] = 2.7,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.7,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 1.6,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 1.33,
-                                                ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_INTELLECT_SHORT"] = 1,
-                                                ["ITEM_MOD_STAMINA_SHORT"] = 1,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
-                                                ["RESISTANCE0_NAME"] = 0.001,
-                                        },
-                                        caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
-                                                    {
-                                                        ["value"] = meleeCapMinus3,
-                                                        ["soft"] = false,
-                                                        ["active"] = true,
-                                                        ["label"] = "Melee/Ability Hit Cap",
-                                                    },
-                                                },
-                                        },
                                 },
                         },
                         ["MAGE"] = {
@@ -254,9 +250,9 @@ function TopFit:GetPresets()
                                         name = "Arcane",
                                         weights = {
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 0.9,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.59,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_HASTE_PERCENT"] = 9,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 8.26,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 0.45,
                                                 ["ITEM_MOD_SPIRIT_SHORT"] = 0.4,
                                                 ["ITEM_MOD_MANA_REGENERATION_SHORT"] = 0.1,
@@ -264,11 +260,11 @@ function TopFit:GetPresets()
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = spellCapMinus6,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Spell Hit Cap",
                                                     },
                                                 },
@@ -278,21 +274,21 @@ function TopFit:GetPresets()
                                         name = "Fire",
                                         weights = {
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.84,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 11.76,
                                                 ["ITEM_MOD_SPIRIT_SHORT"] = 0.68,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 0.66,
+                                                ["TOPFIT_HASTE_PERCENT"] = 6.6,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 0.56,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["ITEM_MOD_MANA_REGENERATION_SHORT"] = 0.35,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = spellCapMinus3,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Spell Hit Cap",
                                                     },
                                                 },
@@ -301,10 +297,10 @@ function TopFit:GetPresets()
                                 [3] = {
                                         name = "Frost",
                                         weights = {
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.317,
+                                                ["TOPFIT_HASTE_PERCENT"] = 13.17,
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.641,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 8.974,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["ITEM_MOD_MANA_REGENERATION_SHORT"] = 0.439,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 0.185,
                                                 ["ITEM_MOD_SPIRIT_SHORT"] = 0.167,
@@ -312,11 +308,11 @@ function TopFit:GetPresets()
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = spellCapMinus3,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Spell Hit Cap",
                                                     },
                                                 },
@@ -329,9 +325,9 @@ function TopFit:GetPresets()
                                         weights = {
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 2,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 1.375,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 1.125,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 15.75,
                                                 ["ITEM_MOD_MANA_REGENERATION_SHORT"] = 1,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 0.75,
+                                                ["TOPFIT_HASTE_PERCENT"] = 7.5,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                         },
                                         caps = {},
@@ -341,22 +337,21 @@ function TopFit:GetPresets()
                                         weights = {
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 14,
                                                 ["ITEM_MOD_STRENGTH_SHORT"] = 2.53,
-                                                ["ITEM_MOD_EXPERTISE_RATING_SHORT"] = 1.7,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.3,
+                                                ["TOPFIT_DODGE_PARRY_REDUCTION"] = 17,
+                                                ["TOPFIT_HASTE_PERCENT"] = 13,
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 1.1,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 1.1,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 15.4,
                                                 ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 0.7,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 0.33,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Melee/Ability Hit Cap",
                                                     },
                                                 },
@@ -366,36 +361,36 @@ function TopFit:GetPresets()
                                         name = "Protection",
                                         weights = {
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 14,
-                                                ["ITEM_MOD_DEFENSE_SKILL_RATING_SHORT"] = 1,
-                                                ["ITEM_MOD_DODGE_RATING_SHORT"] = 1,
-                                                ["ITEM_MOD_EXPERTISE_RATING_SHORT"] = 1,
+                                                ["TOPFIT_DEFENSE_FLAT"] = 1.5,
+                                                ["TOPFIT_DODGE_CHANCE_ALL"] = 12,
+                                                ["TOPFIT_DODGE_PARRY_REDUCTION"] = 10,
                                                 ["ITEM_MOD_STAMINA_SHORT"] = 1,
                                                 ["ITEM_MOD_STRENGTH_SHORT"] = 1,
-                                                ["ITEM_MOD_PARRY_RATING_SHORT"] = 0.9,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_PARRY_CHANCE_ALL"] = 13.5,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 0.4,
                                                 ["ITEM_MOD_ATTACK_POWER_SHORT"] = 0.4,
-                                                ["ITEM_MOD_BLOCK_RATING_SHORT"] = 0.33,
+                                                ["TOPFIT_BLOCK_CHANCE_ALL"] = 1.65,
                                                 ["ITEM_MOD_BLOCK_VALUE_SHORT"] = 0.33,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.33,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 0.3,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 4.62,
+                                                ["TOPFIT_HASTE_PERCENT"] = 3,
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 0.2,
                                                 ["RESISTANCE0_NAME"] = 0.06,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = true,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Melee/Ability Hit Cap",
                                                     },
                                                 },
-                                                ["ITEM_MOD_DEFENSE_SKILL_RATING_SHORT"] = {
+                                                ["TOPFIT_DEFENSE_FLAT"] = {
                                                     {
                                                         ["value"] = defenseCap,
                                                         ["soft"] = true,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Defense Cap",
                                                     },
                                                 },
@@ -407,20 +402,20 @@ function TopFit:GetPresets()
                                         name = "Shadow",
                                         weights = {
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.7,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 0.6,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 9.8,
+                                                ["TOPFIT_HASTE_PERCENT"] = 6,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["ITEM_MOD_SPIRIT_SHORT"] = 0.4,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 0.1,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = spellCapMinus3,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Spell Hit Cap",
                                                     },
                                                 },
@@ -430,11 +425,11 @@ function TopFit:GetPresets()
                                         name = "Holy",
                                         weights = {
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 2,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.5,
+                                                ["TOPFIT_HASTE_PERCENT"] = 15,
                                                 ["ITEM_MOD_MANA_REGENERATION_SHORT"] = 1.25,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 0.875,
                                                 ["ITEM_MOD_SPIRIT_SHORT"] = 0.875,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 7,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
@@ -444,11 +439,11 @@ function TopFit:GetPresets()
                                         name = "Discipline",
                                         weights = {
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 2,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.5,
+                                                ["TOPFIT_HASTE_PERCENT"] = 15,
                                                 ["ITEM_MOD_MANA_REGENERATION_SHORT"] = 1.25,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 0.875,
                                                 ["ITEM_MOD_SPIRIT_SHORT"] = 0.875,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 7,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
@@ -460,22 +455,21 @@ function TopFit:GetPresets()
                                         name = "Assassination",
                                         weights = {
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 14,
-                                                ["ITEM_MOD_EXPERTISE_RATING_SHORT"] = 2,
+                                                ["TOPFIT_DODGE_PARRY_REDUCTION"] = 20,
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 1.85,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.6,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 1.3,
+                                                ["TOPFIT_HASTE_PERCENT"] = 16,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 18.2,
                                                 ["ITEM_MOD_STRENGTH_SHORT"] = 1.1,
                                                 ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 0.8,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = math.ceil(22*10),
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Dual Wield Hit Cap",
                                                     },
                                                 },
@@ -485,22 +479,21 @@ function TopFit:GetPresets()
                                         name = "Combat",
                                         weights = {
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 14,
-                                                ["ITEM_MOD_EXPERTISE_RATING_SHORT"] = 2,
+                                                ["TOPFIT_DODGE_PARRY_REDUCTION"] = 20,
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 1.85,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.8,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 1.2,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 1.2,
+                                                ["TOPFIT_HASTE_PERCENT"] = 18,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 16.8,
                                                 ["ITEM_MOD_STRENGTH_SHORT"] = 1.1,
                                                 ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = math.ceil(22*10),
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Dual Wield Hit Cap",
                                                     },
                                                 },
@@ -510,22 +503,21 @@ function TopFit:GetPresets()
                                         name = "Subtlety",
                                         weights = {
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 14,
-                                                ["ITEM_MOD_EXPERTISE_RATING_SHORT"] = 2,
+                                                ["TOPFIT_DODGE_PARRY_REDUCTION"] = 20,
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 1.85,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.6,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 1.3,
+                                                ["TOPFIT_HASTE_PERCENT"] = 16,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 18.2,
                                                 ["ITEM_MOD_STRENGTH_SHORT"] = 1.1,
                                                 ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 0.8,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = math.ceil(22*10),
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Dual Wield Hit Cap",
                                                     },
                                                 },
@@ -537,30 +529,29 @@ function TopFit:GetPresets()
                                         name = "Enhancement",
                                         weights = {
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 14,
-                                                ["ITEM_MOD_EXPERTISE_RATING_SHORT"] = 4,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.9,
+                                                ["TOPFIT_DODGE_PARRY_REDUCTION"] = 40,
+                                                ["TOPFIT_HASTE_PERCENT"] = 19,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 1.6,
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 1.5,
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 1.4,
                                                 ["ITEM_MOD_STRENGTH_SHORT"] = 1.1,
                                                 ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.9,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 0.43,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 12.6,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = spellCap,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Spell Hit Cap",
                                                     },
                                                     {
                                                         ["value"] = meleeCapDW,
                                                         ["soft"] = true,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Dual Wield Hit Cap",
                                                     },
                                                 },
@@ -569,20 +560,20 @@ function TopFit:GetPresets()
                                 [2] = {
                                         name = "Elemental",
                                         weights = {
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1,
+                                                ["TOPFIT_HASTE_PERCENT"] = 10,
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.65,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 9.1,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 0.2,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = spellCapMinus3,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Spell Hit Cap",
                                                     },
                                                 },
@@ -592,9 +583,9 @@ function TopFit:GetPresets()
                                         name = "Restoration",
                                         weights = {
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 2,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.2,
+                                                ["TOPFIT_HASTE_PERCENT"] = 12,
                                                 ["ITEM_MOD_MANA_REGENERATION_SHORT"] = 1.2,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 1,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 14,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 1,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                                 ["RESISTANCE0_NAME"] = 0.001,
@@ -607,20 +598,20 @@ function TopFit:GetPresets()
                                         name = "Affliction",
                                         weights = {
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 0.75,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.55,
+                                                ["TOPFIT_HASTE_PERCENT"] = 7.5,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 7.7,
                                                 ["ITEM_MOD_SPIRIT_SHORT"] = 0.54,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 0.2,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = spellCapMinus3,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Spell Hit Cap",
                                                     },
                                                 },
@@ -630,20 +621,20 @@ function TopFit:GetPresets()
                                         name = "Demonology",
                                         weights = {
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 0.7,
+                                                ["TOPFIT_HASTE_PERCENT"] = 7,
                                                 ["ITEM_MOD_SPIRIT_SHORT"] = 0.65,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.6,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 8.4,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 0.3,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = spellCap,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Spell Hit Cap",
                                                     },
                                                 },
@@ -653,20 +644,20 @@ function TopFit:GetPresets()
                                         name = "Destruction",
                                         weights = {
                                                 ["ITEM_MOD_SPELL_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 0.7,
+                                                ["TOPFIT_HASTE_PERCENT"] = 7,
                                                 ["ITEM_MOD_SPIRIT_SHORT"] = 0.65,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.6,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 8.4,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["ITEM_MOD_INTELLECT_SHORT"] = 0.2,
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 0.001,
                                                 ["RESISTANCE0_NAME"] = 0.001,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = spellCap,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Spell Hit Cap",
                                                     },
                                                 },
@@ -679,21 +670,20 @@ function TopFit:GetPresets()
                                         weights = {
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 14,
                                                 ["ITEM_MOD_STRENGTH_SHORT"] = 2.45,
-                                                ["ITEM_MOD_EXPERTISE_RATING_SHORT"] = 2.2,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 2,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 2,
+                                                ["TOPFIT_DODGE_PARRY_REDUCTION"] = 22,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 28,
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 1.8,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.4,
+                                                ["TOPFIT_HASTE_PERCENT"] = 14,
                                                 ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["RESISTANCE0_NAME"] = 0.05,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = meleeCapDW,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Dual Wield Hit Cap",
                                                     },
                                                 },
@@ -704,35 +694,34 @@ function TopFit:GetPresets()
                                         weights = {
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 14,
                                                 ["ITEM_MOD_STAMINA_SHORT"] = 1,
-                                                ["ITEM_MOD_DEFENSE_SKILL_RATING_SHORT"] = 0.8,
-                                                ["ITEM_MOD_DODGE_RATING_SHORT"] = 0.7,
-                                                ["ITEM_MOD_EXPERTISE_RATING_SHORT"] = 0.67,
+                                                ["TOPFIT_DEFENSE_FLAT"] = 1.2,
+                                                ["TOPFIT_DODGE_CHANCE_ALL"] = 8.4,
+                                                ["TOPFIT_DODGE_PARRY_REDUCTION"] = 6.7,
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 0.6,
                                                 ["ITEM_MOD_BLOCK_VALUE_SHORT"] = 0.59,
-                                                ["ITEM_MOD_PARRY_RATING_SHORT"] = 0.58,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
-                                                ["ITEM_MOD_BLOCK_RATING_SHORT"] = 0.35,
+                                                ["TOPFIT_PARRY_CHANCE_ALL"] = 8.7,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
+                                                ["TOPFIT_BLOCK_CHANCE_ALL"] = 1.75,
                                                 ["ITEM_MOD_STRENGTH_SHORT"] = 0.33,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 0.2,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 0.2,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 0.2,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 2.8,
+                                                ["TOPFIT_HASTE_PERCENT"] = 2,
                                                 ["ITEM_MOD_ATTACK_POWER_SHORT"] = 0.06,
                                                 ["RESISTANCE0_NAME"] = 0.05,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = true,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Melee/Ability Hit Cap",
                                                     },
                                                 },
-                                                ["ITEM_MOD_DEFENSE_SKILL_RATING_SHORT"] = {
+                                                ["TOPFIT_DEFENSE_FLAT"] = {
                                                     {
                                                         ["value"] = defenseCap,
                                                         ["soft"] = true,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Defense Cap",
                                                     },
                                                 },
@@ -743,21 +732,20 @@ function TopFit:GetPresets()
                                         weights = {
                                                 ["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = 14,
                                                 ["ITEM_MOD_STRENGTH_SHORT"] = 2.2,
-                                                ["ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT"] = 2.3,
-                                                ["ITEM_MOD_CRIT_RATING_SHORT"] = 1.7,
-                                                ["ITEM_MOD_EXPERTISE_RATING_SHORT"] = 1.5,
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 23.8,
+                                                ["TOPFIT_DODGE_PARRY_REDUCTION"] = 15,
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 1.5,
-                                                ["ITEM_MOD_HASTE_RATING_SHORT"] = 1.3,
+                                                ["TOPFIT_HASTE_PERCENT"] = 13,
                                                 ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = 0.5,
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = 5,
                                                 ["RESISTANCE0_NAME"] = 0.01,
                                         },
                                         caps = {
-                                                ["ITEM_MOD_HIT_RATING_SHORT"] = {
+                                                ["TOPFIT_HIT_CHANCE_ALL"] = {
                                                     {
                                                         ["value"] = meleeCap,
                                                         ["soft"] = false,
-                                                        ["active"] = true,
+                                                        ["active"] = false, -- unconfirmed for Forever, see constants at top
                                                         ["label"] = "Melee/Ability Hit Cap",
                                                     },
                                                 },
