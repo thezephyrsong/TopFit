@@ -246,7 +246,13 @@ function TopFit:GetItemInfoTable(item)
     end
 
     -- Scan item tooltip
+    -- enchantBonus: what the item's CURRENT enchant adds (the "Enchanted: ..." line). It is kept for
+    -- display but NOT scored (see TopFit.SCORE_ENCHANTS): an enchant can be put on whichever item
+    -- you end up wearing, so scoring the one an item happens to carry today would just favour
+    -- whatever is already enchanted. greenBonus: any other green non-Equip line, scored as before.
     local enchantBonus = {}
+    local greenBonus = {}
+    local enchantedPrefix = ((_G["ENCHANTED_TOOLTIP_LINE"] or "Enchanted: %s"):match("^(.-)%%s")) or "Enchanted: "
     local emptySocketColors = {}
     local socketBonusInfo = nil
 
@@ -304,7 +310,11 @@ function TopFit:GetItemInfoTable(item)
 
                 if r < 0.1 and g > 0.9 and b < 0.1 then
                     if not string.find(lineText, "Equip:") and not string.find(lineText, "Use:") and not string.find(lineText, "Set:") and not string.find(lineText, "Socket Bonus") then
-                        ParseStatLine(lineText, enchantBonus)
+                        if enchantedPrefix ~= "" and lineText:sub(1, #enchantedPrefix) == enchantedPrefix then
+                            ParseStatLine(lineText, enchantBonus)
+                        else
+                            ParseStatLine(lineText, greenBonus)
+                        end
                     end
                 end
             end
@@ -352,10 +362,15 @@ function TopFit:GetItemInfoTable(item)
     enchantBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] = ((enchantBonus["ITEM_MOD_POWER_REGEN0_SHORT"] or 0) + (enchantBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] or 0))
     enchantBonus["ITEM_MOD_POWER_REGEN0_SHORT"] = nil
     if enchantBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] == 0 then enchantBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] = nil end
+    greenBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] = ((greenBonus["ITEM_MOD_POWER_REGEN0_SHORT"] or 0) + (greenBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] or 0))
+    greenBonus["ITEM_MOD_POWER_REGEN0_SHORT"] = nil
+    if greenBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] == 0 then greenBonus["ITEM_MOD_MANA_REGENERATION_SHORT"] = nil end
 
     -- Total Bonus Aggregation
     local totalBonus = {}
-    for _, bonusTable in pairs({ itemBonus, gemBonus, enchantBonus }) do
+    local scoredTables = { itemBonus, gemBonus, greenBonus }
+    if TopFit.SCORE_ENCHANTS then tinsert(scoredTables, enchantBonus) end
+    for _, bonusTable in pairs(scoredTables) do
         for stat, value in pairs(bonusTable) do
             totalBonus[stat] = (totalBonus[stat] or 0) + value
         end
@@ -716,4 +731,46 @@ function TopFit:IsItemUsableByPlayer(itemLink)
     local usable = TopFit:GetItemUsability(itemLink)
     TopFit.usabilityCache[itemLink] = { usable = usable, time = now }
     return usable
+end
+
+-- ============================================================================
+-- Find the REAL link of an item the player owns, given only its item ID (added 2026-10-10)
+--
+-- Equipment sets store bare item IDs, and the "unpack location" APIs that would give the exact
+-- bag/slot don't exist on this client. Resolving an ID with GetItemInfo() returns the BASE item,
+-- which loses a random suffix ("of the Bandit": Archer's Bracers scored as armor only, missing
+-- +2 Agility, +5 Stamina and +6 Attack Power). Search what the player actually owns instead:
+-- the preferred equipment slot first, then every equipped slot, then the bags. wantedName, when
+-- given (the tooltip's title line), picks the right copy when several share an ID. If the player
+-- owns two same-ID items with different suffixes and no name is given, the first one found wins.
+-- ============================================================================
+function TopFit:FindOwnedItemLink(itemID, preferredSlot, wantedName)
+    itemID = tonumber(itemID)
+    if not itemID or itemID <= 1 then return nil end
+    local GetInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+
+    local function matches(link)
+        if not link or tonumber(link:match("item:(%d+)")) ~= itemID then return false end
+        if wantedName and GetInfo then
+            return (GetInfo(link)) == wantedName
+        end
+        return true
+    end
+
+    if preferredSlot and preferredSlot >= 1 and preferredSlot <= 19 then
+        local link = GetInventoryItemLink("player", preferredSlot)
+        if matches(link) then return link end
+    end
+    for slot = 1, 19 do
+        local link = GetInventoryItemLink("player", slot)
+        if matches(link) then return link end
+    end
+    local maxBags = (NUM_BAG_SLOTS or 4) + (NUM_REAGENT_BAG_SLOTS or 0)
+    for bag = 0, maxBags do
+        for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
+            local link = C_Container.GetContainerItemLink(bag, slot)
+            if matches(link) then return link end
+        end
+    end
+    return nil
 end

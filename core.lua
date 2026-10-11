@@ -625,8 +625,26 @@ function TopFit:OnInitialize()
     -- block value patterns added; also starts the unrecognized-data discovery log.
     -- Version 4 (2026-10-10): all ITEM_MOD_*_RATING_SHORT keys from GetItemStats() are now
     -- stripped at scan time (percent text is the only source).
+    -- Rating points per 1% on Forever, treated as FIXED at every character level (Dan, 2026-10-10).
+    -- Basis: in-game tooltip percent vs the item's rating from wowsims/gamedata items.txt.
+    -- hit: 3 rating = 0.3% at levels 20 and 30, 10 rating = 1.0% on two items (the best-tested
+    -- value); the others each rest on a single reading and match TBC/WotLK's level-60 table.
+    -- NOT used by scoring, which reads the tooltip's percent text; for converting rating-based
+    -- weights or data (e.g. a Pawn import) to percent if ever needed.
+    self.RATING_PER_PERCENT = {
+        hit = 10, haste = 10, expertise = 10,
+        crit = 14, parry = 15, dodge = 12, block = 5,
+    }
+
+    -- Score items WITHOUT the enchant they currently carry (Dan, 2026-10-10): any enchant can be
+    -- applied to whichever item is worn, so comparing items with their current enchants favours
+    -- whatever happens to be enchanted already. Set true to restore the old behaviour. A separate
+    -- "best enchant per slot" layer is the planned way to add enchants back in.
+    self.SCORE_ENCHANTS = false
+
     -- Version 5 (2026-10-10): split TOPFIT_RANGED_DPS / TOPFIT_MELEE_DPS added alongside the generic DPS key.
-    self.ITEM_CACHE_VERSION = 5
+    -- Version 6 (2026-10-10): totalBonus no longer includes the item's current enchant.
+    self.ITEM_CACHE_VERSION = 6
     if self.db.global.itemCacheVersion ~= self.ITEM_CACHE_VERSION then
         self.db.global.itemCache = {}
         self.db.global.itemCacheVersion = self.ITEM_CACHE_VERSION

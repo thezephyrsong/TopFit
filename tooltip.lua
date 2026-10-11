@@ -31,10 +31,10 @@ local function GetTooltipItem(tt, data)
     if data and data.hyperlink then
         return nil, data.hyperlink
     end
-    if data and data.id then
-        local _, link = GetItemInfoSafe(data.id)
-        if link then return nil, link end
-    end
+    -- Prefer anything that carries the item's FULL link (random suffix, e.g. "of the Bandit",
+    -- lives in the link) before falling back to a bare item ID: resolving an ID gives the BASE
+    -- item, which has none of the suffix stats. The equipped-item tooltip hit exactly this and
+    -- scored Archer's Bracers of the Bandit as armor only.
     if TooltipUtil and TooltipUtil.GetDisplayedItem then
         local name, link = TooltipUtil.GetDisplayedItem(tt)
         if link then return name, link end
@@ -42,6 +42,24 @@ local function GetTooltipItem(tt, data)
     if tt and tt.GetItem then
         local name, link = tt:GetItem()
         if link then return name, link end
+    end
+    if data and data.guid and C_Item and C_Item.GetItemLinkByGUID then
+        local link = C_Item.GetItemLinkByGUID(data.guid)
+        if link then return nil, link end
+    end
+    local isItemData = not (data and data.type and Enum and Enum.TooltipDataType)
+        or data.type == Enum.TooltipDataType.Item
+    if data and data.id and isItemData then
+        -- last resort: only the ID is known. If the player owns that item, use their copy (matched
+        -- by the tooltip's title so a bag copy with another suffix isn't picked by mistake).
+        if TopFit and TopFit.FindOwnedItemLink then
+            local titleLine = tt and ((tt.TextLeft1) or (tt.GetName and tt:GetName() and _G[tt:GetName() .. "TextLeft1"]))
+            local titleText = titleLine and titleLine.GetText and titleLine:GetText()
+            local owned = TopFit:FindOwnedItemLink(data.id, nil, titleText)
+            if owned then return nil, owned end
+        end
+        local _, link = GetItemInfoSafe(data.id)
+        if link then return nil, link end
     end
     return nil, nil
 end
@@ -86,7 +104,8 @@ local function TooltipAddCompareLines(tt, link)
                             if voidStorage or bank then
                                 local storedItemID = itemIDs and itemIDs[slotID]
                                 if storedItemID and storedItemID ~= 1 and storedItemID ~= 0 then
-                                    _, itemLink = GetItemInfoSafe(storedItemID)
+                                    itemLink = TopFit:FindOwnedItemLink(storedItemID, slotID)
+                                    if not itemLink then _, itemLink = GetItemInfoSafe(storedItemID) end
                                 end
                             elseif bags and bag and slot and C_Container and C_Container.GetContainerItemLink then
                                 itemLink = C_Container.GetContainerItemLink(bag, slot)
@@ -115,7 +134,10 @@ local function TooltipAddCompareLines(tt, link)
                 end
                 
                 if not itemLink and itemIDs and itemIDs[slotID] and itemIDs[slotID] ~= 1 and itemIDs[slotID] ~= 0 then
-                    _, itemLink = GetItemInfoSafe(itemIDs[slotID])
+                    -- the set only stores a bare item ID; look for the player's real copy first so a
+                    -- suffixed item ("of the Bandit") isn't compared as its suffix-less base item
+                    itemLink = TopFit:FindOwnedItemLink(itemIDs[slotID], slotID)
+                    if not itemLink then _, itemLink = GetItemInfoSafe(itemIDs[slotID]) end
                 end
 
                 if itemLink then
@@ -222,7 +244,7 @@ local function TooltipAddLines(tt, link)
         end
         
         if itemTable["enchantBonus"] then
-            tt:AddLine("Enchant:", 1, 0.9, 0.5)
+            tt:AddLine(TopFit.SCORE_ENCHANTS and "Enchant:" or "Enchant (not scored):", 1, 0.9, 0.5)
             for stat, value in pairs(itemTable["enchantBonus"]) do
                 local valueString = ""
                 local first = true
