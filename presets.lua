@@ -46,11 +46,12 @@ function TopFit:GetPresets()
                                         --   hit 21.98, rangedDps 14, rangedSpeed 100, intellect 1
                                         -- Two mapping decisions made converting SixtyUpgrades' field names to
                                         -- TopFit's stat keys, flagged here rather than silently assumed:
-                                        --   "crit" -> TOPFIT_CRIT_CHANCE_PHYSICAL, not TOPFIT_CRIT_CHANCE_ALL,
-                                        --     matching the same judgment call already made for the Lethal
-                                        --     Attacks talent entry in talentbonuses.lua (a Hunter's crit stat
-                                        --     is ranged+melee, not spells) -- not independently confirmed this
-                                        --     is what SixtyUpgrades' own "crit" field actually represents.
+                                        --   "crit" -> TOPFIT_CRIT_CHANCE_ALL (what gear actually grants) AND
+                                        --     TOPFIT_CRIT_CHANCE_PHYSICAL (ranged+melee, not spells: the rarer
+                                        --     "all attacks" wording and the Lethal Attacks talent entry in
+                                        --     talentbonuses.lua). Corrected 2026-10-11: this used to be PHYSICAL
+                                        --     only, which scored no gear crit at all. Not independently confirmed
+                                        --     what SixtyUpgrades' own "crit" field represents.
                                         --   "rangedSpeed" -> TOPFIT_WEAPON_SPEED at face value (100). This
                                         --     number is far larger than every other value here (which are all
                                         --     single or low double digits) -- possibly a different internal
@@ -72,6 +73,13 @@ function TopFit:GetPresets()
                                                 ["ITEM_MOD_ATTACK_POWER_SHORT"] = 1,
                                                 ["ITEM_MOD_RANGED_ATTACK_POWER_SHORT"] = 1,
                                                 ["ITEM_MOD_AGILITY_SHORT"] = 2.79,
+                                                -- Real Forever gear itemizes crit as "Improves your chance to get a critical
+                                                -- strike by N%" (confirmed), which procparser.lua scores as TOPFIT_CRIT_CHANCE_ALL.
+                                                -- PHYSICAL only comes from the rarer "...with all attacks" wording (talent text, not
+                                                -- yet seen on an item), so a PHYSICAL-only weight left every piece of gear crit
+                                                -- worth 0. Both carry the SixtyUpgrades "crit" value; no double counting, since one
+                                                -- tooltip line feeds only one of the two keys.
+                                                ["TOPFIT_CRIT_CHANCE_ALL"] = 28.57,
                                                 ["TOPFIT_CRIT_CHANCE_PHYSICAL"] = 28.57,
                                                 ["TOPFIT_HIT_CHANCE_ALL"] = 21.98,
                                                 ["TOPFIT_RANGED_DPS"] = 14, -- SixtyUpgrades "rangedDps": ranged weapons only (the generic DPS key would score melee weapons too)

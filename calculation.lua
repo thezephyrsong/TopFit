@@ -37,6 +37,22 @@ end
 function TopFit:AbortCalculations()
 	if TopFit.isBlocked then
 		TopFit.abortCalculation = true
+		-- The abort flag is only ever read inside SemiRecursiveCalculation, which stops running as
+		-- soon as the search has finished. If we are already in the equipping stage (waiting to
+		-- equip, e.g. while in combat or dead), nothing would ever read the flag, so the Abort
+		-- button did nothing and the addon stayed blocked forever. Cancel that stage directly.
+		if TopFit.equippingItems then
+			TopFit.updateFrame:SetScript("OnUpdate", nil)
+			TopFit.equippingItems = false
+			TopFit.abortCalculation = nil
+			TopFit.workSetList = {}
+			TopFit.ignoreCapsForCalculation = nil
+			TopFit.isBlocked = false
+			if TopFit.ProgressFrame then
+				TopFit.ProgressFrame:StoppedCalculation()
+			end
+			TopFit:Print("Aborted before equipping any items.")
+		end
 	end
 end
 

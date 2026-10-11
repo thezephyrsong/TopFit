@@ -152,12 +152,19 @@ function TopFit:EquipRecommendedItems()
     -- equip them
     TopFit.updateEquipmentCounter = 10000
     TopFit.equipRetries = 0
+    TopFit.equippingItems = true
+    TopFit.warnedEquipWait = false
     TopFit.updateFrame:SetScript("OnUpdate", TopFit.onUpdateForEquipment)
 end
 
 function TopFit:onUpdateForEquipment()
     -- don't try equipping in combat or while dead
     if UnitAffectingCombat("player") or UnitIsDeadOrGhost("player") then
+        -- say so once: this used to wait in total silence, which looks exactly like a hang
+        if not TopFit.warnedEquipWait then
+            TopFit.warnedEquipWait = true
+            TopFit:Print("Calculation finished, but items can't be equipped while you are in combat or dead. Waiting until you can; click Abort to cancel.")
+        end
         return
     end
 
@@ -247,6 +254,7 @@ function TopFit:onUpdateForEquipment()
         
         TopFit:Debug("All Done!")
         TopFit.updateFrame:SetScript("OnUpdate", nil)
+        TopFit.equippingItems = false
         TopFit.ProgressFrame:StoppedCalculation()
         
         -- save equipment set (see TopFit:SaveGearToEquipmentSet for what it does and why)
