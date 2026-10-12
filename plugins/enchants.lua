@@ -36,7 +36,7 @@ function TopFit:CreateEnchantsPlugin()
             if setTable then
                 local pin = setTable.enchants and setTable.enchants[row.group]
                 local chosen = TopFit:GetChosenEnchant(setCode, row.group)
-                local weights = TopFit:GetEffectiveWeights(setTable.weights or {})
+                local weights = TopFit:GetEffectiveWeights(setTable.weights or {}, setTable)
                 local scoreText = ""
                 if chosen and next(chosen.stats) then
                     scoreText = string.format("  |cff00ff00(+%.1f)|r", TopFit:ScoreEnchantEntry(chosen, weights))
@@ -87,7 +87,7 @@ function TopFit:CreateEnchantsPlugin()
         info.notCheckable = true
         UIDropDownMenu_AddButton(info, level)
 
-        local weights = TopFit:GetEffectiveWeights(setTable.weights or {})
+        local weights = TopFit:GetEffectiveWeights(setTable.weights or {}, setTable)
         local list = {}
         for _, entry in ipairs(TopFit:GetEnchantsForGroup(group)) do
             if next(entry.stats) then

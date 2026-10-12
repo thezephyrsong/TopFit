@@ -253,6 +253,12 @@ TopFit.talentRatingBonuses["WARLOCK"] = {
 --                    does NOT scale evenly per rank (confirmed by checking every rank's tooltip
 --                    text individually, not assumed from the formula implied by rank 1)
 --
+-- maxRank is the talent's top rank, used to know what the FULL talent is worth when a set's weights
+-- already assume it (a Forever-sim preset: see GetEffectiveWeights). Careful Aim's toStat was changed
+-- from Attack Power to RANGED Attack Power 2026-10-12: Careful Aim converts Intellect into ranged
+-- attack power in every Classic-family version I know of, and the Forever sim gives a Hunter 0.00 for
+-- plain Attack Power but 0.39 for Ranged Attack Power. Not checked against Forever's own talent text.
+--
 -- Consumed by TopFit:GetEffectiveWeights (calculation.lua), which resolves these against live
 -- talent ranks once per calculation pass and adds the converted value to the source stat's
 -- effective weight -- see that function's own comment for how caps interact with this.
@@ -262,31 +268,31 @@ TopFit.talentStatConversions = {}
 TopFit.talentStatConversions["HUNTER"] = {
 	-- Careful Aim (Marksmanship): confirmed evenly-scaled 20%/rank, 5 ranks (20,40,60,80,100%
 	-- checked per rank, not assumed from rank 1 alone).
-	{ name = "Careful Aim", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "ITEM_MOD_ATTACK_POWER_SHORT", percentPerRank = 20 },
+	{ name = "Careful Aim", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "ITEM_MOD_RANGED_ATTACK_POWER_SHORT", percentPerRank = 20, maxRank = 5 },
 }
 
 TopFit.talentStatConversions["SHAMAN"] = {
 	-- Mental Dexterity (Enhancement): displayed per-rank text reads 33%/67%/100% (whole-number
 	-- rounding in the tooltip) -- true value is almost certainly 100/3 = 33.33.../rank, used here
 	-- rather than the rounded display values so 3 ranks sums to exactly 100%, not 99%.
-	{ name = "Mental Dexterity", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "ITEM_MOD_ATTACK_POWER_SHORT", percentPerRank = 100/3 },
+	{ name = "Mental Dexterity", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "ITEM_MOD_ATTACK_POWER_SHORT", percentPerRank = 100/3, maxRank = 3 },
 	-- Mental Quickness (Enhancement): confirmed evenly-scaled 15%/rank, 2 ranks (15%, 30%),
 	-- applies to BOTH spell damage and spell healing simultaneously -- two entries, same source.
-	{ name = "Mental Quickness", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "TOPFIT_SPELL_DAMAGE_FLAT", percentPerRank = 15 },
-	{ name = "Mental Quickness", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "TOPFIT_SPELL_HEALING_FLAT", percentPerRank = 15 },
+	{ name = "Mental Quickness", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "TOPFIT_SPELL_DAMAGE_FLAT", percentPerRank = 15, maxRank = 2 },
+	{ name = "Mental Quickness", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "TOPFIT_SPELL_HEALING_FLAT", percentPerRank = 15, maxRank = 2 },
 }
 
 TopFit.talentStatConversions["PALADIN"] = {
 	-- Champion of the Light (Retribution): same 33/66/100% rounded-display pattern as Mental
 	-- Dexterity above -- true value 100/3 per rank. Applies to both spell damage and healing.
-	{ name = "Champion of the Light", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "TOPFIT_SPELL_DAMAGE_FLAT", percentPerRank = 100/3 },
-	{ name = "Champion of the Light", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "TOPFIT_SPELL_HEALING_FLAT", percentPerRank = 100/3 },
+	{ name = "Champion of the Light", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "TOPFIT_SPELL_DAMAGE_FLAT", percentPerRank = 100/3, maxRank = 3 },
+	{ name = "Champion of the Light", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "TOPFIT_SPELL_HEALING_FLAT", percentPerRank = 100/3, maxRank = 3 },
 }
 
 TopFit.talentStatConversions["PRIEST"] = {
 	-- Spiritual Guidance (Holy), healing component: confirmed evenly-scaled 5%/rank, 5 ranks
 	-- (5,10,15,20,25% checked per rank).
-	{ name = "Spiritual Guidance", fromStat = "ITEM_MOD_SPIRIT_SHORT", toStat = "TOPFIT_SPELL_HEALING_FLAT", percentPerRank = 5 },
+	{ name = "Spiritual Guidance", fromStat = "ITEM_MOD_SPIRIT_SHORT", toStat = "TOPFIT_SPELL_HEALING_FLAT", percentPerRank = 5, maxRank = 5 },
 	-- Spiritual Guidance, damage component: NOT evenly scaled -- checked every rank individually
 	-- (1%, 3%, 5%, 6%, 8%), a genuinely non-uniform progression, not a rounding artifact like
 	-- Mental Dexterity/Champion of the Light above. Using percentPerRank here would be wrong at

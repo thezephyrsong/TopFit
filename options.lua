@@ -159,7 +159,10 @@ function TopFit:AddSet(preset)
         name = setName,
         weights = weights,
         caps = caps,
-        forced = {}
+        forced = {},
+        -- set from a Forever-sim preset: its weights already assume the full Intellect -> AP / spell
+        -- damage talents, so GetEffectiveWeights runs the talent credit in reverse for it
+        weightsAssumeFullTalents = preset and (preset.weightsAssumeFullTalents or preset.noTalentConversions) or nil,
     }
     
     if TopFit.ProgressFrame then

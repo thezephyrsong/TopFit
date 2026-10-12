@@ -161,7 +161,7 @@ end
 
 -- The highest-scoring enchant in a group for this set's (effective) weights, or nil if none scores > 0.
 function TopFit:GetBestEnchant(group, setTable)
-    local weights = TopFit:GetEffectiveWeights(setTable.weights or {})
+    local weights = TopFit:GetEffectiveWeights(setTable.weights or {}, setTable)
     local best, bestScore
     for _, entry in ipairs(TopFit:GetEnchantsForGroup(group)) do
         if next(entry.stats) then
@@ -202,7 +202,7 @@ function TopFit:GetEnchantForItem(setCode, slotID, itemTable)
     local entry = TopFit:GetChosenEnchant(setCode, group)
     if not entry or not next(entry.stats) then return nil end
     local setTable = TopFit.db.profile.sets[setCode]
-    local weights = TopFit:GetEffectiveWeights(setTable.weights or {})
+    local weights = TopFit:GetEffectiveWeights(setTable.weights or {}, setTable)
     return { entry = entry, stats = entry.stats, score = TopFit:ScoreEnchantEntry(entry, weights) }
 end
 

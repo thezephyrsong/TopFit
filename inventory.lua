@@ -427,7 +427,7 @@ function TopFit:CalculateItemScore(itemLink)
         -- Attack Power) on top of the set's own saved weights -- see GetEffectiveWeights' own
         -- comment (calculation.lua) for what this does and why. Returns rawSet itself, unchanged,
         -- when there's nothing to add, so this is cheap for sets/classes with no conversions.
-        local set = TopFit:GetEffectiveWeights(rawSet)
+        local set = TopFit:GetEffectiveWeights(rawSet, setTable)
         local caps = setTable.caps
         
         local itemScore = 0
