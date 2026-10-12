@@ -964,6 +964,7 @@ function TopFit:OnInitialize()
     -- create default plugin frames
     TopFit:CreateStatsPlugin()
     TopFit:CreateVirtualItemsPlugin()
+    if TopFit.CreateEnchantsPlugin then TopFit:CreateEnchantsPlugin() end
 
     TopFit:collectItems()
 end

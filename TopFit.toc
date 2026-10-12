@@ -29,6 +29,8 @@ inventory.lua
 tooltip.lua
 presets.lua
 talentbonuses.lua
+enchant_data.lua
+enchant.lua
 calculation.lua
 options.lua
 frame.lua
@@ -38,6 +40,7 @@ simc_export.lua
 
 plugins\stats.lua
 plugins\virtual_items.lua
+plugins\enchants.lua
 
 enchant_ids.lua
 simc_proc_data.lua

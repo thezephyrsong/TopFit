@@ -1,0 +1,179 @@
+-- Enchants tab: pick, per gear group, which enchant a set assumes (see enchant.lua).
+--   Auto  = the enchant with the best weighted score for the selected set (default)
+--   None  = assume no enchant in that group
+--   <name> = that specific enchant
+-- Only enchants TopFit can score are listed (the rest -- procs, profession perks, threat -- are
+-- unscored, see enchant.lua); at most MAX_MENU_ENTRIES are shown per group, best first, since a
+-- Blizzard dropdown holds a limited number of buttons.
+
+local MAX_MENU_ENTRIES = 28
+
+local function SelectedSetTable()
+    local code = TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet
+    return code, code and TopFit.db.profile.sets[code]
+end
+
+local function Describe(entry)
+    if not entry then return "None" end
+    return entry.name .. "  |cffaaaaaa" .. entry.text .. "|r"
+end
+
+function TopFit:CreateEnchantsPlugin()
+    local frame, pluginId = TopFit:RegisterPlugin("Enchants",
+        "Choose which enchant each gear group is assumed to have. Enchants are not scored on the items themselves, since any enchant can go on whichever item you wear.")
+    frame.initialized = false
+    frame.rows = {}
+
+    local menu  -- shared dropdown menu frame
+
+    local function Refresh()
+        if not frame.initialized then return end
+        TopFit:ClearEnchantCache()
+        local setCode, setTable = SelectedSetTable()
+        frame.enabledCheck:SetChecked(setTable and not setTable.skipEnchants or false)
+        for _, row in ipairs(frame.rows) do
+            local text = "-"
+            if setTable then
+                local pin = setTable.enchants and setTable.enchants[row.group]
+                local chosen = TopFit:GetChosenEnchant(setCode, row.group)
+                local weights = TopFit:GetEffectiveWeights(setTable.weights or {})
+                local scoreText = ""
+                if chosen and next(chosen.stats) then
+                    scoreText = string.format("  |cff00ff00(+%.1f)|r", TopFit:ScoreEnchantEntry(chosen, weights))
+                end
+                if setTable.skipEnchants then
+                    text = "|cff888888(enchants off for this set)|r"
+                elseif pin == "none" then
+                    text = "None"
+                elseif pin and TopFit:GetEnchantEntry(row.group, pin) then
+                    text = Describe(chosen) .. scoreText
+                else
+                    text = "Auto: " .. (chosen and Describe(chosen) or "nothing useful for this set") .. scoreText
+                end
+            end
+            row.value:SetText(text)
+        end
+    end
+
+    local function Choose(group, choice)
+        local setCode, setTable = SelectedSetTable()
+        if not setTable then return end
+        setTable.enchants = setTable.enchants or {}
+        if choice == "auto" then
+            setTable.enchants[group] = nil
+        else
+            setTable.enchants[group] = choice
+        end
+        CloseDropDownMenus()
+        Refresh()
+    end
+
+    local function InitMenu(self, level)
+        local group = menu.currentGroup
+        local setCode, setTable = SelectedSetTable()
+        if not group or not setTable then return end
+
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = "Auto (best for this set)"
+        info.arg1 = group; info.arg2 = "auto"
+        info.func = function(_, g, c) Choose(g, c) end
+        info.notCheckable = true
+        UIDropDownMenu_AddButton(info, level)
+
+        info = UIDropDownMenu_CreateInfo()
+        info.text = "None"
+        info.arg1 = group; info.arg2 = "none"
+        info.func = function(_, g, c) Choose(g, c) end
+        info.notCheckable = true
+        UIDropDownMenu_AddButton(info, level)
+
+        local weights = TopFit:GetEffectiveWeights(setTable.weights or {})
+        local list = {}
+        for _, entry in ipairs(TopFit:GetEnchantsForGroup(group)) do
+            if next(entry.stats) then
+                tinsert(list, { entry = entry, score = TopFit:ScoreEnchantEntry(entry, weights) })
+            end
+        end
+        table.sort(list, function(a, b)
+            if a.score ~= b.score then return a.score > b.score end
+            return a.entry.name < b.entry.name
+        end)
+        for i = 1, math.min(#list, MAX_MENU_ENTRIES) do
+            local item = list[i]
+            info = UIDropDownMenu_CreateInfo()
+            info.text = string.format("%s  (%s)  %.1f", item.entry.name, item.entry.text, item.score)
+            info.arg1 = group; info.arg2 = item.entry.name
+            info.func = function(_, g, c) Choose(g, c) end
+            info.notCheckable = true
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end
+
+    local function Initialize()
+        if frame.initialized then return end
+        frame.initialized = true
+
+        local check = LibStub("tekKonfig-Checkbox").new(frame, nil, "Include enchants in this set's calculation", "TOPLEFT", frame, "TOPLEFT", 0, 0)
+        check.tiptext = "|cffffffffWhen checked, the enchants chosen below are added on top of the best items for this set (score and cap stats)."
+        local checksound = check:GetScript("OnClick")
+        check:SetScript("OnClick", function(self)
+            if checksound then checksound(self) end
+            local _, setTable = SelectedSetTable()
+            if setTable then
+                setTable.skipEnchants = not self:GetChecked() or nil
+                Refresh()
+            end
+        end)
+        frame.enabledCheck = check
+
+        local hint = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        hint:SetPoint("TOPLEFT", check, "BOTTOMLEFT", 0, -6)
+        hint:SetPoint("RIGHT", frame, "RIGHT")
+        hint:SetJustifyH("LEFT")
+        hint:SetText("Click a row to choose its enchant. The number is its score for this set. Procs, profession perks and threat enchants are not scored.")
+
+        menu = CreateFrame("Frame", "TopFit_EnchantMenu", UIParent, "UIDropDownMenuTemplate")
+        UIDropDownMenu_Initialize(menu, InitMenu, "MENU")
+
+        local previous = hint
+        for _, group in ipairs(TopFit.EnchantGroups) do
+            local button = CreateFrame("Button", nil, frame)
+            button:SetHeight(18)
+            button:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -6)
+            button:SetPoint("RIGHT", frame, "RIGHT")
+            button:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+
+            local label = button:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+            label:SetPoint("LEFT", button, "LEFT", 0, 0)
+            label:SetWidth(80)
+            label:SetJustifyH("LEFT")
+            label:SetText(group)
+
+            local value = button:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+            value:SetPoint("LEFT", label, "RIGHT", 4, 0)
+            value:SetPoint("RIGHT", button, "RIGHT", 0, 0)
+            value:SetJustifyH("LEFT")
+
+            button:SetScript("OnClick", function(self)
+                if not select(2, SelectedSetTable()) then return end
+                menu.currentGroup = group
+                UIDropDownMenu_Initialize(menu, InitMenu, "MENU")
+                ToggleDropDownMenu(1, nil, menu, self, 0, 0)
+            end)
+
+            tinsert(frame.rows, { group = group, button = button, value = value })
+            previous = button
+        end
+        Refresh()
+    end
+
+    TopFit.RegisterCallback("TopFit_enchants", "OnShow", function(event, id)
+        if id == pluginId then
+            Initialize()
+            Refresh()
+        end
+    end)
+    TopFit.RegisterCallback("TopFit_enchants", "OnSetChanged", function(event, setId)
+        Refresh()
+    end)
+end

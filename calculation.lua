@@ -332,7 +332,7 @@ function TopFit:InitSemiRecursiveCalculations()
 					for _, locationTable in pairs(TopFit.itemListBySlot[slotID]) do
 						local itemTable = TopFit:GetCachedItem(locationTable.itemLink)
 						if itemTable then
-							local thisStat = itemTable.totalBonus[statCode] or 0
+							local thisStat = (itemTable.totalBonus[statCode] or 0) + (TopFit.GetEnchantStatValue and TopFit:GetEnchantStatValue(slotID, itemTable, statCode) or 0)
 							if ((thisStat > 0) and ((maxStat == nil) or (thisStat > maxStat))) then
 								maxStat = thisStat
 							end
@@ -388,6 +388,7 @@ function TopFit:ReduceItemList()
 	-- Rogue...) -- see GetItemUsability in inventory.lua. Forced slots and virtual (user-added)
 	-- items are left alone.
 	TopFit.usabilityCache = {}
+	if TopFit.ClearEnchantCache then TopFit:ClearEnchantCache() end
 	for slotID, itemList in pairs(TopFit.itemListBySlot) do
 		if not forcedTable[slotID] then
 			for i = #itemList, 1, -1 do
@@ -645,7 +646,7 @@ function TopFit:IsCapsReached(currentSlot)
 					local itemEntry = TopFit.itemListBySlot[i][TopFit.slotCounters[i]]
 					local itemTable = itemEntry and TopFit:GetCachedItem(itemEntry.itemLink)
 					if itemTable then
-						currentValues[stat] = (currentValues[stat] or 0) + (itemTable.totalBonus[stat] or 0)
+						currentValues[stat] = (currentValues[stat] or 0) + (itemTable.totalBonus[stat] or 0) + (TopFit.GetEnchantStatValue and TopFit:GetEnchantStatValue(i, itemTable, stat) or 0)
 					end
 				end
 			end
@@ -672,7 +673,7 @@ function TopFit:IsCapsUnreachable(currentSlot)
 					local itemEntry = TopFit.itemListBySlot[i][TopFit.slotCounters[i]]
 					local itemTable = itemEntry and TopFit:GetCachedItem(itemEntry.itemLink)
 					if itemTable then
-						currentValues[stat] = (currentValues[stat] or 0) + (itemTable.totalBonus[stat] or 0)
+						currentValues[stat] = (currentValues[stat] or 0) + (itemTable.totalBonus[stat] or 0) + (TopFit.GetEnchantStatValue and TopFit:GetEnchantStatValue(i, itemTable, stat) or 0)
 					end
 				end
 			end
@@ -840,6 +841,17 @@ function TopFit:SaveCurrentCombination()
 			
 			for stat, value in pairs(itemTable.totalBonus) do
 				cIC.totalStats[stat] = (cIC.totalStats[stat] or 0) + value
+			end
+			
+			-- the enchant this set assumes for whatever is worn in this slot (enchant.lua)
+			local enchantInfo = TopFit.GetEnchantForItem and TopFit:GetEnchantForItem(TopFit.setCode, i, itemTable)
+			if enchantInfo then
+				cIC.totalScore = cIC.totalScore + enchantInfo.score
+				cIC.enchants = cIC.enchants or {}
+				cIC.enchants[i] = enchantInfo.entry
+				for stat, value in pairs(enchantInfo.stats) do
+					cIC.totalStats[stat] = (cIC.totalStats[stat] or 0) + value
+				end
 			end
 		end
 	end
