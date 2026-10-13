@@ -1,9 +1,15 @@
--- Forever enchants by gear group: { group, name, text }, where text is the enchant's own effect line
--- (the same wording the tooltip shows after "Enchanted: "). 165 entries, transcribed 2026-10-11 from
--- the "Enchants by slot" data on foreverchanges.pro (beta client build 1.60.1.70338), which lists the
--- 165 Enchanting enchants Forever's client carries. Not checked in game one by one. Keyed by
--- (group, name); names are unique within a group. Armor kits and scopes are not Enchanting and are
--- not included. See enchant.lua for how the text becomes stats and which entries stay unscored.
+-- Forever enchants by gear group: { group, name, text [, enchantID] }. text is the enchant's own effect
+-- line (the wording the tooltip shows after "Enchanted: "). The first 165 rows were transcribed
+-- 2026-10-11 from the "Enchants by slot" data on foreverchanges.pro (beta client build 1.60.1.70338);
+-- not checked in game one by one. enchantID, where present, is the client's SpellItemEnchantment ID
+-- (the number in an item link's enchant field), taken from the WoW: Forever sim's enchant registry
+-- (wowsims/forever, RegisterAllEnchants). The sim file also carried TBC/WotLK enchants (Mongoose,
+-- Executioner, Deathfrost, TBC scopes, Felsteel Shield Spike, boots speed): those were confirmed
+-- wrong for Forever by Dan and are NOT here. The last rows (Fiery Blaze, Dismantle, the three Shield
+-- Spikes, Wolfshead Trophy, Retricutioner, Grand Crusader/Inquisitor/Arcanist/Sorcerer) are in the sim
+-- but not in the ForeverChanges list; several are Season-of-Discovery enchants whose availability in
+-- Forever is unconfirmed. Keyed by (group, name); names are unique within a group. Armor kits and
+-- scopes are not Enchanting and are not included. See enchant.lua for which entries are scored.
 TopFit.EnchantData = {
 	{ "Bracer", "Inferior Stamina", "Stamina +2" },
 	{ "Chest", "Minor Intellect", "Intellect +2" },
@@ -13,7 +19,7 @@ TopFit.EnchantData = {
 	{ "Bracer", "Minor Deflect", "Defense +3" },
 	{ "Bracer", "Minor Strength", "Strength +3" },
 	{ "Chest", "Lesser Intellect", "Intellect +3" },
-	{ "Chest", "Minor Absorption", "Has a 2% chance per hit of giving you 10 points of damage absorption. Cannot occur more often than once every 5 sec." },
+	{ "Chest", "Minor Absorption", "Has a 2% chance per hit of giving you 10 points of damage absorption. Cannot occur more often than once every 5 sec.", 44 },
 	{ "Cloak", "Minor Protection", "Armor +10" },
 	{ "Bracer", "Minor Healing Power", "Healing Spells +8, Damage Spells +3" },
 	{ "Weapon", "Minor Beastslayer", "Beastslaying +2" },
@@ -33,9 +39,9 @@ TopFit.EnchantData = {
 	{ "Shield", "Minor Stamina", "Stamina +3" },
 	{ "Cloak", "Lesser Shadow Resistance", "+10 Shadow Resistance" },
 	{ "Cloak", "Lesser Protection", "Armor +20" },
-	{ "Weapon", "Insight", "A chance to grant Insight when you cast a spell, increasing Spirit by 100% for 10 sec." },
-	{ "Weapon", "Recovery", "Trigger Recovery when you are Parried or Dodged, healing you for 5% of your maximum health. Cannot occur more often than once every 10 sec." },
-	{ "Weapon", "Revelation", "A chance to trigger Revelation when a non-periodic spell fails to critically strike. Revelation grants 100% increased critical strike chance to the next spell cast. Revelation's chance to trigger is diminished as your critical strike chance increases." },
+	{ "Weapon", "Insight", "A chance to grant Insight when you cast a spell, increasing Spirit by 100% for 10 sec.", 8216 },
+	{ "Weapon", "Recovery", "Trigger Recovery when you are Parried or Dodged, healing you for 5% of your maximum health. Cannot occur more often than once every 10 sec.", 8721 },
+	{ "Weapon", "Revelation", "A chance to trigger Revelation when a non-periodic spell fails to critically strike. Revelation grants 100% increased critical strike chance to the next spell cast. Revelation's chance to trigger is diminished as your critical strike chance increases.", 8217 },
 	{ "Bracer", "Lesser Agility", "Agility +4" },
 	{ "Bracer", "Lesser Strength", "Strength +4" },
 	{ "Chest", "Stamina", "Stamina +4" },
@@ -45,7 +51,7 @@ TopFit.EnchantData = {
 	{ "Cloak", "Lesser Fire Resistance", "+10 Fire Resistance" },
 	{ "Bracer", "Lesser Stamina", "Stamina +4" },
 	{ "Shield", "Lesser Spirit", "Spirit +3" },
-	{ "Chest", "Lesser Absorption", "Has a 5% chance per hit of giving you 25 points of damage absorption. Cannot occur more often than once every 5 sec." },
+	{ "Chest", "Lesser Absorption", "Has a 5% chance per hit of giving you 25 points of damage absorption. Cannot occur more often than once every 5 sec.", 63 },
 	{ "Weapon", "Lesser Striking", "Weapon Damage +2" },
 	{ "2H Weapon", "Lesser Impact", "Weapon Damage +5" },
 	{ "Chest", "Intellect", "Intellect +4" },
@@ -82,7 +88,7 @@ TopFit.EnchantData = {
 	{ "Gloves", "Advanced Mining", "Mining +5" },
 	{ "2H Weapon", "Impact", "Weapon Damage +6" },
 	{ "Chest", "Lesser Stats", "All Stats +2" },
-	{ "Chest", "Absorption", "Has a 25% chance per hit of giving you 50 points of damage absorption. Cannot occur more often than once every 5 sec." },
+	{ "Chest", "Absorption", "Has a 25% chance per hit of giving you 50 points of damage absorption. Cannot occur more often than once every 5 sec.", 8220 },
 	{ "2H Weapon", "Lesser Strength", "Strength +15" },
 	{ "Bracer", "Greater Spirit", "Spirit +7" },
 	{ "Cloak", "Greater Defense", "Armor +60" },
@@ -91,7 +97,7 @@ TopFit.EnchantData = {
 	{ "Gloves", "Advanced Herbalism", "Herbalism +5" },
 	{ "Bracer", "Intellect", "Intellect +5" },
 	{ "Gloves", "Agility", "Agility +7" },
-	{ "Weapon", "Demonslaying", "A chance of stunning and doing heavy damage to demons." },
+	{ "Weapon", "Demonslaying", "A chance of stunning and doing heavy damage to demons.", 912 },
 	{ "Boots", "Stamina", "Stamina +5" },
 	{ "Bracer", "Deflection", "Defense +7" },
 	{ "Shield", "Frost Resistance", "+8 Frost Resistance" },
@@ -113,7 +119,7 @@ TopFit.EnchantData = {
 	{ "Weapon", "Greater Striking", "Weapon Damage +4" },
 	{ "Cloak", "Greater Resistance", "+5 All Resistances" },
 	{ "Shield", "Greater Stamina", "Stamina +9" },
-	{ "Weapon", "Fiery Weapon", "Often strike for 40 additional fire damage." },
+	{ "Weapon", "Fiery Weapon", "Often strike for 40 additional fire damage.", 803 },
 	{ "Gloves", "Minor Haste", "Haste +1%" },
 	{ "Bracer", "Superior Spirit", "Spirit +9" },
 	{ "Gloves", "Greater Agility", "Agility +10" },
@@ -121,20 +127,20 @@ TopFit.EnchantData = {
 	{ "Chest", "Major Stamina", "+10 Stamina" },
 	{ "Shield", "Superior Spirit", "Spirit +9" },
 	{ "Cloak", "Superior Defense", "Armor +70" },
-	{ "Weapon", "Icy Chill", "Often chill the target reducing their movement and attack speed." },
+	{ "Weapon", "Icy Chill", "Often chill the target reducing their movement and attack speed.", 1894 },
 	{ "2H Weapon", "Strength", "Strength +25" },
 	{ "2H Weapon", "Agility", "Agility +25" },
 	{ "Bracer", "Mana Regeneration", "Mana Regen 4 per 5 sec." },
 	{ "Chest", "Major Intellect", "Intellect +10" },
 	{ "Weapon", "Agility", "Agility +15" },
 	{ "Weapon", "Strength", "Strength +15" },
-	{ "Gloves", "Lotus Claw", "Give a small chance to acquire Death Lotus when gathering any herb in Hyjal." },
+	{ "Gloves", "Lotus Claw", "Give a small chance to acquire Death Lotus when gathering any herb in Hyjal.", 8695 },
 	{ "2H Weapon", "Superior Impact", "Weapon Damage +9" },
 	{ "Boots", "Greater Agility", "Agility +7" },
 	{ "Bracer", "Superior Agility", "+9 Agility" },
 	{ "Bracer", "Superior Strength", "Strength +9" },
 	{ "Gloves", "Greater Strength", "Strength +10" },
-	{ "Weapon", "Unholy Weapon", "Often inflict a curse on the target reducing their melee damage." },
+	{ "Weapon", "Unholy Weapon", "Often inflict a curse on the target reducing their melee damage.", 1899 },
 	{ "2H Weapon", "Major Intellect", "Intellect +9" },
 	{ "2H Weapon", "Major Spirit", "Spirit +9" },
 	{ "2H Weapon", "Mighty Healing Power", "Healing Spells +100, Damage Spells +34" },
@@ -165,9 +171,20 @@ TopFit.EnchantData = {
 	{ "Off-Hand", "Wisdom", "+6 Intellect and +5 Spirit" },
 	{ "Weapon", "Crusader", "Often when attacking in melee it heals for 100 and increases Strength by 100 for 15 sec." },
 	{ "Weapon", "Healing Power", "Healing Spells +55" },
-	{ "Weapon", "Lifestealing", "Often steal life from the enemy and give it to the wielder." },
+	{ "Weapon", "Lifestealing", "Often steal life from the enemy and give it to the wielder.", 1898 },
 	{ "Weapon", "Mighty Intellect", "Intellect +22" },
 	{ "Weapon", "Mighty Spirit", "Spirit +22" },
 	{ "Weapon", "Spell Power", "Spell Power +30" },
 	{ "Weapon", "Superior Striking", "Weapon Damage +5" },
+	{ "Weapon", "Fiery Blaze", "15% chance to inflict 11 Fire damage to all enemies within 3 yards.", 36 },
+	{ "Weapon", "Dismantle", "Often cause all spells and attacks to sometimes deal 75 additional damage to mechanical creatures.", 7210 },
+	{ "Shield", "Iron Shield Spike", "Attaches an Iron Spike to your shield that deals damage every time you block with it.", 43 },
+	{ "Shield", "Mithril Shield Spike", "Attaches a Mithril Spike to your shield that deals damage every time you block with it.", 463 },
+	{ "Shield", "Thorium Shield Spike", "Attaches a Thorium Spike to your shield that deals damage every time you block with it.", 1704 },
+	{ "Head", "Wolfshead Trophy", "Gain 20 energy or 5 rage when shapeshifting into Cat or Bear form.", 7124 },
+	{ "Chest", "Retricutioner", "Reflect 9 damage back to the attacker when the bearer is struck in melee.", 7223 },
+	{ "Weapon", "Grand Crusader", "Often when attacking in melee it heals for 400 and increases Strength by 120 for 20s.", 7940 },
+	{ "2H Weapon", "Grand Inquisitor", "Often when attacking in melee it heals for 400 and increases Strength by 200 for 20s.", 7943 },
+	{ "2H Weapon", "Grand Arcanist", "Often when striking with a spell it restores 400 mana and increases Spell Power by 140 for 20s.", 7941 },
+	{ "Weapon", "Grand Sorcerer", "Often when striking with a spell it restores 400 mana and increases Spell Power by 70 for 20s.", 7942 },
 }

@@ -137,6 +137,7 @@ function TopFit:CreateEnchantsPlugin()
 
         local previous = hint
         for _, group in ipairs(TopFit.EnchantGroups) do
+          if TopFit:GroupHasScoredEnchants(group) then
             local button = CreateFrame("Button", nil, frame)
             button:SetHeight(18)
             button:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -6)
@@ -163,6 +164,7 @@ function TopFit:CreateEnchantsPlugin()
 
             tinsert(frame.rows, { group = group, button = button, value = value })
             previous = button
+          end
         end
         Refresh()
     end

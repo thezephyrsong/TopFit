@@ -13,7 +13,7 @@
 -- UNSCORED on purpose and says why, rather than being guessed at.
 -- ============================================================================
 
-TopFit.EnchantGroups = { "Weapon", "2H Weapon", "Shield", "Off-Hand", "Chest", "Cloak", "Bracer", "Gloves", "Boots", "Necklace" }
+TopFit.EnchantGroups = { "Head", "Weapon", "2H Weapon", "Shield", "Off-Hand", "Chest", "Cloak", "Bracer", "Gloves", "Boots", "Necklace" }
 
 local SCHOOL_RESISTANCE = {
     Holy = "RESISTANCE1_NAME", Fire = "RESISTANCE2_NAME", Nature = "RESISTANCE3_NAME",
@@ -87,6 +87,10 @@ function TopFit:ParseEnchantText(text)
     elseif text:find("Fishing") or text:find("Herbalism") or text:find("Mining") or text:find("Skinning")
         or text:find("Riding") or text:find("movement") or text:find("stealth") or text:find("Death Lotus") then
         reason = "profession/utility effect; no combat stats"
+    elseif text:find("every time you block") or text:find("Reflect") then
+        reason = "damage dealt back to attackers; not scored"
+    elseif text:find("energy") or text:find("rage when") then
+        reason = "resource-on-shapeshift utility effect; not scored"
     elseif text:find("Threat") or text:find("threat") then
         reason = "threat modifier; not scored"
     elseif text:find("Beastslaying") or text:find("Elemental Slayer") or text:find("demons") then
@@ -103,12 +107,14 @@ end
 local function BuildEnchantIndex()
     if TopFit.EnchantIndex then return end
     TopFit.EnchantIndex = {}
+    TopFit.EnchantIndexByID = {}
     TopFit.EnchantsByGroup = {}
     for _, group in ipairs(TopFit.EnchantGroups) do TopFit.EnchantsByGroup[group] = {} end
     for _, row in ipairs(TopFit.EnchantData or {}) do
-        local entry = { group = row[1], name = row[2], text = row[3] }
+        local entry = { group = row[1], name = row[2], text = row[3], id = row[4] }
         entry.stats, entry.unscoredReason = TopFit:ParseEnchantText(entry.text)
         TopFit.EnchantIndex[entry.group .. "|" .. entry.name] = entry
+        if entry.id then TopFit.EnchantIndexByID[entry.id] = entry end
         if TopFit.EnchantsByGroup[entry.group] then
             tinsert(TopFit.EnchantsByGroup[entry.group], entry)
         end
@@ -120,6 +126,20 @@ function TopFit:GetEnchantEntry(group, name)
     return TopFit.EnchantIndex[group .. "|" .. name]
 end
 
+-- The enchant behind an item link's enchant field (item:ID:ENCHANTID:...), if we know that ID.
+function TopFit:GetEnchantByID(enchantID)
+    BuildEnchantIndex()
+    return TopFit.EnchantIndexByID[tonumber(enchantID) or 0]
+end
+
+-- Does this group hold anything TopFit can score? (the tab hides groups that don't)
+function TopFit:GroupHasScoredEnchants(group)
+    for _, entry in ipairs(TopFit:GetEnchantsForGroup(group)) do
+        if next(entry.stats) then return true end
+    end
+    return false
+end
+
 function TopFit:GetEnchantsForGroup(group)
     BuildEnchantIndex()
     return TopFit.EnchantsByGroup[group] or {}
@@ -128,7 +148,7 @@ end
 -- ---------------------------------------------------------------------------
 -- Slot / item -> group
 -- ---------------------------------------------------------------------------
-local FIXED_SLOT_GROUP = { [2] = "Necklace", [5] = "Chest", [8] = "Boots", [9] = "Bracer", [10] = "Gloves", [15] = "Cloak" }
+local FIXED_SLOT_GROUP = { [1] = "Head", [2] = "Necklace", [5] = "Chest", [8] = "Boots", [9] = "Bracer", [10] = "Gloves", [15] = "Cloak" }
 
 function TopFit:GetEnchantGroup(slotID, itemTable)
     if FIXED_SLOT_GROUP[slotID] then return FIXED_SLOT_GROUP[slotID] end
