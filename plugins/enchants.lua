@@ -192,13 +192,37 @@ function TopFit:CreateEnchantsPlugin()
         menu = CreateFrame("Frame", "TopFit_EnchantMenu", UIParent, "UIDropDownMenuTemplate")
         UIDropDownMenu_Initialize(menu, InitMenu, "MENU")
 
-        local previous = hint
+        -- The rows sit in a scroll frame: with 14 groups they are taller than the tab. The checkbox and
+        -- hint above stay fixed.
+        local scroll = CreateFrame("ScrollFrame", "TopFit_EnchantScrollFrame", frame, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -6)
+        scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -24, 0)   -- room for the scroll bar
+        local content = CreateFrame("Frame", nil, scroll)
+        content:SetWidth(1)
+        content:SetHeight(1)
+        scroll:SetScrollChild(content)
+        scroll:SetScript("OnSizeChanged", function(self, width)
+            if width and width > 0 then content:SetWidth(width) end
+        end)
+        scroll:EnableMouseWheel(true)
+        scroll:SetScript("OnMouseWheel", function(self, delta)
+            local target = self:GetVerticalScroll() - delta * 36
+            self:SetVerticalScroll(math.max(0, math.min(self:GetVerticalScrollRange(), target)))
+        end)
+        frame.scroll = scroll
+
+        local ROW_HEIGHT, ROW_GAP = 18, 6
+        local previous = nil
         for _, group in ipairs(TopFit.EnchantGroups) do
           if TopFit:GroupHasScoredEnchants(group) then
-            local button = CreateFrame("Button", nil, frame)
-            button:SetHeight(18)
-            button:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -6)
-            button:SetPoint("RIGHT", frame, "RIGHT")
+            local button = CreateFrame("Button", nil, content)
+            button:SetHeight(ROW_HEIGHT)
+            if previous then
+                button:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -ROW_GAP)
+            else
+                button:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+            end
+            button:SetPoint("RIGHT", content, "RIGHT")
             button:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
 
             local label = button:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -223,6 +247,8 @@ function TopFit:CreateEnchantsPlugin()
             previous = button
           end
         end
+        content:SetHeight(math.max(1, #frame.rows * (ROW_HEIGHT + ROW_GAP)))
+        scroll:UpdateScrollChildRect()
         Refresh()
     end
 
