@@ -18,12 +18,8 @@ end
 TopFit = LibStub("AceAddon-3.0"):NewAddon("TopFit", "AceConsole-3.0")
 
 -- Safe accessors for the classic-style 3-tab talent API (GetNumTalentTabs/GetTalentInfo/
--- GetTalentTabInfo/GetNumTalents). Confirmed present on Classic-family client builds (TBC/
--- Wrath Classic -- see REWRITE_PLAN_12_1_5.md's generalwrex/wowsimsexporter finding),
--- confirmed ABSENT on unified retail 12.1.5 (see the same doc's AutoGear finding). Whether
--- WoW: Forever has it is the single biggest open question in this whole rewrite, unresolved
--- until there's a beta client to check against -- these wrappers exist so that uncertainty
--- degrades gracefully (talent-based bonuses/detection silently read as "no data") instead of
+-- GetTalentTabInfo/GetNumTalents). Whether a given client build still has it varies, so these
+-- wrappers exist so that uncertainty degrades gracefully (talent-based bonuses/detection silently read as "no data") instead of
 -- hard-erroring the entire calculation pipeline the moment a Shaman/Warrior tries to
 -- calculate a set. Every direct call to the four functions above elsewhere in the codebase
 -- should go through these instead.
@@ -55,21 +51,18 @@ function TopFit:GetTalentRankSafe(tab, index)
     return currentRank or 0, name, maxRank
 end
 
--- Scans active Retail C_ClassTalents / C_Traits loadout and returns active ranks
-function TopFit:GetRetailTalentRanks()
-    local ranksBySpellID = {}
-    local ranksByName = {}
-
-    if not (C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_Traits) then
-        return ranksBySpellID, ranksByName
-    end
-
+-- Returns the player's active talent ranks as two tables, keyed by spellID and by talent name.
+-- Reads the modern C_ClassTalents / C_Traits loadout when the client has one; when that yields nothing
+-- (the API is missing, or it has no active config on this client) it falls back to the classic
+-- 3-tab talent API through the safe wrappers above (name -> rank only; that API has no spellIDs).
+-- The result is cached for a few seconds: GetEffectiveWeights asks for it once per item.
+local TALENT_CACHE_SECONDS = 5
+local function ScanTraitRanks(ranksBySpellID, ranksByName)
+    if not (C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_Traits) then return end
     local configID = C_ClassTalents.GetActiveConfigID()
-    if not configID then return ranksBySpellID, ranksByName end
-
+    if not configID then return end
     local configInfo = C_Traits.GetConfigInfo(configID)
-    if not configInfo or not configInfo.treeIDs then return ranksBySpellID, ranksByName end
-
+    if not configInfo or not configInfo.treeIDs then return end
     for _, treeID in ipairs(configInfo.treeIDs) do
         local nodes = C_Traits.GetTreeNodes(treeID)
         if nodes then
@@ -83,7 +76,6 @@ function TopFit:GetRetailTalentRanks()
                             local defInfo = C_Traits.GetDefinitionInfo(entryInfo.definitionID)
                             if defInfo and defInfo.spellID then
                                 ranksBySpellID[defInfo.spellID] = nodeInfo.activeRank
-
                                 local spellInfo = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(defInfo.spellID)
                                 local spellName = spellInfo and spellInfo.name
                                 if spellName then
@@ -96,7 +88,34 @@ function TopFit:GetRetailTalentRanks()
             end
         end
     end
+end
 
+local function ScanClassicTalentRanks(ranksByName)
+    for tab = 1, TopFit:GetNumTalentTabsSafe() do
+        for index = 1, TopFit:GetNumTalentsSafe(tab) do
+            local rank, name = TopFit:GetTalentRankSafe(tab, index)
+            if name and rank > 0 then ranksByName[name] = rank end
+        end
+    end
+end
+
+function TopFit:GetRetailTalentRanks()
+    local now = GetTime and GetTime() or 0
+    local cache = TopFit.talentRankCache
+    if cache and (now - cache.time) < TALENT_CACHE_SECONDS then
+        return cache.bySpellID, cache.byName
+    end
+
+    local ranksBySpellID, ranksByName = {}, {}
+    ScanTraitRanks(ranksBySpellID, ranksByName)
+    if not next(ranksBySpellID) and not next(ranksByName) then
+        ScanClassicTalentRanks(ranksByName)
+    end
+
+    -- only cache a successful read, so a "not loaded yet" pass is retried on the next call
+    if next(ranksBySpellID) or next(ranksByName) then
+        TopFit.talentRankCache = { time = now, bySpellID = ranksBySpellID, byName = ranksByName }
+    end
     return ranksBySpellID, ranksByName
 end
 
@@ -221,7 +240,7 @@ function TopFit:onUpdateForEquipment()
                     TopFit.itemRecommendations[slotID] = nil
                 else
                     -- try equipping the item again
-                    --TODO: if we try to equip offhand, and mainhand is two-handed, and no titan's grip, unequip mainhand first
+                    --TODO: if we try to equip offhand, and mainhand is two-handed, unequip mainhand first
                     ClearCursor()
                     if foundBag then
                         C_Container.PickupContainerItem(foundBag, foundSlot)
@@ -636,7 +655,7 @@ function TopFit:OnInitialize()
     -- Rating points per 1% on Forever, treated as FIXED at every character level (Dan, 2026-10-10).
     -- Basis: in-game tooltip percent vs the item's rating from wowsims/gamedata items.txt.
     -- hit: 3 rating = 0.3% at levels 20 and 30, 10 rating = 1.0% on two items (the best-tested
-    -- value); the others each rest on a single reading and match TBC/WotLK's level-60 table.
+    -- value); the others each rest on a single reading.
     -- NOT used by scoring, which reads the tooltip's percent text, and NOT used by the Pawn
     -- import: Pawn's Classic convention already puts these stats at 1 point per 1%, so Pawn weights
     -- map straight onto the percent stats (import.lua). Reference data only.
@@ -791,7 +810,7 @@ function TopFit:OnInitialize()
             -- TOPFIT_SPELL_DAMAGE_FLAT/TOPFIT_SPELL_HEALING_FLAT below, and unlike those two,
             -- it's confirmed dead weight for Forever specifically -- GetItemStats() will never
             -- return this key on Forever gear, since Forever itemizes spell damage/healing as
-            -- flat Equip: text (see procparser.lua), not as a WotLK-style unified rating stat.
+            -- flat Equip: text (see procparser.lua), not as a unified rating stat.
             [1] = "ITEM_MOD_SPELL_PENETRATION_SHORT",
             [2] = "ITEM_MOD_MANA_REGENERATION_SHORT",
             [3] = "TOPFIT_SPELL_DAMAGE_FLAT",
@@ -831,7 +850,7 @@ function TopFit:OnInitialize()
             -- reasoning as ITEM_MOD_SPELL_POWER_SHORT above: confirmed dead weight for Forever.
             -- GetItemStats() will never return these on Forever gear -- hit/crit are itemized as
             -- flat "Improves your chance to..." percent text (confirmed against real gear
-            -- screenshots, procparser.lua), not WotLK-style rating stats. ITEM_MOD_HASTE_RATING_SHORT
+            -- screenshots, procparser.lua), not rating stats. ITEM_MOD_HASTE_RATING_SHORT
             -- left alone -- (2026-10-10: the combined "attack speed and casting speed" line is now confirmed and parsed to TOPFIT_HASTE_PERCENT).
             -- ITEM_MOD_HASTE_RATING_SHORT removed 2026-09-27 (Dan: convert ratings to
             -- percentages), replaced with TOPFIT_HASTE_PERCENT -- same caveat as armor
@@ -919,44 +938,6 @@ function TopFit:OnInitialize()
     
     -- frame for calculation function
     TopFit.calculationsFrame = CreateFrame("Frame");
-    
-    -- heirloom info
-    local isPlateWearer, isMailWearer = false, false
-    -- Death Knight removed 2026-09-26 (Dan confirmed): doesn't exist in WoW: Forever.
-    if (select(2, UnitClass("player")) == "WARRIOR") or (select(2, UnitClass("player")) == "PALADIN") then
-        isPlateWearer = true
-    end
-    if (select(2, UnitClass("player")) == "SHAMAN") or (select(2, UnitClass("player")) == "HUNTER") then
-        isMailWearer = true
-    end
-    
-    -- tables of itemIDs for heirlooms which change armor type
-    TopFit.heirloomInfo = {
-        plateHeirlooms = {
-            [3] = {
-                [1] = 42949,
-                [2] = 44100,
-                [3] = 44099,
-            },
-            [5] = {
-                [1] = 48685,
-            },
-        },
-        mailHeirlooms = {
-            [3] = {
-                [1] = 44102,
-                [2] = 42950,
-                [3] = 42951,
-                [4] = 44101,
-            },
-            [5] = {
-                [1] = 48677,
-                [2] = 48683,
-            },
-        },
-        isPlateWearer = isPlateWearer,
-        isMailWearer = isMailWearer
-    }
     
     -- container for plugin information and frames
     TopFit.plugins = {}

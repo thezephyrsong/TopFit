@@ -5,16 +5,10 @@
 -- about it and will keep asking for more gear-based percent than you actually need once you've
 -- taken the talent.
 --
--- REWRITTEN 2026-09-26 for Forever. The old version of this file (WotLK/Triumvirate) doesn't
--- apply anymore, for two independent reasons, not just one:
---   1. Triumvirate is cancelled.
---   2. Even setting that aside, the whole MECHANISM changed. Forever's talents are read via
---      TopFit:GetRetailTalentRanks() (core.lua), which uses the modern C_ClassTalents/C_Traits
---      node system -- talents are addressed by spellID/name, NOT by (tab, index), which doesn't
---      exist in this system at all. And Forever's itemization is flat percent, not WotLK-style
---      rating (see MIGRATION_WOWFOREVER.md section 8) -- so a talent granting "+1% crit" should
---      credit a TOPFIT_CRIT_CHANCE_ALL-style pseudo-stat directly, not get converted through a
---      rating-per-percent constant into ITEM_MOD_CRIT_RATING_SHORT the way the old file did.
+-- Forever's talents are read via TopFit:GetRetailTalentRanks() (core.lua), which uses the modern
+-- C_ClassTalents/C_Traits node system -- talents are addressed by spellID/name, not by (tab,
+-- index). And Forever's itemization is flat percent, not rating, so a talent granting "+1% crit"
+-- credits a TOPFIT_CRIT_CHANCE_ALL-style pseudo-stat directly.
 --
 -- Entry fields:
 --   name            the talent's spell name, exactly as GetRetailTalentRanks()'s ranksByName
@@ -219,11 +213,7 @@ TopFit.talentRatingBonuses["WARLOCK"] = {
 	{ name = "Suppression", stat = "TOPFIT_HIT_CHANCE_ALL", percentPerPoint = 1 },
 }
 
--- All nine classes that exist in WoW: Forever are covered above. Death Knight, Evoker, Demon
--- Hunter, and Monk are NOT playable classes in Forever at all -- confirmed 2026-09-26 (Dan) --
--- so there is nothing to gather or add for them, not just "not yet confirmed." If any of these
--- names show up again in a future data source, treat that source with suspicion rather than
--- assuming Forever's class roster changed.
+-- All nine classes that exist in WoW: Forever are covered above.
 
 -- ============================================================================
 -- Stat-conversion talents -- "X% of stat A becomes stat B"
@@ -254,10 +244,10 @@ TopFit.talentRatingBonuses["WARLOCK"] = {
 --                    text individually, not assumed from the formula implied by rank 1)
 --
 -- maxRank is the talent's top rank, used to know what the FULL talent is worth when a set's weights
--- already assume it (a Forever-sim preset: see GetEffectiveWeights). Careful Aim's toStat was changed
--- from Attack Power to RANGED Attack Power 2026-10-12: Careful Aim converts Intellect into ranged
--- attack power in every Classic-family version I know of, and the Forever sim gives a Hunter 0.00 for
--- plain Attack Power but 0.39 for Ranged Attack Power. Not checked against Forever's own talent text.
+-- already assume it (a Forever-sim preset: see GetEffectiveWeights). Careful Aim converts Intellect
+-- into ATTACK POWER (Dan, 2026-10-16), and attack power also grants ranged attack power, which
+-- GetEffectiveWeights accounts for by valuing a point of Attack Power at the Attack Power weight
+-- PLUS the Ranged Attack Power weight.
 --
 -- Consumed by TopFit:GetEffectiveWeights (calculation.lua), which resolves these against live
 -- talent ranks once per calculation pass and adds the converted value to the source stat's
@@ -268,7 +258,7 @@ TopFit.talentStatConversions = {}
 TopFit.talentStatConversions["HUNTER"] = {
 	-- Careful Aim (Marksmanship): confirmed evenly-scaled 20%/rank, 5 ranks (20,40,60,80,100%
 	-- checked per rank, not assumed from rank 1 alone).
-	{ name = "Careful Aim", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "ITEM_MOD_RANGED_ATTACK_POWER_SHORT", percentPerRank = 20, maxRank = 5 },
+	{ name = "Careful Aim", fromStat = "ITEM_MOD_INTELLECT_SHORT", toStat = "ITEM_MOD_ATTACK_POWER_SHORT", percentPerRank = 20, maxRank = 5 },
 }
 
 TopFit.talentStatConversions["SHAMAN"] = {

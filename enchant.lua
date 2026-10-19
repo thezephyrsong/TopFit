@@ -194,6 +194,10 @@ local function BuildEnchantIndex()
                 end
             end
         end
+        -- the client lists "+26 Attack Power" as AP 26 AND ranged AP 26; attack power already grants
+        -- ranged attack power (see GetEffectiveWeights), so keep only the AP half
+        local apKey, rapKey = "ITEM_MOD_ATTACK_POWER_SHORT", "ITEM_MOD_RANGED_ATTACK_POWER_SHORT"
+        if stats[apKey] and stats[rapKey] and stats[apKey] == stats[rapKey] then stats[rapKey] = nil end
         PseudoToStats(row.pseudoStats, add)
         local unknownPseudo
         for i, value in ipairs(row.pseudoStats or {}) do

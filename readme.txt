@@ -2,8 +2,8 @@ TopFit
 ======
 
 Author: Mirroar (Thyrfall @ EU-Die Todeskrallen) - continued by Zae
-Version: 3.3v7
-WoW Version: 3.3.5 (TOC 30300)
+Version: see TopFit.toc
+WoW Version: WoW: Forever (see TopFit.toc for the interface number)
 
 GitHub:       http://github.com/Mirroar/TopFit
 
@@ -11,7 +11,7 @@ GitHub:       http://github.com/Mirroar/TopFit
 --------------
 TopFit is a gear management addon designed to select the best gear for you when you just can't be bothered to compare items yourself.
 To make intelligent gear choices for you, you will first have to create item scales, telling the Addon which stats are the most important to you. After that, just put all interesting items into you inventory and start the calculation. Voila, you have a fine new equipment set, which you can update with a single click from now on.
-TopFit will check an item's stats, gems, enchantments, whether you can dualwield or Titan's Grip and more.
+TopFit will check an item's stats, enchantments, whether you can dualwield and more.
 Any caps you're trying to reach can also be set (hit rating cap for damage dealers, defense rating cap for (non-bear-)tanks, etc).
 
 2. Quickstart

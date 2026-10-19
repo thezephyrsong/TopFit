@@ -1,7 +1,5 @@
 -- Preset stat weights, replaced 2026-10-12 with the output of a fresh WoW: Forever sim
--- (Damage/DPS metric, 10000 iterations; per-spec stat weights pasted by Dan). The previous presets
--- were WotLK-era, several carried a dead ITEM_MOD_SPELL_POWER_SHORT weight (that stat doesn't exist
--- on Forever gear), and none were Forever-sourced apart from the old Hunter EP. They are in git history.
+-- (Damage/DPS metric, 10000 iterations; per-spec stat weights pasted by Dan).
 --
 -- How the sim columns map onto TopFit's stats:
 --   * Strength/Agility/Intellect/Spirit, Attack Power, Ranged Attack Power, MP5 -> the same stat.

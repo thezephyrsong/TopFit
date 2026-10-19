@@ -1,11 +1,7 @@
 -- maps a class's English (non-localized) token to the armor material it's meant to wear.
 -- used by the "Force Armor Type" per-set option to keep e.g. a Paladin from being recommended
 -- a leather/cloth piece purely because it scores higher on raw weights than the available plate.
--- Death Knight, Evoker, Demon Hunter, and Monk intentionally absent -- confirmed 2026-09-26
--- (Dan): none of these four exist as playable classes in WoW: Forever at all. They'd been
--- added here speculatively when the class token maps elsewhere in the codebase were first
--- ported; that was wrong, not just premature, so removed rather than left as harmless-but-
--- incorrect entries a future reader might mistake for confirmation these classes exist.
+-- Only the nine classes WoW: Forever has appear here.
 local CLASS_ARMOR_TYPE = {
 	WARRIOR     = "Plate",
 	PALADIN     = "Plate",
@@ -95,11 +91,9 @@ function TopFit:CalculateRecommendations()
 	
 	-- determine if the player can dualwield
 	TopFit.playerCanDualWield = false
-	TopFit.playerCanTitansGrip = false
 	
 	local playerClass = select(2, UnitClass("player"))
-	-- Death Knight/Demon Hunter/Monk removed from this check 2026-09-26 (Dan confirmed): none
-	-- exist in WoW: Forever. See CLASS_ARMOR_TYPE's comment above for the same correction.
+	-- rogues dual-wield from the start; warriors and hunters learn it at level 20
 	if playerClass == "ROGUE"
 		or ((playerClass == "WARRIOR" or playerClass == "HUNTER") and UnitLevel("player") > 20) then
 		TopFit.playerCanDualWield = true
@@ -145,6 +139,18 @@ end
 -- hit the free fast-path below and never reach that call. Worth revisiting if scoring a large
 -- bag/bank on one of those four classes turns out to be slow in practice.
 function TopFit:GetEffectiveWeights(weights, setTable)
+	-- "+Attack Power" also grants Ranged Attack Power (Dan, 2026-10-16), so a point of Attack Power is
+	-- worth the AP weight PLUS the RAP weight. This matters for Hunter weights (the sim gives a Hunter 0.00
+	-- for plain AP and 0.39 for RAP: without this, +AP gear would score nothing for a Hunter). Items and
+	-- enchants that list ONLY ranged AP still use the RAP weight alone. (Enchant records that list the
+	-- same number as both AP and RAP are collapsed to AP in enchant.lua, so nothing is counted twice.)
+	local rangedAPWeight = weights["ITEM_MOD_RANGED_ATTACK_POWER_SHORT"]
+	if rangedAPWeight and rangedAPWeight ~= 0 then
+		local merged = {}
+		for stat, value in pairs(weights) do merged[stat] = value end
+		merged["ITEM_MOD_ATTACK_POWER_SHORT"] = (weights["ITEM_MOD_ATTACK_POWER_SHORT"] or 0) + rangedAPWeight
+		weights = merged
+	end
 	-- A set from a Forever-sim preset has weights that already ASSUME the full talent (the sim's
 	-- Intellect weight includes everything Careful Aim / Mental Dexterity / Champion of the Light
 	-- are worth). Adding the talent on top would count it twice, so for those sets the conversion
@@ -159,10 +165,6 @@ function TopFit:GetEffectiveWeights(weights, setTable)
 	if not entries or #entries == 0 then
 		return weights
 	end
-	if not (C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_Traits) then
-		return weights
-	end
-
 	local ranksBySpellID, ranksByName = TopFit:GetRetailTalentRanks()
 	if not next(ranksBySpellID) and not next(ranksByName) then
 		return weights
@@ -212,9 +214,7 @@ end
 -- Sums the percent stat bonuses granted by talents configured in talentbonuses.lua.
 -- Forever's talents are read via TopFit:GetRetailTalentRanks() (core.lua) -- the modern
 -- C_ClassTalents/C_Traits node system, addressed by spellID/name, not (tab, index). See
--- talentbonuses.lua's own header for why the old tab/index + rating-conversion approach (still
--- visible in git history) doesn't apply here at all anymore, not just because Triumvirate's
--- cancelled but because the underlying mechanism itself is different on this client.
+-- talentbonuses.lua's own header for how talent bonuses are modelled.
 function TopFit:GetTalentRatingBonuses()
 	local bonuses = {}
 	local playerClass = select(2, UnitClass("player"))
@@ -223,18 +223,13 @@ function TopFit:GetTalentRatingBonuses()
 		return bonuses
 	end
 	
-	if not (C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_Traits) then
-		if not TopFit.warnedAboutMissingTalentData then
-			TopFit:Debug("Talent-granted stat bonuses skipped -- this client doesn't expose C_ClassTalents/C_Traits.")
-			TopFit.warnedAboutMissingTalentData = true
-		end
-		return bonuses
-	end
-	
 	local ranksBySpellID, ranksByName = TopFit:GetRetailTalentRanks()
 	if not next(ranksBySpellID) and not next(ranksByName) then
+		-- Not an error worth interrupting the player for: it just means no talent data this pass
+		-- (a character with no talents, or a client that hasn't loaded them yet). Debug mode only,
+		-- and once per session.
 		if not TopFit.warnedAboutMissingTalentData then
-			TopFit:Print("Talent-granted stat bonuses can't be read yet -- your active talent config may not be loaded. Try opening your Talent panel once this session, then recalculate.")
+			TopFit:Debug("Talent-granted stat bonuses skipped -- no talent ranks could be read this pass.")
 			TopFit.warnedAboutMissingTalentData = true
 		end
 		return bonuses
@@ -1009,17 +1004,7 @@ function TopFit:IsOnehandedWeapon(item)
 					end
 				end
 
-				if TopFit.playerCanTitansGrip and equipSlot == "INVTYPE_2HWEAPON" then
-					if itemSubType then
-						local sub = itemSubType:lower()
-						if sub:find("polearm") or sub:find("staff") or sub:find("staves") or sub:find("fishing") then
-							return false
-						end
-					end
-					return true
-				else
-					return false
-				end
+				return false
 			end
 	end
 

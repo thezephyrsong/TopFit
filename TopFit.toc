@@ -42,5 +42,3 @@ plugins\stats.lua
 plugins\virtual_items.lua
 plugins\enchants.lua
 
-enchant_ids.lua
-simc_proc_data.lua

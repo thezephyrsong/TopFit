@@ -219,106 +219,131 @@ multipliers, and stats that multiply themselves rather than converting
 into something else (Priest's Mental Strength) or convert into something
 this addon doesn't score (Mage's Arcane Resilience → Armor).
 
-**Still open**: the "talent config may not be loaded" warning has been
-observed firing on every calculation, not just the expected one-time case
-before the Talent panel's first opened this session. Not yet
-investigated — worth checking whether it clears up after confirming the
-Talent panel has actually been opened; if it persists, that's a real bug
-in `GetRetailTalentRanks`/`GetActiveConfigID()` worth its own look.
+**Talent ranks, how they are read (`TopFit:GetRetailTalentRanks`, `core.lua`)**: first the
+modern `C_ClassTalents`/`C_Traits` loadout; if that yields nothing (API missing, or no active
+config on this client) it falls back to the classic 3-tab talent API through the `...Safe` wrappers
+(name to rank only). The read is cached for 5 seconds because `GetEffectiveWeights` asks once per
+item, and only a successful read is cached. The old "talent config may not be loaded" message printed
+on every session's first calculation because on this client the modern read evidently comes back
+empty; it is now a debug-mode-only note, once per session. **To verify in-game**: that the classic
+fallback actually finds the talents (with debug mode on, no "Talent-granted stat bonuses skipped"
+line should appear on a character that has talents).
+
+**Intellect conversions on sim-preset sets run in reverse** (2026-10-12): the Forever-sim weights
+already assume the full talent, so `GetEffectiveWeights` starts from the sim's Intellect weight and
+takes back the share of each talent the player is missing (5/5 = the sim weight, 3/5 = 40% of the
+talent's share removed). Careful Aim converts Intellect into **Attack Power** (Dan), and a point of
+Attack Power also grants Ranged Attack Power, so every set's effective Attack Power weight is its AP
+weight PLUS its RAP weight (this is what makes +AP gear count for a Hunter whose sim AP weight is
+0.00). Enchant records that list the same number as AP and RAP are collapsed to AP in `enchant.lua`
+so nothing is counted twice.
 
 ---
 
-## 5. EP presets and sim export targets
+## 5. Presets and sim export (current state, refreshed 2026-10-16)
 
-- **Triumvirate (the old `simc-triumvirate` project) is cancelled
-  entirely.**
-- **One real preset exists**: Hunter, in `presets.lua`, built from Dan's
-  own live SixtyUpgrades export (`sixtyupgrades.com/forever/...`). Two
-  mapping judgment calls flagged in its own comment: `crit` mapped to
-  `TOPFIT_CRIT_CHANCE_PHYSICAL` rather than independently re-confirmed,
-  and `rangedSpeed: 100` kept at face value despite being an order of
-  magnitude larger than every other number in the same export — possibly
-  a different internal scale on SixtyUpgrades' side. No caps included —
-  Forever's real cap target percentages aren't confirmed, and a guessed
-  number would be worse than none.
-- **Remaining 8 classes are paused, not actively being gathered.** Dan is
-  waiting for the WowSims Forever branch to go public and will pull
-  preset weights from there instead of continuing manual per-character
-  SixtyUpgrades exports — those would be properly simulated per spec.
-  **Check periodically**: the exporter addon is
-  [github.com/wowsims/exporter](https://github.com/wowsims/exporter) (the
-  real upstream, not a fork — confirmed 2026-09-27). Checked directly:
-  still only `Conditional_Vanilla/TBC/Wrath/Cata/Mists.lua`, no Forever
-  file, and none of the 6 open issues mention Forever either. This is the
-  same repo whose `ExportStructures/ItemSpec.lua` schema was already
-  examined (section 5) — once a Forever branch lands here, it'll be in
-  the same already-documented shape.
-- **The rest of `presets.lua`** (everything except the one Hunter entry)
-  is still 100% old WotLK/Triumvirate rating-based data — wrong class
-  model and wrong stat model both. Not rewritten yet; same
-  blocked-on-WowSims status as the EP gathering above.
-- **Sim export target: community WowSims** (wowsims.com, Go-based), once
-  its Forever branch exists — not a custom TopFit-hosted sim. Confirmed
-  from reading the actual WowSimsExporter companion addon: plain JSON,
-  item schema versioned by an `elseif` chain with no Forever branch yet.
-  **SixtyUpgrades already has live Forever support** (confirmed from
-  Dan's real export, which has `sixtyupgrades.com/forever/...` links) —
-  an earlier note in this doc claiming otherwise was based on a stand-in
-  Season of Discovery sample and was wrong; corrected.
-- **Real Forever SixtyUpgrades export schema, confirmed**: items as
-  `{name, id, slot, enchant: {name, id, spellId}, acquired}`; talents as
-  `{name, id, rank, spellId}`; EP weights as `{name, stats: {...}}`; a
-  flat-percent stats block with per-school damage fields. One or two more
-  class exports (ideally a caster) would be useful to cross-check field-
-  name consistency, but this is now lower priority given the WowSims-first
-  pivot for actual preset weights.
+- **Triumvirate (the old `simc-triumvirate` project) is cancelled entirely.** Nothing in TopFit
+  targets it any more.
+- **`presets.lua` is the Forever sim's output, wholesale** (replaced 2026-10-12): 14 presets from a
+  WoW: Forever sim run (Damage/DPS metric, 10000 iterations): Balance, Feral Bear, Feral Cat, Hunter,
+  Mage, Protection Paladin, Retribution, Shadow, Rogue, Elemental, Enhancement, Warlock, DPS Warrior,
+  Protection Warrior. The mapping is documented in the file header; the short version:
+  rating weights x the rating-per-percent rate (hit/haste/expertise 10, crit 14); casters' spell hit and
+  crit go on both the generic and spell keys; armor penetration dropped; weapon DPS = 14 x the attack
+  power weight (Hunter: 14 x ranged AP, on the ranged-only DPS key); 0.001 armor tie-break. Sets made
+  from these carry `weightsAssumeFullTalents` (section 4).
+- **What these presets do NOT have**: caps (the sim's hit/expertise weights only hold below the cap
+  and Forever's targets are unconfirmed, so TopFit over-values them until caps exist); tank
+  survivability (the three "(damage metric)" presets hold threat/damage weights only); healer presets
+  (no healing-metric specs in the table); more than one preset per class.
+- **Pawn compatibility is a standing rule** (Dan, 2026-10-10): stay close to Pawn's rating-name
+  conventions so imports/exports keep working with Pawn's own Forever support. Pawn's Classic parsing
+  already puts a "+1.0%" line at 1 point of the rating-named stat, so Pawn weights map 1:1 onto
+  TopFit's percent stats on import (no rating conversion) and export uses Pawn's names. Pawn itself
+  still marks Forever as unsupported (it warns on login) and has no pattern for Forever's combined
+  "attack speed and casting speed" haste line, so Pawn will miss that on its side.
+- **Sim export**: `simc_export.lua` was rewritten by Dan (WoWSims-style export) and has **not been
+  reviewed here**. The proc parser's header still describes the old simc `equip=`/`use=` format.
+  The community exporter ([github.com/wowsims/exporter](https://github.com/wowsims/exporter)) had no
+  Forever file when last checked (2026-09-27); worth a recheck. SixtyUpgrades has live Forever
+  support (items as `{name, id, slot, enchant: {name, id, spellId}, acquired}`, talents as
+  `{name, id, rank, spellId}`, EP weights as `{name, stats}`); it was the source of the old Hunter EP
+  preset, which the sim presets replaced.
 
 ---
 
-## 6. Outstanding items
+## 6. Outstanding items and the way forward
 
-Genuinely open, pulled together in one place:
+### A. Needs data or a decision (next work, roughly in priority order)
 
-- [ ] `WOW_PROJECT_ID` (`/dump WOW_PROJECT_ID`) — low priority now that
-      the interface number is confirmed via the TOC directly and nothing
-      currently depends on this value
-- [ ] `GetItemStats()` key names on a few real Forever items — expected
-      to match, not independently confirmed
-- [x] Item-tooltip phrasing for parry/block/dodge chance and haste —
-      confirmed from real gear and implemented 2026-10-10 (section 3)
-- [ ] Item-tooltip phrasing for armor penetration/resilience — still no
-      source; no such item seen yet. Run `/topfit unrecognized` after a
-      full scan; `/topfit itemdump <link>` shows one item's raw stats
-- [x] **`GetItemStats()` DOES return rating keys on Forever gear**
-      (Stronghold Gauntlets: `ITEM_MOD_PARRY_RATING_SHORT = 15`,
-      `ITEM_MOD_CRIT_RATING_SHORT = 14`, alongside the parsed 1% lines) —
-      resolved 2026-10-10 (Dan: everything on Forever is handled as
-      percent numbers, no ratings). `TopFit:StripRatingStats` removes every
-      `ITEM_MOD_*_RATING_SHORT` key at scan time, after the discovery log
-      has recorded it. Consequence: saved set weights on old rating keys
-      now score 0 and must be re-entered on the percent keys (cache
-      version 4)
-- [ ] "Talent config may not be loaded" warning firing every calculation,
-      not just once per session — not yet investigated (section 4)
-- [ ] `enchant_ids.lua` — extensively references the now-removed
-      `ITEM_MOD_SPELL_POWER_SHORT` and looks like it has the same
-      staleness problem `gem_ids.lua` had before its own cleanup (likely
-      WotLK-era enchant data that may not match Forever's real enchants)
-- [ ] `presets.lua` beyond the one Hunter entry — still fully
-      WotLK-rating-based; blocked on the WowSims Forever branch per
-      section 5, not an active task right now
-- [ ] WowSims Forever branch going public — blocks both the sim-export
-      format work and further EP preset gathering; check periodically
+1. **Cap targets for Forever** (melee/ranged hit, spell hit, expertise, and defense/crit immunity).
+   The caps in the old presets were WotLK figures and are gone; the sim presets ship with none. Source:
+   a sim run's own cap notes, or measured miss/crit tables in-game. Once known, add caps to the
+   presets (hit and expertise first: they are the stats the sim weights over-value).
+2. **Tank survivability weights.** Protection Paladin, Protection Warrior and Feral Bear need
+   stamina / armor / defense / dodge / parry / block weights from a survival- or threat-aware source;
+   the damage-metric sim does not provide them.
+3. **Healer presets** (Holy Paladin, Discipline/Holy Priest, Restoration Druid/Shaman): need a
+   healing-metric sim run. The loader already scores healing power.
+4. **Spec variants.** The sim table gives one preset per class; Arms vs Fury, the three Hunter
+   specs, Mage/Warlock/Rogue specs need their own runs if you want them.
+5. **Proc scoring** for enchants and items whose numbers are stated (Insight 35% per spell cast with
+   Spirit +100% for 10s; Grand Arcanist/Sorcerer 7% per spell for 20s; the three absorption enchants
+   2%/5%/25% per hit taken with a 5s lockout). Needs an assumed cast/hit rate setting before it can
+   be scored. Every other proc states no rate and stays unscored.
+6. **The `simc_export.lua` rewrite**: review it, and update the proc parser's header to match.
 
-**Caution, not a data source**: treat Discord/community "fixes" with the
-same skepticism applied to the SavedVariables true/false-vs-1/0 claim
-(investigated, found to not match how SavedVariables actually works,
-declined). Plausible-sounding folk fixes circulate fast in a new beta
-community and aren't always right — bring anything that sounds like a
-real client behavior change here to check against what TopFit actually
-does before acting on it.
+### B. Inferred or unverified, needs an in-game check
 
-### Class usability filter (2026-10-10)
+- **Enchants tab**: the dropdown opens and picks; the scroll frame's width; the pseudo-stat index
+  numbers (dodge, block, hit, crit, haste are inferred from rows with known effects, parry's index is
+  unknown); whether Forever actually offers the Shield Spikes, Counterweights and the Season-of-
+  Discovery enchants.
+- **Talents**: the classic-API fallback finds the talents (see section 4); the full-talent
+  assumption holds for each sim spec; Careful Aim -> Attack Power -> Ranged Attack Power as stated.
+- **Enchantless scoring** relies on the client's "Enchanted: %s" wording to separate the enchant
+  line; check an enchanted item's stat block says "Enchant (not scored)".
+- **Equip-stage abort** (10-11): Abort cancels while waiting to equip as a dead or in-combat
+  character. The suffix-item tooltip fix, the minimap button radius, the dropdown `PlaySound` fix
+  and the `UnpackLocation` warning removal were reported done with no confirmation either way.
+- **Rating conversion table** (`TopFit.RATING_PER_PERCENT`): only hit has readings at more than one
+  character level; crit/parry/dodge/block/haste/expertise each rest on one reading.
+- Low priority: `WOW_PROJECT_ID` (`/dump WOW_PROJECT_ID`; nothing depends on it) and `GetItemStats()`
+  key names on a few more real items.
+
+### C. Known limitations (by design for now)
+
+- Dual-wielders get one Weapon enchant choice for both hands (the choice is per group, not per slot).
+- A character with no talents at all looks the same as "talent data not loaded", so it keeps the
+  full-talent weights.
+- Saved sets with weights on the old rating keys score those stats 0 (cache version 6 refreshes items,
+  not weights).
+- The unscored enchants (procs, shield spikes, the Lesser Arcanums' health/mana, profession perks) are
+  listed in the data but never chosen automatically.
+
+### D. Housekeeping
+
+- Decide whether to delete `MIGRATION_WOWFOREVER.md` (almost entirely about leaving 3.3.5) and trim
+  the older entries in the appendix below.
+- `changelog.txt` is the original addon's release history and is left as is.
+
+### E. Closed since the last refresh (for traceability)
+
+Parry/dodge/block/haste item text; rating keys stripped from `GetItemStats()`; item/set scoring
+without the current enchant; class usability filter (confirmed working in-game); suffix items resolved
+to their real link; Enchants tab with the full client enchant data (kits, scopes, spikes, Arcanums,
+shoulder, ZG class enchants); presets replaced by the Forever sim weights; Hunter crit mapped to the
+generic crit stat; Pawn hit/crit import; talent warning quieted with a classic-API fallback; the
+WotLK/3.3.5 cleanup (`enchant_ids.lua`, `simc_proc_data.lua`, `gem_ids.lua`, heirlooms, Titan's Grip);
+armor penetration/resilience (no Forever item has either: closed).
+
+**Caution, not a data source**: treat Discord/community "fixes" with the same skepticism applied to
+the SavedVariables true/false-vs-1/0 claim (investigated, found to not match how SavedVariables
+actually works, declined). Plausible-sounding folk fixes circulate fast in a new beta community and
+aren't always right: check anything that sounds like a real client behavior change against what
+TopFit actually does before acting on it.
+
+### Class usability filter (2026-10-10, confirmed working in-game)
 
 Candidates the class can't use are removed in `ReduceItemList` (`calculation.lua`) before scoring:
 `TopFit:GetItemUsability` (`inventory.lua`) reads the tooltip and treats a RED right-hand type
@@ -327,10 +352,9 @@ column ("Shield", "Mail", "Plate", "Wand", "Idol"...) or a red `Classes:` line a
 unreadable tooltip counts as usable), is cached per session for 60s and never stored in the
 persistent item cache (account-wide, so a class-specific flag would be wrong on another
 character). Forced slots and virtual items are exempt. Tooltips show a grey "not usable" line
-instead of scores for such items. **Unverified in-game**: that this client's scan tooltip
-reports red on the right-hand column; `/topfit itemdump <link>` prints the result to check.
-Consequence: a proficiency the character hasn't trained yet (e.g. mail before level 40) also
-counts as unusable until trained.
+instead of scores for such items. Consequence: a proficiency the character hasn't trained yet (e.g.
+mail before level 40) also counts as unusable until trained. `/topfit itemdump <link>` prints the
+result for any item.
 
 ---
 
@@ -485,3 +509,5 @@ play-by-play.
 - **10-12 (more enchants, enchant IDs)**: Dan confirmed the first sim enchant file (Mongoose, Executioner, Deathfrost, TBC scopes, Felsteel Shield Spike, boots speed) was old TBC/WotLK and wrong for Forever; none of it was added. From the second file (the sim's real `RegisterAllEnchants`): `enchant_data.lua` rows gained an optional 4th field, the client SpellItemEnchantment ID (the number in an item link's enchant field), for 12 existing enchants (Minor/Lesser/Absorption, Insight, Revelation, Recovery, Demonslaying, Icy Chill, Unholy Weapon, Fiery Weapon, Lifestealing, Lotus Claw), and 11 enchants the ForeverChanges list lacked were added with IDs: Fiery Blaze 36, Dismantle 7210, Iron/Mithril/Thorium Shield Spike 43/463/1704, Wolfshead Trophy 7124 (new Head group, slot 1), Retricutioner 7223, Grand Crusader 7940, Grand Inquisitor 7943, Grand Arcanist 7941, Grand Sorcerer 7942 (several are Season-of-Discovery enchants; availability in Forever unconfirmed). 176 entries total, 127 scored (the new ones are all procs/utility, so unscored). `TopFit:GetEnchantByID(id)` looks an entry up from a link's enchant ID; the tab hides groups with nothing scorable (Head). Stated proc numbers now on record for future scoring: Insight 35% per spell cast (Spirit +100%, 10s), Absorption 2%/5%/25% per hit taken (10/25/50 absorbed, 5s lockout), Grand Arcanist/Sorcerer 7% per spell (Spell Power 140/70 + 400 mana, 20s); Grand Crusader/Inquisitor, Demonslaying, Icy Chill, Unholy Weapon, Revelation, Dismantle state no rate. 803 and 1898 come from the sim's older weapon-proc block (vanilla IDs). Scopes (Crude/Standard/Accurate/Deadly/Sniper, IDs 30/32/33/663/664) are in the first file and look vanilla, but are Engineering, so left out for now.
 - **10-13 (Dan's client-record enchant data + all crafted "enchants")**: Dan replaced `enchant_data.lua` with rows built from client records (effectId, spellId, itemId, slot type, extraTypes, a 0-based `stats` array, `pseudoStats`, `weaponDamage`) covering Enchanting enchants AND Leatherworking armor kits, Engineering scopes, Blacksmithing shield spikes / counterweights, Arcanums, ZG class enchants and shoulder inscriptions. `enchant.lua` rewritten on top: (1) stat-index map corrected against rows with known values: 4 = Healing, 5 = Spell Damage (his first loader had them swapped), 6-11 = Arcane/Fire/Frost/Holy/Nature/Shadow damage, 17 AP, 18 Ranged AP, 25 Defense, 27 Block Value, 31 Armor, 34 MP5 (values >= 50 are the Lesser Arcanums' mana pool and ignored), 35-39 resistances; 30/32/33 (health/mana pools) have no TopFit stat. (2) `pseudoStats` mapped: 4 dodge, 16 block, 12/24 hit, 13 spell hit, 14/25 crit, 15 spell crit, 20/21/22 haste -- indices INFERRED from rows with known effects, not from a definition. (3) Flat weapon damage (scopes, Striking/Impact) becomes DPS = damage / the item's own weapon speed (generic weapon DPS plus melee- or ranged-specific key), so those are scored now. (4) Groups: Head, Shoulder, Necklace, Chest, Cloak, Bracer, Gloves, Legs, Boots, Weapon, 2H Weapon, Shield, Off-Hand, Ranged; `extraTypes` puts armor kits in Chest/Gloves/Legs/Boots and ZG/Arcanums in Head and Legs; one choice per group is what stops a kit and an enchant stacking. The "Enchant X - " name prefix decides the group where present. (5) Class-restricted ZG enchants only appear for their class. (6) Scopes only for bows/guns/crossbows (by item sub type). (7) Tab text now built by the loader (entry.text). Pins saved by short name from the earlier version still resolve. Open: pseudo-stat indices to confirm; parry% index unknown; Shield/Counterweight/Spike availability and the SoD enchants' availability in Forever unconfirmed; procs still unscored.
 - **10-14 (Enchants tab scrolling)**: With 14 groups the rows overflowed the tab. They now sit in a `UIPanelScrollFrameTemplate` scroll frame (mouse wheel too); the include-enchants checkbox and hint stay fixed above it. Not seen in the client yet: the scroll frame's width relies on its size-changed event.
+- **10-15 (WotLK / 3.3.5 cleanup)**: Removed what only existed for WotLK/3.3.5/Triumvirate. Files deleted: `enchant_ids.lua` (WotLK enchant-ID table, nothing read it), `simc_proc_data.lua` (WotLK/Triumvirate item proc data) and `gem_ids.lua` (empty stub, already off the load order). `procparser.lua` no longer has the simc-data decoder/lookup or the fallback that filled a proc's cooldown/duration/chance from it by item NAME; procs now come from the tooltip alone (chance/PPM stay nil, so the existing default estimate applies). `core.lua`: the WotLK heirloom table and plate/mail-wearer flags (never read). Titan's Grip: the `playerCanTitansGrip` flag, its branch in `calculation.lua` and the stats-plugin checkbox references (the checkbox was never created). Comments and header text that named WotLK, 3.3.5, Triumvirate, Death Knight or Wrath were reworded or dropped in `core.lua`, `talentbonuses.lua`, `calculation.lua`, `import.lua`, `presets.lua`, `procparser.lua`, `readme.txt`. Left alone on purpose: `changelog.txt` (history of the original addon), this plan and `MIGRATION_WOWFOREVER.md` (working history), the gem-scoring functions (nil-guarded, not WotLK-specific), and the icon name `spell_holy_sealofwrath` in the enchant data. Effect to watch: items that used to get a proc chance/cooldown from the simc data by name (e.g. same-named vanilla weapons) now use the default proc estimate unless the tooltip states the numbers.
+- **10-16 (talent warning, Careful Aim, plan refresh)**: The talent-config message is now debug-mode-only and `GetRetailTalentRanks` falls back to the classic 3-tab talent API when the modern read is empty, with a 5-second cache. Careful Aim goes back to Attack Power as its target stat; every set's effective Attack Power weight is now AP + Ranged AP (Dan: attack power also grants ranged attack power), and enchant records listing the same number as AP and RAP collapse to AP. Sections 4, 5 and 6 of this document rewritten to match the current state.

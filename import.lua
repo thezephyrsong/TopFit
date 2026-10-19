@@ -1,13 +1,13 @@
 --[[
 	import.lua
-	Ported from TopFit 6.0v4's modules/importplugin.class.lua down to the 3.3v6 (WotLK 3.3.5a) codebase.
+	Ported from TopFit 6.0v4's modules/importplugin.class.lua.
 
 	Lets you import weight scales from Pawn strings, AskMrRobot-style scale dumps, or TopFit's own
 	export strings, and lets you export your current set as a string to share or back up.
 
 	Stripped relative to the retail version: Mastery, MasteryRating, Multistrike, Versatility,
 	Avoidance, Amplify, Cleave, Indestructible, Leech, MovementSpeed, BonusArmor (kept folded into Armor).
-	None of those stats exist on 3.3.5a items, so there is nothing for them to map to. Leaving a stat
+	None of those stats exist on Forever items, so there is nothing for them to map to. Leaving a stat
 	out of statNameToKey is harmless -- SanitizeScales() silently drops anything it doesn't recognize.
 
 	No locale table exists in this codebase (unlike 6.0v4), so user-facing strings are hardcoded English.
@@ -31,8 +31,7 @@ local statNameToKey = {
 	-- ParryRating, BlockPercent -> BlockRating, HasteClassic -> HasteRating, ExpertiseClassic ->
 	-- ExpertiseRating, DefenseSkill -> DefenseRating; see Pawn's TooltipParsing.lua). So a Pawn
 	-- weight is already "per 1%" and needs NO rating conversion -- TopFit.RATING_PER_PERCENT must not
-	-- be applied here. (This replaces the 2026-09-27 decision to drop these, which assumed
-	-- WotLK-scale rating points.) Armor penetration and resilience stay unmapped: no Forever item
+	-- be applied here. Armor penetration and resilience stay unmapped: no Forever item
 	-- has either. Spell* variants (SpellHitRating etc.) are left unmapped on purpose: Pawn folds them
 	-- into the plain names for non-casters, and mapping two Pawn names onto one TopFit key would make
 	-- the winner depend on table order.
