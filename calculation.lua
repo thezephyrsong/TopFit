@@ -342,6 +342,9 @@ function TopFit:InitSemiRecursiveCalculations()
 	TopFit.maxRestStat = {}
 	TopFit.currentCapValues = {}
 	
+	-- weights the set-bonus scoring (setbonus.lua) uses for this calculation
+	TopFit.setBonusWeights = nil
+	
 	-- create maximum values for each cap and item slot
 	for statCode, capList in pairs(TopFit.Utopia) do
 		if TopFit:IsStatCapped(capList) then
@@ -442,7 +445,7 @@ function TopFit:ReduceItemList()
 		if #itemList >= 1 then
 			for i = #itemList, 1, -1 do
 				if (TopFit:GetItemScore(itemList[i].itemLink, TopFit.setCode, TopFit.ignoreCapsForCalculation) <= 0) then
-					if not forcedTable[slotID] then
+					if not forcedTable[slotID] and not (TopFit.IsScoreableSetPiece and TopFit:IsScoreableSetPiece(TopFit:GetCachedItem(itemList[i].itemLink))) then
 						local hasCap = false
 						for statCode, capList in pairs(TopFit.Utopia) do
 							if TopFit:IsStatCapped(capList) then
@@ -536,7 +539,9 @@ function TopFit:ReduceItemList()
 						end
 					end
 					
-					if betterItemExists >= numBetterItemsNeeded then
+					-- a set piece's value is partly the bonus it unlocks (setbonus.lua), so it is never pruned for
+					-- merely scoring lower than a non-set item
+					if betterItemExists >= numBetterItemsNeeded and not (TopFit.IsScoreableSetPiece and TopFit:IsScoreableSetPiece(itemTable)) then
 						tremove(itemList, i)
 					end
 				end
@@ -572,6 +577,11 @@ function TopFit:SemiRecursiveCalculation()
 						operation = TopFit.operationsPerFrame
 						
 						TopFit:SaveCurrentCombination()
+						
+						-- the search above can't find item set bonuses on its own; see setbonus.lua
+						if TopFit.ApplySetBonusPass then
+							TopFit:ApplySetBonusPass()
+						end
 						
 						if (TopFit.bestCombination) then
 							for slotID, locationTable in pairs(TopFit.bestCombination.items) do
@@ -875,6 +885,10 @@ function TopFit:SaveCurrentCombination()
 				end
 			end
 		end
+	end
+	
+	if TopFit.AddSetBonuses then
+		TopFit:AddSetBonuses(cIC)
 	end
 	
 	local satisfied = true

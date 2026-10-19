@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Keep the data-generation tooling out of "Download ZIP" / git archive exports
+/tools export-ignore
+/update_data.bat export-ignore
