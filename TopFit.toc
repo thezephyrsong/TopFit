@@ -23,6 +23,9 @@
 embeds.xml
 
 core.lua
+procdata.lua
+setdata.lua
+setbonus.lua
 MinimapButton.lua
 procparser.lua
 inventory.lua

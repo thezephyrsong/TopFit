@@ -38,3 +38,5 @@ ignore:
   - .gitignore
   - .pkgmeta
   - release.yml
+  - tools
+  - update_data.bat
