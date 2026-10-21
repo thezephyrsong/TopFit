@@ -379,8 +379,13 @@ function TopFit:GetItemInfoTable(item)
     local procInfo = TopFit.ParseItemProc and TopFit:ParseItemProc(itemLink)
     local hasUnscoredProc = false
     if procInfo then
-        local effectiveValue = TopFit.GetProcEffectiveValue and TopFit:GetProcEffectiveValue(procInfo)
-        if effectiveValue then
+        local effectiveStats = procInfo.stats and TopFit.GetProcEffectiveStats and TopFit:GetProcEffectiveStats(procInfo)
+        local effectiveValue = (not procInfo.stats) and TopFit.GetProcEffectiveValue and TopFit:GetProcEffectiveValue(procInfo)
+        if effectiveStats then
+            for statKey, value in pairs(effectiveStats) do
+                totalBonus[statKey] = (totalBonus[statKey] or 0) + value
+            end
+        elseif effectiveValue then
             totalBonus[procInfo.statKey] = (totalBonus[procInfo.statKey] or 0) + effectiveValue
         else
             hasUnscoredProc = true

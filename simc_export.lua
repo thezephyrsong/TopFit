@@ -17,12 +17,23 @@ end
 -- JSON SERIALIZER
 -- ============================================================================
 
+local JSON_NULL = {} -- sentinel: encodes as null (used for empty gear slots)
+
+local function EncodeString(str)
+	return '"' .. str:gsub('[%c"\\]', function(c)
+		local map = { ['"'] = '\\"', ['\\'] = '\\\\', ['\n'] = '\\n', ['\r'] = '\\r', ['\t'] = '\\t' }
+		return map[c] or string.format("\\u%04x", c:byte())
+	end) .. '"'
+end
+
 local function EncodeJSON(val)
 	local t = type(val)
-	if t == "number" or t == "boolean" then
+	if val == JSON_NULL then
+		return "null"
+	elseif t == "number" or t == "boolean" then
 		return tostring(val)
 	elseif t == "string" then
-		return string.format("%q", val)
+		return EncodeString(val)
 	elseif t == "table" then
 		local isArray = (#val > 0) or (next(val) == nil)
 		local parts = {}
@@ -33,7 +44,7 @@ local function EncodeJSON(val)
 			return "[" .. table.concat(parts, ",") .. "]"
 		else
 			for k, v in pairs(val) do
-				table.insert(parts, string.format("%q:%s", k, EncodeJSON(v)))
+				table.insert(parts, EncodeString(tostring(k)) .. ":" .. EncodeJSON(v))
 			end
 			return "{" .. table.concat(parts, ",") .. "}"
 		end
@@ -46,29 +57,41 @@ end
 -- ============================================================================
 
 local CLASS_TO_WOWSIMS = {
-	WARRIOR = "Warrior",
-	PALADIN = "Paladin",
-	HUNTER  = "Hunter",
-	ROGUE   = "Rogue",
-	PRIEST  = "Priest",
-	SHAMAN  = "Shaman",
-	MAGE    = "Mage",
-	WARLOCK = "Warlock",
-	DRUID   = "Druid",
+	WARRIOR = "warrior",
+	PALADIN = "paladin",
+	HUNTER  = "hunter",
+	ROGUE   = "rogue",
+	PRIEST  = "priest",
+	SHAMAN  = "shaman",
+	MAGE    = "mage",
+	WARLOCK = "warlock",
+	DRUID   = "druid",
 }
 
+-- Names exactly as the sim's importer knows them (it lower-cases and drops spaces before matching, see
+-- nameToRace in ui/sim/proto/names.ts). Keyed by UnitRace's token and by its English name. WoW: Forever has no
+-- Draenei. Both Skyborne variants come back from the client as plain "Skyborne"; they are told apart by
+-- faction in GenerateWowsimsExportString (Windshaper = Horde, High Order = Alliance).
 local RACE_TO_WOWSIMS = {
 	Human    = "Human",
 	Dwarf    = "Dwarf",
-	NightElf = "NightElf",
+	NightElf = "Night Elf",
+	["Night Elf"] = "Night Elf",
 	Gnome    = "Gnome",
-	Draenei  = "Draenei",
 	Orc      = "Orc",
 	Undead   = "Undead",
+	Scourge  = "Undead",
 	Tauren   = "Tauren",
 	Troll    = "Troll",
-	BloodElf = "BloodElf",
+	BloodElf = "Blood Elf",
+	["Blood Elf"] = "Blood Elf",
+	HighOrderSkyborne = "High Order Skyborne",
+	WindshaperSkyborne = "Windshaper Skyborne",
 }
+
+-- The sim's addon importer compares this with the latest release tag of wowsims/exporter and only shows a
+-- "not up to date" toast when it differs (an absent version shows as 'undefined'); it never blocks the import.
+local EXPORT_VERSION = "v3.2.4"
 
 -- Slot mapping ordered by inventory slot IDs
 local SLOT_MAPPING = {
@@ -117,20 +140,37 @@ local function ParseItemLink(itemLink)
 	}
 end
 
--- Constructs Classic-style talent string allocations
+-- Builds the Forever talent string: one segment per tab joined by "-", each segment one rank
+-- digit per node ordered by row (tier) then column -- the same order the sim's talent JSONs use
+-- (newTalentsConfig enforces it). GetTalentInfo's index order is not guaranteed to match, so
+-- sort on the tier/column the API reports (return values 3 and 4) instead of trusting the index.
 local function GetTalentString()
 	local numTabs = (TopFit.GetNumTalentTabsSafe and TopFit:GetNumTalentTabsSafe()) or GetNumTalentTabs()
 	if not numTabs or numTabs == 0 then return "" end
 
-	local digits = {}
+	local segments = {}
 	for tab = 1, numTabs do
 		local numTalents = (TopFit.GetNumTalentsSafe and TopFit:GetNumTalentsSafe(tab)) or GetNumTalents(tab)
+		local nodes = {}
 		for i = 1, numTalents do
-			local _, _, _, _, currentRank = GetTalentInfo(tab, i)
-			table.insert(digits, tostring(currentRank or 0))
+			local name, _, tier, column, currentRank = GetTalentInfo(tab, i)
+			-- some indices come back empty on this client; skip them (the official exporter does too)
+			if name and tier and column then
+				table.insert(nodes, { tier = tier, column = column, rank = currentRank or 0, index = i })
+			end
 		end
+		table.sort(nodes, function(a, b)
+			if a.tier ~= b.tier then return a.tier < b.tier end
+			if a.column ~= b.column then return a.column < b.column end
+			return a.index < b.index
+		end)
+		local digits = {}
+		for _, n in ipairs(nodes) do
+			table.insert(digits, tostring(n.rank))
+		end
+		table.insert(segments, table.concat(digits))
 	end
-	return table.concat(digits)
+	return table.concat(segments, "-")
 end
 
 -- ============================================================================
@@ -145,8 +185,12 @@ function TopFit:GenerateWowsimsExportString()
 		return nil
 	end
 
-	local _, raceToken = UnitRace("player")
-	local wowsimsRace = RACE_TO_WOWSIMS[raceToken] or raceToken
+	local raceName, raceToken = UnitRace("player")
+	local wowsimsRace = RACE_TO_WOWSIMS[raceToken] or RACE_TO_WOWSIMS[raceName]
+	if not wowsimsRace and (tostring(raceToken):find("Skyborne") or tostring(raceName):find("Skyborne")) then
+		wowsimsRace = (UnitFactionGroup("player") == "Horde") and "Windshaper Skyborne" or "High Order Skyborne"
+	end
+	wowsimsRace = wowsimsRace or raceToken or raceName
 
 	local itemsList = {}
 
@@ -159,24 +203,25 @@ function TopFit:GenerateWowsimsExportString()
 				if parsed.enchant > 0 then
 					itemEntry.enchant = parsed.enchant
 				end
-				if parsed.gems then
-					itemEntry.gems = parsed.gems
-				end
+				-- no gems: the official exporter's Forever item layout is id + enchant only
 				table.insert(itemsList, itemEntry)
 			else
-				table.insert(itemsList, {})
+				table.insert(itemsList, JSON_NULL)
 			end
 		else
-			table.insert(itemsList, {})
+			table.insert(itemsList, JSON_NULL)
 		end
 	end
 
 	local payload = {
+		version = EXPORT_VERSION,
 		class = wowsimsClass,
 		race = wowsimsRace,
 		level = UnitLevel("player"),
 		talents = GetTalentString(),
-		equipment = {
+		-- the importer maps over this array and throws if it is missing; TopFit doesn't read professions
+		professions = {},
+		gear = {
 			items = itemsList
 		}
 	}

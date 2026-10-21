@@ -544,8 +544,65 @@ end
 -- scans itemLink's tooltip for a Use:/Equip: proc line and parses it.
 -- returns a table: { trigger = "use"/"equip", statKey, amount, duration, cooldown (or nil) }
 -- or nil if no parseable proc effect was found
+-- looks the item up in the generated procdata.lua (real proc chance / ICD / duration / cooldown / trigger
+-- flags from the client's spell data, via the Forever sim). Returns the same table shape ParseItemProc does,
+-- plus the extra fields below, or nil when the item has no scoreable stat effect in the data.
+-- For "use" items cooldown is real, so GetProcEffectiveStats can score them. For procs the chance/icd/flags
+-- are carried along but cooldown stays nil: turning a per-event chance into uptime also needs an
+-- events-per-second assumption, and this module never guesses that.
+function TopFit:LookupProcData(itemLink)
+	if not (itemLink and TopFit.ProcData) then return nil end
+	local id = tonumber(itemLink:match("item:(%d+)"))
+	local entry = id and TopFit.ProcData[id]
+	if not entry then return nil end
+
+	local best
+	for _, e in ipairs(entry) do
+		if e.stats and next(e.stats) then
+			if not best or (e.kind == "use" and best.kind ~= "use") then best = e end
+		end
+	end
+	if not best then return nil end
+
+	local statKey, amount
+	for k, v in pairs(best.stats) do
+		if not statKey or k < statKey then statKey, amount = k, v end
+	end
+	return {
+		source = "procdata",
+		trigger = (best.kind == "use") and "use" or "equip",
+		statKey = statKey,
+		amount = amount,
+		stats = best.stats,       -- every stat the effect grants (statKey/amount is just one of them)
+		duration = best.dur,
+		cooldown = (best.kind == "use") and best.cd or nil,
+		chance = best.chance,     -- per trigger event, 0-1
+		rppm = best.rppm,
+		icd = best.icd,
+		procFlags = best.flags,
+		triggerText = best.trigger,
+	}
+end
+
+-- like GetProcEffectiveValue but for every stat of a procdata effect: { statKey = average value }.
+-- nil when duration/cooldown aren't both known (same rule as above: never guess).
+function TopFit:GetProcEffectiveStats(procInfo)
+	if not procInfo or not procInfo.stats or not procInfo.duration
+		or not procInfo.cooldown or procInfo.cooldown <= 0 then
+		return nil
+	end
+	local uptime = procInfo.duration / procInfo.cooldown
+	if uptime > 1 then uptime = 1 end
+	local out = {}
+	for k, v in pairs(procInfo.stats) do out[k] = v * uptime end
+	return out
+end
+
 function TopFit:ParseItemProc(itemLink)
-	if not itemLink or not USE_PREFIX or not EQUIP_PREFIX then return nil end
+	if not itemLink then return nil end
+	local fromData = TopFit:LookupProcData(itemLink)
+	if fromData then return fromData end
+	if not USE_PREFIX or not EQUIP_PREFIX then return nil end
 
 	TopFit.scanTooltip:SetOwner(UIParent, 'ANCHOR_NONE')
 	TopFit.scanTooltip:SetHyperlink(itemLink)
