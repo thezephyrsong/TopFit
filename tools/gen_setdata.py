@@ -2,6 +2,7 @@
 """
 gen_setdata.py -- builds TopFit's setdata.lua (item set bonuses) from the WoW: Forever sim repo.
 
+<<<<<<< HEAD
 usage (from the TopFit folder):  python tools/gen_setdata.py [--repo ../Forever] [--addon .] [--db wowsims.db]
   (tools/update_data.py runs this and gen_procdata.py together.)  Writes <addon>/setdata.lua.
 
@@ -11,6 +12,15 @@ bonus spell) from, in order of preference:
      always the build you play)                                   -- or any file given with --db
   2. tools/data_watch/.cache/ItemSet*_<build>.csv (older clone layout; newest build found)
 plus sim/core/spelldata/spells_auto_gen.go for what each bonus spell does,
+=======
+usage (from the TopFit folder):  python tools/gen_setdata.py [--repo ../Forever] [--addon .]
+  (tools/update_data.py runs this and gen_procdata.py together.)  Writes <addon>/setdata.lua.
+
+Reads
+  tools/data_watch/.cache/ItemSet_<build>.csv        set -> piece item IDs   (newest build found)
+  tools/data_watch/.cache/ItemSetSpell_<build>.csv   set -> (piece threshold, bonus spell ID)
+  sim/core/spelldata/spells_auto_gen.go              what each bonus spell does
+>>>>>>> 68329dd089ce6b905f497196fff18a0ca0fdeb02
 and writes TopFit.SetData (by set ID) and TopFit.SetByItem (item ID -> set ID).
 
 Only flat stat bonuses TopFit can score are kept in `stats`. Bonuses TopFit has no stat key for (procs, movement,
@@ -18,9 +28,13 @@ ratings, ...) stay in `other` -- visible, never scored. Sets with nothing scorea
 """
 import argparse
 import csv
+<<<<<<< HEAD
 import json
 import re
 import sqlite3
+=======
+import re
+>>>>>>> 68329dd089ce6b905f497196fff18a0ca0fdeb02
 import sys
 from pathlib import Path
 
@@ -28,6 +42,7 @@ from fvspells import add_common_args, load_spells, lua_val, require_repo, spell_
 
 
 
+<<<<<<< HEAD
 MISSING_TABLES_HELP = """No item-set tables found. The sim keeps them in tools/database/wowsims.db, which is gitignored and
 built from your game client -- in the Forever clone run
 
@@ -82,15 +97,33 @@ def _load_from_sqlite(db_path):
 
 
 def _load_from_csv(cache):
+=======
+def generate(repo, out_path):
+    repo = require_repo(repo, "spells", "cache")
+    cache = repo / "tools/data_watch/.cache"
+>>>>>>> 68329dd089ce6b905f497196fff18a0ca0fdeb02
     def newest(prefix):
         def key(p):
             return [int(x) for x in re.findall(r"\d+", p.name[len(prefix):])]
         files = sorted(cache.glob(prefix + "_*.csv"), key=key)
+<<<<<<< HEAD
         return files[-1] if files else None
 
     sets_csv, spells_csv = newest("ItemSet"), newest("ItemSetSpell")
     if not sets_csv or not spells_csv:
         return None
+=======
+        if not files:
+            sys.exit("no %s_*.csv in %s" % (prefix, cache))
+        return files[-1]
+
+
+    sets_csv, spells_csv = newest("ItemSet"), newest("ItemSetSpell")
+    # glob "ItemSet_*" also matches nothing of ItemSetSpell_* ("ItemSet_" vs "ItemSetS"), but check anyway
+    assert "ItemSetSpell" not in sets_csv.name
+    spells = load_spells(repo / "sim/core/spelldata/spells_auto_gen.go")
+
+>>>>>>> 68329dd089ce6b905f497196fff18a0ca0fdeb02
     sets = {}
     for r in csv.DictReader(open(sets_csv, encoding="utf-8")):
         items = []
@@ -99,6 +132,7 @@ def _load_from_csv(cache):
             if iid and iid not in items:
                 items.append(iid)
         sets[int(r["ID"])] = {"name": r["Name_lang"], "items": items, "bonuses": {}}
+<<<<<<< HEAD
     rows = [(int(r["ItemSetID"]), int(r["Threshold"]), int(r["SpellID"]))
             for r in csv.DictReader(open(spells_csv, encoding="utf-8"))]
     return sets, rows, "%s + %s" % (sets_csv.name, spells_csv.name)
@@ -131,6 +165,17 @@ def generate(repo, out_path, db_path=None):
         if sid not in sets:
             continue
         n_rows += 1
+=======
+
+    n_rows = n_scored = n_unscored = n_missing = 0
+    for r in csv.DictReader(open(spells_csv, encoding="utf-8")):
+        sid = int(r["ItemSetID"])
+        if sid not in sets:
+            continue
+        n_rows += 1
+        spell = int(r["SpellID"])
+        thr = int(r["Threshold"])
+>>>>>>> 68329dd089ce6b905f497196fff18a0ca0fdeb02
         if spell not in spells:
             n_missing += 1
             continue
@@ -186,7 +231,11 @@ def generate(repo, out_path, db_path=None):
     lines.append("}")
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
+<<<<<<< HEAD
     print("source:", source)
+=======
+    print("source: %s, %s" % (sets_csv.name, spells_csv.name))
+>>>>>>> 68329dd089ce6b905f497196fff18a0ca0fdeb02
     print("sets in client: %d, kept (with scoreable bonuses): %d, mapped items: %d" % (len(sets), len(out_sets), len(by_item)))
     print("bonus rows: %d (scoreable %d, not scoreable %d, spell missing from store %d)" % (n_rows, n_scored, n_unscored, n_missing))
     print("wrote", out_path)
@@ -195,9 +244,14 @@ def generate(repo, out_path, db_path=None):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Generate setdata.lua from the Forever sim clone.")
     add_common_args(parser)
+<<<<<<< HEAD
     parser.add_argument("--db", type=Path, help="wowsims.db to read the ItemSet tables from (default: <repo>/tools/database/wowsims.db)")
     args = parser.parse_args(argv)
     generate(args.repo, args.addon / "setdata.lua", args.db)
+=======
+    args = parser.parse_args(argv)
+    generate(args.repo, args.addon / "setdata.lua")
+>>>>>>> 68329dd089ce6b905f497196fff18a0ca0fdeb02
 
 
 if __name__ == "__main__":

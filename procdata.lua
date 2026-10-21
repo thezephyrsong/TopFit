@@ -12,22 +12,22 @@
 -- (TopFit is the global created in core.lua; this file loads after it.)
 TopFit.ProcData = {
 	[1204] = { -- The Green Tower
-		{kind="proc", spell=17154, dur=30, chance=0.01, flags=40, trigger="hit by melee", stats={RESISTANCE6_NAME=50}},
+		{kind="proc", spell=17154, dur=30, chance=0.01, flags=40, trigger="hit by melee", stats={RESISTANCE3_NAME=50}},
 	},
 	[1447] = { -- Ring of Saviors
-		{kind="use", spell=18826, dur=20, cd=600, stats={RESISTANCE3_NAME=300}},
+		{kind="use", spell=18826, dur=20, cd=600, stats={RESISTANCE0_NAME=300}},
 	},
 	[2243] = { -- Hand of Edward the Odd
 		{kind="proc", spell=18803, dur=4, chance=1, flags=87376, trigger="melee ability/ranged attack/ranged ability/harmful ability/harmful spell/helpful spell", other={["A_MOD_CASTING_SPEED_NOT_STACK misc=0 100000"]=true}},
 	},
 	[2802] = { -- Blazing Emblem
-		{kind="use", spell=13744, dur=15, cd=600, other={["mana"]=33}},
+		{kind="use", spell=13744, dur=15, cd=600, stats={RESISTANCE2_NAME=33}},
 	},
 	[2820] = { -- Nifty Stopwatch
 		{kind="use", spell=14530, dur=10, cd=360, catcd=10, other={["A_MOD_INCREASE_SPEED misc=0 40"]=true}},
 	},
 	[4696] = { -- Lapidis Tankard of Tidesippe
-		{kind="use", spell=1135, dur=30, cd=600, catcd=1, other={["bonusArmor"]=332}},
+		{kind="use", spell=1135, dur=30, cd=600, catcd=1, stats={ITEM_MOD_MANA_REGENERATION_SHORT=332}},
 	},
 	[4984] = { -- Skull of Impending Doom
 		{kind="use", spell=5024, dur=10, cd=300, other={["A_MOD_INCREASE_SPEED misc=0 60"]=true}},
@@ -39,7 +39,7 @@ TopFit.ProcData = {
 		{kind="proc", spell=1291908, dur=20, chance=1, flags=134217728, other={["A_MOD_DAMAGE_TAKEN misc=1 -15"]=true}},
 	},
 	[6622] = { -- Sword of Zeal
-		{kind="proc", spell=8191, dur=15, stats={RESISTANCE3_NAME=150,RESISTANCE4_NAME=10}},
+		{kind="proc", spell=8191, dur=15, stats={RESISTANCE0_NAME=150}, other={["physicalDamage"]=10}},
 	},
 	[7189] = { -- Goblin Rocket Boots
 		{kind="use", spell=8892, dur=20, cd=300, other={["A_MOD_INCREASE_SPEED misc=0 70"]=true}},
@@ -57,25 +57,25 @@ TopFit.ProcData = {
 		{kind="use", spell=12022, dur=600, cd=60, stats={ITEM_MOD_STAMINA_SHORT=10}},
 	},
 	[10418] = { -- Glimmering Mithril Insignia
-		{kind="use", spell=12733, dur=30, cd=600, stats={ITEM_MOD_MANA_REGENERATION_SHORT=10,RESISTANCE2_NAME=10,RESISTANCE6_NAME=10}, other={["health"]=10,["mana"]=10}},
+		{kind="use", spell=12733, dur=30, cd=600, stats={RESISTANCE2_NAME=10,RESISTANCE3_NAME=10,RESISTANCE4_NAME=10,RESISTANCE5_NAME=10,RESISTANCE6_NAME=10}},
 	},
 	[10724] = { -- Gnomish Rocket Boots
 		{kind="use", spell=13141, dur=20, cd=1800, other={["A_MOD_INCREASE_SPEED misc=0 50"]=true}},
 	},
 	[11811] = { -- Smoking Heart of the Mountain
-		{kind="use", spell=1300752, dur=20, cd=360, catcd=-0.001, stats={RESISTANCE3_NAME=520}},
+		{kind="use", spell=1300752, dur=20, cd=360, catcd=-0.001, stats={RESISTANCE0_NAME=520}},
 	},
 	[12790] = { -- Arcanite Champion
 		{kind="proc", spell=16916, dur=30, stats={ITEM_MOD_STRENGTH_SHORT=120}},
 	},
 	[13164] = { -- Heart of the Scale
-		{kind="use", spell=17275, dur=300, cd=1800, other={["mana"]=20}},
+		{kind="use", spell=17275, dur=300, cd=1800, stats={RESISTANCE2_NAME=20}},
 	},
 	[18820] = { -- Talisman of Ephemeral Power
 		{kind="use", spell=23271, dur=15, cd=90, catcd=15, stats={TOPFIT_SPELL_DAMAGE_FLAT=175,TOPFIT_SPELL_HEALING_FLAT=175}},
 	},
 	[19288] = { -- Darkmoon Card: Blue Dragon
-		{kind="proc", spell=23684, dur=15, chance=0.02, flags=81920, trigger="harmful spell/helpful spell", other={["spellCritRating"]=150}},
+		{kind="proc", spell=23684, dur=15, chance=0.02, flags=81920, trigger="harmful spell/helpful spell", stats={ITEM_MOD_SPIRIT_SHORT=150}},
 	},
 	[19339] = { -- Mind Quickening Gem
 		{kind="use", spell=23723, dur=20, cd=300, catcd=20, other={["A_MOD_CASTING_SPEED_NOT_STACK misc=0 33"]=true}},
@@ -87,7 +87,7 @@ TopFit.ProcData = {
 		{kind="use", spell=23734, dur=20, cd=300, catcd=20, other={["A_MOD_DAMAGE_PERCENT_DONE misc=126 20"]=true,["A_MOD_HEALING_DONE_PERCENT misc=126 20"]=true,["A_MOD_POWER_COST_SCHOOL_PCT misc=126 20"]=true}},
 	},
 	[19345] = { -- Aegis of Preservation
-		{kind="use", spell=23780, dur=20, cd=300, catcd=-0.001, stats={RESISTANCE3_NAME=500}},
+		{kind="use", spell=23780, dur=20, cd=300, catcd=-0.001, stats={RESISTANCE0_NAME=500}},
 	},
 	[19952] = { -- Gri'lek's Charm of Valor
 		{kind="use", spell=24498, dur=15, cd=180, catcd=20, stats={TOPFIT_CRIT_CHANCE_SPELL=10}},
@@ -96,19 +96,19 @@ TopFit.ProcData = {
 		{kind="use", spell=24998, dur=15, cd=90, catcd=-0.001, stats={TOPFIT_SPELL_HEALING_FLAT=350}},
 	},
 	[21180] = { -- Earthstrike
-		{kind="use", spell=25891, dur=20, cd=120, catcd=20, other={["spellHasteRating"]=280,["spellPiercing"]=280}},
+		{kind="use", spell=25891, dur=20, cd=120, catcd=20, stats={ITEM_MOD_ATTACK_POWER_SHORT=280}},
 	},
 	[21190] = { -- Wrath of Cenarius
 		{kind="proc", spell=25907, dur=10, chance=0.05, flags=65536, trigger="harmful spell", stats={TOPFIT_SPELL_DAMAGE_FLAT=132}},
 	},
 	[21473] = { -- Eye of Moam
-		{kind="use", spell=26166, dur=30, cd=180, catcd=30, stats={TOPFIT_SPELL_DAMAGE_FLAT=50}, other={["spellHitRating"]=100}},
+		{kind="use", spell=26166, dur=30, cd=180, catcd=30, stats={TOPFIT_SPELL_DAMAGE_FLAT=50}, other={["spellPiercing"]=100}},
 	},
 	[21647] = { -- Fetish of the Sand Reaver
 		{kind="use", spell=26400, dur=20, cd=180, catcd=-0.001, other={["A_MOD_THREAT misc=127 -70"]=true}},
 	},
 	[21670] = { -- Badge of the Swarmguard
-		{kind="use", spell=26480, dur=30, cd=180, catcd=-0.001, other={["meleeHitRating"]=200}},
+		{kind="use", spell=26480, dur=30, cd=180, catcd=-0.001, other={["armorPenetration"]=200}},
 	},
 	[22678] = { -- Talisman of Ascendance
 		{kind="use", spell=28200, dur=20, cd=60, catcd=20, stats={TOPFIT_SPELL_DAMAGE_FLAT=40,TOPFIT_SPELL_HEALING_FLAT=75}},
@@ -120,13 +120,13 @@ TopFit.ProcData = {
 		{kind="use", spell=28862, dur=20, cd=120, catcd=-0.001, other={["A_MOD_THREAT misc=127 -35"]=true}},
 	},
 	[23040] = { -- Glyph of Deflection
-		{kind="use", spell=28773, dur=20, cd=120, catcd=-0.001, other={["expertiseRating"]=235}},
+		{kind="use", spell=28773, dur=20, cd=120, catcd=-0.001, stats={ITEM_MOD_BLOCK_VALUE_SHORT=235}},
 	},
 	[23041] = { -- Slayer's Crest
-		{kind="use", spell=28777, dur=20, cd=120, catcd=20, other={["spellHasteRating"]=260,["spellPiercing"]=260}},
+		{kind="use", spell=28777, dur=20, cd=120, catcd=20, stats={ITEM_MOD_ATTACK_POWER_SHORT=260}},
 	},
 	[23042] = { -- Loatheb's Reflection
-		{kind="use", spell=28778, dur=20, cd=120, catcd=-0.001, stats={ITEM_MOD_MANA_REGENERATION_SHORT=40,RESISTANCE2_NAME=40,RESISTANCE6_NAME=40}, other={["health"]=40,["mana"]=40}},
+		{kind="use", spell=28778, dur=20, cd=120, catcd=-0.001, stats={RESISTANCE2_NAME=40,RESISTANCE3_NAME=40,RESISTANCE4_NAME=40,RESISTANCE5_NAME=40,RESISTANCE6_NAME=40}},
 	},
 	[23046] = { -- The Restrained Essence of Sapphiron
 		{kind="use", spell=28779, dur=20, cd=120, catcd=20, stats={TOPFIT_SPELL_DAMAGE_FLAT=130,TOPFIT_SPELL_HEALING_FLAT=130}},
@@ -141,19 +141,19 @@ TopFit.ProcData = {
 		{kind="use", spell=1249110, dur=15, cd=300, catcd=15, stats={TOPFIT_FROST_DAMAGE_FLAT=29,TOPFIT_SHADOW_DAMAGE_FLAT=29}},
 	},
 	[249470] = { -- Molten Heart of the Mountain
-		{kind="use", spell=1249113, dur=15, cd=300, catcd=15, other={["spellHasteRating"]=55,["spellPiercing"]=55}},
+		{kind="use", spell=1249113, dur=15, cd=300, catcd=15, stats={ITEM_MOD_ATTACK_POWER_SHORT=55}},
 	},
 	[249473] = { -- Dormant Heart of the Mountain
 		{kind="proc", spell=1249119, dur=15, chance=1, flags=16384, trigger="helpful spell", stats={TOPFIT_SPELL_DAMAGE_FLAT=13,TOPFIT_SPELL_HEALING_FLAT=40}},
 	},
 	[270226] = { -- Golden Banana
-		{kind="use", spell=1287571, dur=15, cd=300, catcd=15, stats={ITEM_MOD_AGILITY_SHORT=16,ITEM_MOD_INTELLECT_SHORT=16,ITEM_MOD_STAMINA_SHORT=16,ITEM_MOD_STRENGTH_SHORT=16}, other={["spellCritRating"]=16}},
+		{kind="use", spell=1287571, dur=15, cd=300, catcd=15, stats={ITEM_MOD_AGILITY_SHORT=16,ITEM_MOD_INTELLECT_SHORT=16,ITEM_MOD_SPIRIT_SHORT=16,ITEM_MOD_STAMINA_SHORT=16,ITEM_MOD_STRENGTH_SHORT=16}},
 	},
 	[272438] = { -- Weakness Analyzer
 		{kind="use", spell=1291101, dur=20, cd=90, catcd=20, stats={TOPFIT_CRIT_CHANCE_PHYSICAL=5}},
 	},
 	[272439] = { -- Serenity Field
-		{kind="use", spell=1291103, dur=15, cd=90, catcd=15, other={["spellCritRating"]=72}},
+		{kind="use", spell=1291103, dur=15, cd=90, catcd=15, stats={ITEM_MOD_SPIRIT_SHORT=72}},
 	},
 	[272440] = { -- Defender's Grip Stabilizer
 		{kind="use", spell=1291105, dur=15, cd=360, catcd=15, other={["A_MOD_BLOCK_PERCENT misc=0 8"]=true}},
@@ -162,16 +162,16 @@ TopFit.ProcData = {
 		{kind="proc", spell=12685, dur=10, chance=0.05, flags=139944, trigger="hit by melee", other={["A_MOD_TOTAL_THREAT misc=0 -275"]=true}},
 	},
 	[273046] = { -- Guardian's Dualblade
-		{kind="proc", spell=1293345, dur=12, chance=0.33, icd=60, flags=664232, trigger="hit by melee", stats={RESISTANCE3_NAME=1080}},
+		{kind="proc", spell=1293345, dur=12, chance=0.33, icd=60, flags=664232, trigger="hit by melee", stats={RESISTANCE0_NAME=1080}},
 	},
 	[273137] = { -- Skum's Bucket
-		{kind="use", spell=1291782, dur=24, cd=600, catcd=-0.001, other={["bonusArmor"]=174}},
+		{kind="use", spell=1291782, dur=24, cd=600, catcd=-0.001, stats={ITEM_MOD_MANA_REGENERATION_SHORT=174}},
 	},
 	[273827] = { -- Debt Collector
-		{kind="proc", spell=1292598, dur=15, chance=1, flags=65536, trigger="harmful spell", other={["bonusArmor"]=2}},
+		{kind="proc", spell=1292598, dur=15, chance=1, flags=65536, trigger="harmful spell", stats={ITEM_MOD_MANA_REGENERATION_SHORT=2}},
 	},
 	[274290] = { -- Painwalker Buckler
-		{kind="proc", spell=1293700, dur=10, chance=0.17, flags=139944, trigger="hit by melee", other={["bonusArmor"]=12}},
+		{kind="proc", spell=1293700, dur=10, chance=0.17, flags=139944, trigger="hit by melee", stats={ITEM_MOD_MANA_REGENERATION_SHORT=12}},
 	},
 	[274386] = { -- Toy Soldier
 		{kind="use", spell=1293820, dur=20, cd=300, catcd=20, other={["A_MOD_DODGE_PERCENT misc=0 3"]=true}},
@@ -180,7 +180,7 @@ TopFit.ProcData = {
 		{kind="proc", spell=1294058, dur=10, chance=1, icd=0.01, flags=64, trigger="ranged attack", other={["A_MOD_POWER_COST_SCHOOL misc=126 -24"]=true}},
 	},
 	[274430] = { -- Rock Sentinel Slicer
-		{kind="proc", spell=1294065, dur=10, chance=1, flags=16384, trigger="helpful spell", stats={RESISTANCE3_NAME=300}},
+		{kind="proc", spell=1294065, dur=10, chance=1, flags=16384, trigger="helpful spell", stats={RESISTANCE0_NAME=300}},
 	},
 	[275671] = { -- Field Agent Beverage
 		{kind="use", spell=1297448, dur=10, cd=180, catcd=-0.001, other={["A_MOD_STEALTH_DETECT misc=0 15"]=true}},
@@ -189,6 +189,6 @@ TopFit.ProcData = {
 		{kind="use", spell=1302833, dur=10, cd=600, catcd=10, other={["A_MOD_SPEED_ALWAYS misc=0 25"]=true}},
 	},
 	[286541] = { -- Bael'dun Tankard
-		{kind="use", spell=1133, dur=27, cd=600, catcd=-0.001, other={["bonusArmor"]=249}},
+		{kind="use", spell=1133, dur=27, cd=600, catcd=-0.001, stats={ITEM_MOD_MANA_REGENERATION_SHORT=249}},
 	},
 }

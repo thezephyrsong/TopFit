@@ -481,7 +481,7 @@ TopFit.SetData = {
 		[3] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=28,TOPFIT_SPELL_HEALING_FLAT=28}, spells={14127}},
 	}},
 	[493] = { name="Genesis Raiment", items={21355,21353,21354,21356,21357}, bonuses={
-		[3] = {stats={TOPFIT_DEFENSE_FLAT=15}, other={"A_MOD_ARMOR_NO_MODS misc=1 150"}, spells={18196,15693}},
+		[3] = {stats={RESISTANCE0_NAME=150,TOPFIT_DEFENSE_FLAT=15}, spells={18196,15693}},
 		[5] = {spells={26106}},
 	}},
 	[505] = { name="Avenger's Battlegear", items={21389,21387,21388,21390,21391}, bonuses={
@@ -492,58 +492,58 @@ TopFit.SetData = {
 		[2] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
 		[4] = {spells={27419}},
 		[6] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40}, spells={14049}},
-		[8] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={14803}},
+		[8] = {stats={RESISTANCE0_NAME=200}, spells={14803}},
 	}},
 	[512] = { name="Darkmantle Armor", items={22002,22003,22004,22005,22006,22007,22008,22009}, bonuses={
 		[2] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
 		[4] = {spells={27787}},
 		[6] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40}, spells={14049}},
-		[8] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={14803}},
+		[8] = {stats={RESISTANCE0_NAME=200}, spells={14803}},
 	}},
 	[513] = { name="Feralheart Raiment", items={22106,22107,22108,22109,22110,22111,22112,22113}, bonuses={
 		[2] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
 		[4] = {spells={27781}},
 		[6] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=26,TOPFIT_SPELL_DAMAGE_FLAT=15,TOPFIT_SPELL_HEALING_FLAT=15}, spells={9344,9334}},
-		[8] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={14803}},
+		[8] = {stats={RESISTANCE0_NAME=200}, spells={14803}},
 	}},
 	[514] = { name="Vestments of the Virtuous", items={22078,22079,22080,22081,22082,22083,22084,22085}, bonuses={
 		[2] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
 		[4] = {spells={27778}},
 		[6] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={14047}},
-		[8] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={14803}},
+		[8] = {stats={RESISTANCE0_NAME=200}, spells={14803}},
 	}},
 	[515] = { name="Beastmaster Armor", items={22010,22011,22061,22013,22015,22016,22017,22060}, bonuses={
 		[2] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
 		[4] = {spells={27785}},
 		[6] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40}, spells={14049}},
-		[8] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={14803}},
+		[8] = {stats={RESISTANCE0_NAME=200}, spells={14803}},
 	}},
 	[516] = { name="Soulforge Armor", items={22086,22087,22088,22089,22090,22091,22092,22093}, bonuses={
 		[2] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
 		[4] = {spells={27498}},
 		[6] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40}, spells={14049}},
-		[8] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={14803}},
+		[8] = {stats={RESISTANCE0_NAME=200}, spells={14803}},
 	}},
 	[517] = { name="Sorcerer's Regalia", items={22062,22063,22064,22065,22066,22067,22068,22069}, bonuses={
 		[2] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
 		[4] = {spells={27867}},
 		[6] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={14047}},
-		[8] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={14803}},
+		[8] = {stats={RESISTANCE0_NAME=200}, spells={14803}},
 	}},
 	[518] = { name="Deathmist Raiment", items={22070,22071,22072,22073,22074,22075,22076,22077}, bonuses={
 		[2] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
 		[4] = {spells={27780}},
 		[6] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={14047}},
-		[8] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={14803}},
+		[8] = {stats={RESISTANCE0_NAME=200}, spells={14803}},
 	}},
 	[519] = { name="The Five Thunders", items={22095,22096,22097,22098,22099,22100,22101,22102}, bonuses={
 		[2] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
 		[4] = {spells={27774}},
 		[6] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={14047}},
-		[8] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={14803}},
+		[8] = {stats={RESISTANCE0_NAME=200}, spells={14803}},
 	}},
 	[520] = { name="Ironweave Battlesuit", items={22306,22311,22313,22302,22304,22305,22303,22301}, bonuses={
-		[2] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={14803}},
+		[2] = {stats={RESISTANCE0_NAME=200}, spells={14803}},
 		[3] = {other={"A_MOD_TARGET_RESISTANCE misc=124 -5"}, spells={26283}},
 		[4] = {other={"A_MOD_MECHANIC_RESISTANCE misc=26 10","A_MOD_MECHANIC_RESISTANCE misc=9 10"}, spells={27733}},
 		[5] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={14047}},
@@ -668,7 +668,7 @@ TopFit.SetData = {
 		[3] = {spells={24433}},
 	}},
 	[1587] = { name="Hyperconductive Wizard's Attire", items={213311,213336,213329}, bonuses={
-		[2] = {stats={TOPFIT_HIT_CHANCE_ALL=1}, other={"A_MOD_ARMOR_NO_MODS misc=1 100"}, spells={432639,15666}},
+		[2] = {stats={RESISTANCE0_NAME=100,TOPFIT_HIT_CHANCE_ALL=1}, spells={432639,15666}},
 		[3] = {spells={435977}},
 	}},
 	[1588] = { name="Hyperconductive Mender's Meditation", items={213310,213328,213337}, bonuses={
@@ -868,7 +868,7 @@ TopFit.SetData = {
 		[6] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=30}, spells={9336}},
 	}},
 	[1666] = { name="Wildheart Raiment", items={226712,226713,226714,226708,226711,226709,226710,226715}, bonuses={
-		[2] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={29097}},
+		[2] = {stats={RESISTANCE0_NAME=200}, spells={29097}},
 		[4] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40,TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=44}, spells={450512}},
 		[6] = {spells={450608}},
 		[8] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
@@ -881,7 +881,7 @@ TopFit.SetData = {
 		[6] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40,TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={14049,14047}},
 	}},
 	[1668] = { name="Beaststalker Armor", items={226718,226717,226722,226720,226721,226716,226719,226723}, bonuses={
-		[2] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={29094}},
+		[2] = {stats={RESISTANCE0_NAME=200}, spells={29094}},
 		[4] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40}, spells={30772}},
 		[6] = {spells={450577}},
 		[8] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
@@ -894,7 +894,7 @@ TopFit.SetData = {
 		[6] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40}, spells={14049}},
 	}},
 	[1670] = { name="Magister's Regalia", items={226724,226725,226730,226728,226731,226727,226726,226729}, bonuses={
-		[2] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={29091}},
+		[2] = {stats={RESISTANCE0_NAME=200}, spells={29091}},
 		[4] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={30777}},
 		[6] = {spells={450527}},
 		[8] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
@@ -907,7 +907,7 @@ TopFit.SetData = {
 		[6] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={14047}},
 	}},
 	[1672] = { name="Lightforge Armor", items={226732,226738,226739,226734,226737,226733,226736,226735}, bonuses={
-		[2] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={29093}},
+		[2] = {stats={RESISTANCE0_NAME=200}, spells={29093}},
 		[4] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40,TOPFIT_SPELL_HEALING_FLAT=32}, spells={450516}},
 		[6] = {spells={450625}},
 		[8] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
@@ -920,7 +920,7 @@ TopFit.SetData = {
 		[6] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={14047}},
 	}},
 	[1674] = { name="Vestments of the Devout", items={226744,226742,226746,226740,226741,226745,226743,226747}, bonuses={
-		[2] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={14803}},
+		[2] = {stats={RESISTANCE0_NAME=200}, spells={14803}},
 		[4] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={30779}},
 		[6] = {spells={450576}},
 		[8] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
@@ -940,13 +940,13 @@ TopFit.SetData = {
 		[6] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40}, spells={14049}},
 	}},
 	[1677] = { name="Shadowcraft Armor", items={226701,226703,226704,226707,226702,226705,226706,226700}, bonuses={
-		[2] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={29096}},
+		[2] = {stats={RESISTANCE0_NAME=200}, spells={29096}},
 		[4] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40}, spells={30771}},
 		[6] = {spells={27787}},
 		[8] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
 	}},
 	[1678] = { name="The Elements", items={226751,226752,226755,226754,226748,226750,226753,226749}, bonuses={
-		[2] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={29095}},
+		[2] = {stats={RESISTANCE0_NAME=200}, spells={29095}},
 		[4] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40,TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=44}, spells={450517}},
 		[6] = {spells={450626}},
 		[8] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
@@ -959,7 +959,7 @@ TopFit.SetData = {
 		[6] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={14047}},
 	}},
 	[1680] = { name="Dreadmist Raiment", items={226761,226759,226760,226756,226762,226757,226763,226758}, bonuses={
-		[2] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={29090}},
+		[2] = {stats={RESISTANCE0_NAME=200}, spells={29090}},
 		[4] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={30778}},
 		[6] = {spells={450585}},
 		[8] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
@@ -972,7 +972,7 @@ TopFit.SetData = {
 		[6] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={14047}},
 	}},
 	[1682] = { name="Battlegear of Valor", items={226765,226764,226766,226770,226771,226769,226767,226768}, bonuses={
-		[2] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={29092}},
+		[2] = {stats={RESISTANCE0_NAME=200}, spells={29092}},
 		[4] = {stats={ITEM_MOD_ATTACK_POWER_SHORT=40}, spells={30770}},
 		[6] = {spells={450587}},
 		[8] = {stats={RESISTANCE1_NAME=8,RESISTANCE2_NAME=8,RESISTANCE3_NAME=8,RESISTANCE4_NAME=8,RESISTANCE5_NAME=8,RESISTANCE6_NAME=8}, spells={18679}},
@@ -1308,7 +1308,7 @@ TopFit.SetData = {
 		[4] = {spells={461990}},
 	}},
 	[1782] = { name="The Postmaster", items={228528,228524,228529,228527,228525}, bonuses={
-		[2] = {other={"A_MOD_ARMOR_NO_MODS misc=1 50"}, spells={9764}},
+		[2] = {stats={RESISTANCE0_NAME=50}, spells={9764}},
 		[3] = {stats={RESISTANCE2_NAME=10,RESISTANCE6_NAME=10}, spells={14590,14712}},
 		[4] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=12,TOPFIT_SPELL_HEALING_FLAT=12}, spells={9417}},
 		[5] = {stats={ITEM_MOD_INTELLECT_SHORT=10}, other={"A_MOD_INCREASE_SPEED misc=0 5"}, spells={17498,9106}},
@@ -1321,12 +1321,12 @@ TopFit.SetData = {
 	}},
 	[1785] = { name="Ironweave Battlesuit", items={228596,228597,228598,228681,228066,228700,228038,228547}, bonuses={
 		[2] = {other={"A_MOD_MECHANIC_RESISTANCE misc=26 10","A_MOD_MECHANIC_RESISTANCE misc=9 10"}, spells={27733}},
-		[4] = {other={"A_MOD_ARMOR_NO_MODS misc=1 200"}, spells={14803}},
+		[4] = {stats={RESISTANCE0_NAME=200}, spells={14803}},
 		[6] = {stats={TOPFIT_SPELL_DAMAGE_FLAT=23,TOPFIT_SPELL_HEALING_FLAT=23}, spells={14047}},
 	}},
 	[1786] = { name="Deathbone Guardian", items={227999,228008,228002,228006,228000}, bonuses={
 		[2] = {stats={TOPFIT_DEFENSE_FLAT=3}, spells={7516}},
-		[3] = {other={"A_MOD_ARMOR_NO_MODS misc=1 50"}, spells={9764}},
+		[3] = {stats={RESISTANCE0_NAME=50}, spells={9764}},
 		[4] = {stats={RESISTANCE1_NAME=15,RESISTANCE2_NAME=15,RESISTANCE3_NAME=15,RESISTANCE4_NAME=15,RESISTANCE5_NAME=15,RESISTANCE6_NAME=15}, spells={18686}},
 		[5] = {other={"A_MOD_PARRY_PERCENT misc=0 1"}, spells={13665}},
 	}},
