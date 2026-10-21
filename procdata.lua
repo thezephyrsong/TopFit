@@ -17,6 +17,9 @@ TopFit.ProcData = {
 	[1447] = { -- Ring of Saviors
 		{kind="use", spell=18826, dur=20, cd=600, stats={RESISTANCE0_NAME=300}},
 	},
+	[1979] = { -- Wall of the Dead
+		{kind="proc", spell=18828, dur=20, chance=0.03, flags=680, trigger="hit by melee", stats={RESISTANCE0_NAME=150}},
+	},
 	[2243] = { -- Hand of Edward the Odd
 		{kind="proc", spell=18803, dur=4, chance=1, flags=87376, trigger="melee ability/ranged attack/ranged ability/harmful ability/harmful spell/helpful spell", other={["A_MOD_CASTING_SPEED_NOT_STACK misc=0 100000"]=true}},
 	},
@@ -70,6 +73,9 @@ TopFit.ProcData = {
 	},
 	[13164] = { -- Heart of the Scale
 		{kind="use", spell=17275, dur=300, cd=1800, stats={RESISTANCE2_NAME=20}},
+	},
+	[14554] = { -- Cloudkeeper Legplates
+		{kind="use", spell=18787, dur=30, cd=900, catcd=30, stats={ITEM_MOD_ATTACK_POWER_SHORT=100}},
 	},
 	[18820] = { -- Talisman of Ephemeral Power
 		{kind="use", spell=23271, dur=15, cd=90, catcd=15, stats={TOPFIT_SPELL_DAMAGE_FLAT=175,TOPFIT_SPELL_HEALING_FLAT=175}},
