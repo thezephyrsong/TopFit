@@ -32,7 +32,7 @@
 --     reverse for them (calculation.lua, GetEffectiveWeights), taking back the share of each talent
 --     the player has not got, instead of adding it a second time.
 -- BEGIN GENERATED SIM PRESETS -- written by tools/gen_presets.py; edit the script, not this block
--- Source: the Forever sim's ui/specs/*/*/presets.ts EP presets (clone at 6bf8c1ea7f).
+-- Source: the Forever sim's ui/specs/*/*/presets.ts EP presets (clone at fbf5d98e8f).
 -- Rating points per 1% at level 60 (CombatRatings.txt): hit 10, crit 14, haste 10, expertise 10, dodge 12, parry 15, block 5, defense 1.
 TopFit.simPresets = {
 	["DRUID"] = {
