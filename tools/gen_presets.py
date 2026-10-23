@@ -32,11 +32,10 @@ How a sim weight becomes a TopFit weight (the same rules presets.lua's header do
 """
 import argparse
 import re
-import subprocess
 import sys
 from pathlib import Path
 
-from fvspells import add_common_args, require_repo
+from fvspells import add_common_args, attribution_lines, require_repo
 
 BEGIN = "-- BEGIN GENERATED SIM PRESETS"
 END = "-- END GENERATED SIM PRESETS"
@@ -164,14 +163,6 @@ def num(v):
     return ("%.4f" % v).rstrip("0").rstrip(".") if v != int(v) else str(int(v))
 
 
-def git_sha(repo):
-    try:
-        return subprocess.check_output(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
-                                       stderr=subprocess.DEVNULL, text=True).strip()
-    except Exception:
-        return None
-
-
 def build_block(repo, level):
     rates = load_rates(repo, level)
     presets = parse_presets(repo)
@@ -191,10 +182,10 @@ def build_block(repo, level):
     used = ["%s %s" % (lbl, num(rates[col])) for lbl, col in
             (("hit", "Hit - Melee"), ("crit", "Crit - Melee"), ("haste", "Haste - Melee"), ("expertise", "Expertise"),
              ("dodge", "Dodge"), ("parry", "Parry"), ("block", "Block"), ("defense", "Defense Skill")) if col in rates]
-    sha = git_sha(repo)
     lines = [
         "%s -- written by tools/gen_presets.py; edit the script, not this block" % BEGIN,
-        "-- Source: the Forever sim's ui/specs/*/*/presets.ts EP presets%s." % (" (clone at %s)" % sha if sha else ""),
+        "-- Source: the Forever sim's ui/specs/*/*/presets.ts EP presets.",
+        *attribution_lines(repo),
         "-- Rating points per 1%% at level %s (CombatRatings.txt): %s." % (level, ", ".join(used)),
         "TopFit.simPresets = {",
     ]

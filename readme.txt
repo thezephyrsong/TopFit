@@ -7,6 +7,15 @@ WoW Version: WoW: Forever (see TopFit.toc for the interface number)
 
 GitHub:       http://github.com/Mirroar/TopFit
 
+Data sources and credits
+------------------------
+The item proc data (procdata.lua), item set data (setdata.lua) and the "Sim:" stat-weight presets (presets.lua)
+are generated from the WoWSims Forever project: https://github.com/wowsims/forever
+(MIT License, Copyright (c) 2022 wowsims team). The license text and a description of what is derived from it
+are in THIRD_PARTY_NOTICES.md. TopFit does not include any WoWSims code.
+World of Warcraft is a trademark of Blizzard Entertainment. TopFit is not affiliated with or endorsed by
+Blizzard Entertainment or the WoWSims team.
+
 1. Description
 --------------
 TopFit is a gear management addon designed to select the best gear for you when you just can't be bothered to compare items yourself.

@@ -32,7 +32,10 @@
 --     reverse for them (calculation.lua, GetEffectiveWeights), taking back the share of each talent
 --     the player has not got, instead of adding it a second time.
 -- BEGIN GENERATED SIM PRESETS -- written by tools/gen_presets.py; edit the script, not this block
--- Source: the Forever sim's ui/specs/*/*/presets.ts EP presets (clone at fbf5d98e8f).
+-- Source: the Forever sim's ui/specs/*/*/presets.ts EP presets.
+-- Data derived from the WoWSims Forever project (https://github.com/wowsims/forever), MIT License,
+-- Copyright (c) 2022 wowsims team -- clone at fbf5d98e8f. See THIRD_PARTY_NOTICES.md. World of Warcraft is a trademark of
+-- Blizzard Entertainment; TopFit is not affiliated with or endorsed by Blizzard or the WoWSims team.
 -- Rating points per 1% at level 60 (CombatRatings.txt): hit 10, crit 14, haste 10, expertise 10, dodge 12, parry 15, block 5, defense 1.
 TopFit.simPresets = {
 	["DRUID"] = {

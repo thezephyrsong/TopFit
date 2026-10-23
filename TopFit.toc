@@ -16,7 +16,7 @@
 ## Category-ruRU: Экипировка
 ## Category-zhCN: 装备
 ## Category-zhTW: 裝備
-## X-Credits: ckaotik (for adding almost all the gems and enchant info), tekkub, trefane (SmartFitter), vger(Pawn)
+## X-Credits: ckaotik (for adding almost all the gems and enchant info), tekkub, trefane (SmartFitter), vger(Pawn); item proc, set and stat-weight data derived from the WoWSims Forever project (MIT), https://github.com/wowsims/forever
 ## SavedVariables: TopFitDB
 
 

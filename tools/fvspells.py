@@ -6,6 +6,7 @@ wearer-side stat auras into TopFit stat keys.
 """
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -19,6 +20,26 @@ REPO_FILES = {
     "spells": "sim/core/spelldata/spells_auto_gen.go",
     "cache": "tools/data_watch/.cache",
 }
+
+
+def git_sha(repo):
+    """short commit of the sim clone, or None (not a git checkout / git missing)"""
+    try:
+        return subprocess.check_output(["git", "-C", str(repo), "rev-parse", "--short=10", "HEAD"],
+                                       stderr=subprocess.DEVNULL, text=True).strip() or None
+    except Exception:
+        return None
+
+
+def attribution_lines(repo):
+    """Comment lines every generated data file carries: where the data came from and under what license."""
+    sha = git_sha(repo)
+    return [
+        "-- Data derived from the WoWSims Forever project (https://github.com/wowsims/forever), MIT License,",
+        "-- Copyright (c) 2022 wowsims team%s. See THIRD_PARTY_NOTICES.md. World of Warcraft is a trademark of" % (
+            " -- clone at %s" % sha if sha else ""),
+        "-- Blizzard Entertainment; TopFit is not affiliated with or endorsed by Blizzard or the WoWSims team.",
+    ]
 
 
 def add_common_args(parser):
