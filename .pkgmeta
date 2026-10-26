@@ -13,7 +13,7 @@ externals:
   Libs/CallbackHandler-1.0:
     url: https://repos.wowace.com/wow/callbackhandler/trunk/CallbackHandler-1.0
     tag: latest
-  Libs/AceAddon-3.0:
+  Libs/AceGUI-3.0:
     url: https://repos.wowace.com/wow/ace3/trunk/AceGUI-3.0
     tag: latest
   Libs/AceDB-3.0:
