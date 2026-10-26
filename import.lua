@@ -244,7 +244,51 @@ local function SanitizeScales(scaleTable)
 	return returnTable
 end
 
--- imports a Pawn/AMR/TopFit string and creates a new set from it
+-- Which existing set should a (re-)imported weight string update? A set with the same name wins (importing
+-- "Hunter" again means that set); otherwise the set that is currently selected, i.e. the one being used.
+local function FindSetToUpdate(importName)
+	local sets = TopFit.db.profile.sets
+	local wanted = importName and importName:lower()
+	if wanted then
+		for code, set in pairs(sets) do
+			if set.name and set.name:lower() == wanted then return code end
+		end
+	end
+	local selected = TopFit.ProgressFrame and TopFit.ProgressFrame.selectedSet
+	if selected and sets[selected] then return selected end
+end
+
+-- Replaces the weights of an existing set with freshly imported ones. A re-import is a complete new weight
+-- vector, so stats the import doesn't mention drop out -- except the per-set bonus weights ("SET: <name>"), which
+-- are added by hand in the weights tab and never appear in an external string. Caps are only touched when the
+-- import carries some (a Pawn / AskMrRobot string has none). The set's name, forced items and its
+-- weightsAssumeFullTalents setting stay as they were.
+function TopFit:UpdateSetWeights(setCode, weights, caps)
+	local set = self.db.profile.sets[setCode]
+	if not set then return false end
+
+	local newWeights = {}
+	for stat, value in pairs(weights) do newWeights[stat] = value end
+	for stat, value in pairs(set.weights or {}) do
+		if type(stat) == "string" and stat:find("^SET: ") and newWeights[stat] == nil then
+			newWeights[stat] = value
+		end
+	end
+	set.weights = newWeights
+	if caps and next(caps) then set.caps = caps end
+
+	self:CalculateScores()
+	if self.eventHandler then self.eventHandler:Fire("OnSetChanged", setCode) end
+	return true
+end
+
+local function CreateImportedSet(name, weights, caps)
+	TopFit:AddSet({ name = name, weights = weights, caps = caps or {} })
+	TopFit:Print(string.format("Imported set \"%s\".", name))
+end
+
+-- imports a Pawn/AMR/TopFit string: updates the set being used (or the one with the same name) after asking,
+-- or creates a new set
 function TopFit:ImportString(importString)
 	local setName, setScores, caps = ParsePawn(importString)
 	if not setName then
@@ -258,13 +302,42 @@ function TopFit:ImportString(importString)
 		return nil
 	end
 
-	TopFit:AddSet({
-		name = setName,
-		weights = SanitizeScales(setScores),
-		caps = caps or {},
-	})
-	TopFit:Print(string.format("Imported set \"%s\".", setName))
+	local weights = SanitizeScales(setScores)
+	local targetCode = FindSetToUpdate(setName)
+	if not targetCode then
+		CreateImportedSet(setName, weights, caps)   -- nothing to update (first set, or none selected)
+		return
+	end
+
+	StaticPopup_Show('TOPFIT_IMPORT_UPDATE', TopFit.db.profile.sets[targetCode].name, setName,
+		{ importName = setName, weights = weights, caps = caps, targetCode = targetCode })
 end
+
+StaticPopupDialogs['TOPFIT_IMPORT_UPDATE'] = {
+	-- %s #1 = the set that would be updated, %s #2 = the name inside the imported string (plain %s, no positional
+	-- arguments, so it formats the same everywhere)
+	text = 'Replace the weights of your set "%s" with the imported weights for "%s", or create a new set?',
+	button1 = 'Update set',
+	button2 = CANCEL,
+	button3 = 'New set',
+	OnAccept = function(self, data)
+		data = data or self.data
+		if not data then return end
+		local set = TopFit.db.profile.sets[data.targetCode]
+		if set and TopFit:UpdateSetWeights(data.targetCode, data.weights, data.caps) then
+			TopFit:Print(string.format("Updated the weights of \"%s\" from the import.", set.name))
+		else
+			TopFit:Print("That set no longer exists; nothing was updated.")
+		end
+	end,
+	OnAlt = function(self, data)
+		data = data or self.data
+		if data then CreateImportedSet(data.importName, data.weights, data.caps) end
+	end,
+	timeout = 0,
+	whileDead = true,
+	hideOnEscape = true,
+}
 
 -- exports the currently selected set as a TopFit string (or a Pawn string if pawnFormat is true)
 function TopFit:GenerateExportString(pawnFormat)
@@ -307,7 +380,7 @@ end
 -- to reference), part of the same UI modernization as the Settings namespace / BackdropTemplate
 -- requirement found elsewhere in this project.
 StaticPopupDialogs['TOPFIT_IMPORT'] = {
-	text = 'Paste a Pawn, AskMrRobot, or TopFit string below to import it as a new set:',
+	text = 'Paste a Pawn, AskMrRobot, or TopFit string below. You can then update the set you are using with its weights, or import it as a new set:',
 	button1 = 'Import',
 	button2 = CANCEL,
 	OnAccept = function(self)
