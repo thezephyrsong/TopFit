@@ -19,6 +19,7 @@ REPO_FILES = {
     "db": "assets/database/db.json",
     "spells": "sim/core/spelldata/spells_auto_gen.go",
     "cache": "tools/data_watch/.cache",
+    "trees": "ui/sim/talents/trees",
 }
 
 

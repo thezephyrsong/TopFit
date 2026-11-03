@@ -12,7 +12,8 @@ Data sources and credits
 The item proc data (procdata.lua), item set data (setdata.lua) and the "Sim:" stat-weight presets (presets.lua)
 are generated from the WoWSims Forever project: https://github.com/wowsims/forever
 (MIT License, Copyright (c) 2022 wowsims team). The license text and a description of what is derived from it
-are in THIRD_PARTY_NOTICES.md. TopFit does not include any WoWSims code.
+are in THIRD_PARTY_NOTICES.md. TopFit does not include any WoWSims code. The "export for the simulator" feature follows
+the output format of the WoWSims exporter addon (MIT, https://github.com/wowsims/exporter).
 World of Warcraft is a trademark of Blizzard Entertainment. TopFit is not affiliated with or endorsed by
 Blizzard Entertainment or the WoWSims team.
 
@@ -63,7 +64,7 @@ Weights:
 
 Your gear for the WoWSims simulator:
  - /tf simc (or Right-Click on the minimap button, or "Export equipped gear (SimC)" in the import/export menu) shows a string for your worn gear, race, level and talents. Paste it into the simulator's addon import.
- - Professions are not exported; set them in the simulator.
+ - Your talents are read from the game's talent system and written in the simulator's order (talentdata.lua). Your two main professions are included. If the talents come out empty, /run TopFit:DebugTalents() says why.
 
 A note on stat units: on Forever, hit, crit, haste, dodge, parry, block (and defense skill) work in percent, not ratings. Weights for those stats are per 1% (defense: per skill point). Pawn strings are taken as given. Weights from a rating-based source, such as the simulator's own EP weights, have to be multiplied by the rating points needed for 1%; the "Sim:" presets are already converted.
 

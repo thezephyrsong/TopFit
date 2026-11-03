@@ -10,7 +10,7 @@ Expects the clone at <Addons>/Forever (next to TopFit). Anything else:
     set FOREVER_REPO=D:/games/Forever            (or export on Linux/macOS)
 
 Writes  procdata.lua  (item proc / on-use data),  setdata.lua  (item set bonuses)  and the sim-preset block of
-presets.lua  (EP stat weights) into the addon folder.
+presets.lua  (EP stat weights) and talentdata.lua (talent order for the sim export) into the addon folder.
 Add --pull to `git pull` the clone first; run again after a client patch or when the sim data changes.
 """
 import argparse
@@ -21,6 +21,7 @@ from pathlib import Path
 import gen_presets
 import gen_procdata
 import gen_setdata
+import gen_talents
 from fvspells import add_common_args, require_repo
 
 
@@ -28,7 +29,7 @@ def main():
     parser = argparse.ArgumentParser(description="Regenerate procdata.lua and setdata.lua from the Forever sim clone.")
     add_common_args(parser)
     parser.add_argument("--pull", action="store_true", help="git pull the Forever clone first")
-    parser.add_argument("--only", choices=("procs", "sets", "presets"), help="regenerate just one of the three files")
+    parser.add_argument("--only", choices=("procs", "sets", "presets", "talents"), help="regenerate just one of the four files")
     parser.add_argument("--db", type=Path, help="wowsims.db for the item-set tables (default: <repo>/tools/database/wowsims.db)")
     args = parser.parse_args()
 
@@ -45,6 +46,9 @@ def main():
     if args.only in (None, "presets"):
         print("\n== presets.lua (sim presets block) ==")
         gen_presets.generate(repo, args.addon / "presets.lua")
+    if args.only in (None, "talents"):
+        print("\n== talentdata.lua ==")
+        gen_talents.generate(repo, args.addon / "talentdata.lua")
     if args.only in (None, "sets"):
         print("\n== setdata.lua ==")
         try:

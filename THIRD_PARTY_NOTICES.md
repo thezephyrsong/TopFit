@@ -9,15 +9,16 @@ project's license requires.
 - License: MIT
 - Copyright (c) 2022 wowsims team
 
-**What is derived from it.** Three data files are produced by the scripts in `tools/` from a clone of that project:
+**What is derived from it.** Four data files are produced by the scripts in `tools/` from a clone of that project:
 
 | TopFit file | What it holds | Where it comes from in the WoWSims Forever project |
 | --- | --- | --- |
 | `procdata.lua` | Proc chance, internal cooldown, trigger flags, duration and on-use cooldown of item effects | `assets/database/db.json`, `sim/core/spelldata/spells_auto_gen.go` |
 | `setdata.lua` | Item set pieces and the flat-stat part of each set bonus | the item-set tables in the project's generated `wowsims.db`, and its spell data |
 | `presets.lua` (the block marked "GENERATED SIM PRESETS") | Stat-weight presets, shown in the preset menu as "Sim: ..." | the EP-weight presets in `ui/specs/*/*/presets.ts`, and the rating conversions in `CombatRatings.txt` |
+| `talentdata.lua` | The order of every class's talents in the sim, used to write the talent string of the WoWSims export | `ui/sim/talents/trees/*.json` |
 
-TopFit does not contain any WoWSims source code. The generated files only hold data (IDs, numbers and TopFit stat
+TopFit does not contain any WoWSims Forever source code. The generated files only hold data (IDs, numbers and TopFit stat
 keys), and each one starts with a header stating where it came from.
 
 The project's authors also ask that anyone using it in their own project provide a user-visible link back to the
@@ -30,6 +31,43 @@ of the in-game About panel.
 MIT License
 
 Copyright (c) 2022 wowsims team
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## WoWSims Exporter (addon)
+
+- Project: <https://github.com/wowsims/exporter>
+- License: MIT
+- Copyright (c) 2022 General Wrex
+
+TopFit's "export equipped gear for the simulator" feature (`simc_export.lua`) is written for TopFit, but it follows
+the output format of this addon and several of its lookups: the JSON fields the simulator's addon import expects,
+the profession skill-line IDs, and matching the client's talent nodes to the simulator's talent order by trait
+definition ID. Its license text is reproduced here.
+
+### License text
+
+```
+MIT License
+
+Copyright (c) 2022 General Wrex
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

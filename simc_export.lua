@@ -91,7 +91,7 @@ local RACE_TO_WOWSIMS = {
 
 -- The sim's addon importer compares this with the latest release tag of wowsims/exporter and only shows a
 -- "not up to date" toast when it differs (an absent version shows as 'undefined'); it never blocks the import.
-local EXPORT_VERSION = "v3.2.4"
+local EXPORT_VERSION = "v3.2.6"
 
 -- Slot mapping ordered by inventory slot IDs
 local SLOT_MAPPING = {
@@ -119,8 +119,8 @@ local function ParseItemLink(itemLink)
 	if not itemLink then return nil end
 
 	-- Link format: |cffffffff|Hitem:itemID:enchantID:gemID1:gemID2:gemID3:gemID4...
-	local itemID, enchantID, g1, g2, g3, g4 = itemLink:match(
-		"item:(%d+):(%d*):(%d*):(%d*):(%d*):(%d*)"
+	local itemID, enchantID, g1, g2, g3, g4, suffixID = itemLink:match(
+		"item:(%d+):(%d*):(%d*):(%d*):(%d*):(%d*):(%-?%d*)"
 	)
 
 	if not itemID then return nil end
@@ -137,122 +137,116 @@ local function ParseItemLink(itemLink)
 		id = tonumber(itemID),
 		enchant = tonumber(enchantID) or 0,
 		gems = #gems > 0 and gems or nil,
+		randomSuffix = tonumber(suffixID) or 0,
 	}
 end
 
--- Builds the Forever talent string: one segment per tab joined by "-", each segment one rank digit per node,
--- ordered by tab, then row, then column -- the same order the sim's talent JSONs use (newTalentsConfig enforces it).
+-- Builds the talent string the way the WoWSims sim reads it: one digit per talent, trees joined by "-", e.g.
+-- "0500032-05-3". Digit i of tree t is talent i of tree t in the sim's own tree files
+-- (ui/sim/talents/trees/<class>.json), which are sorted tab, then row, then column.
 --
--- Forever stores talents as trait trees (C_Traits): one tree per class, three tabs side by side by node posX,
--- rows by posY. Beta client data (build 70425):
---   tab 1 posX 1020-2820, tab 2 posX 5020-6820, tab 3 posX 9080-10880; the grid steps by 600; posY 2130-5730.
--- So the string is built from node POSITIONS, not from any API's index order. The classic 3-tab API
--- (GetTalentInfo) is only a fallback, and is checked when called -- not once at load, which is what made
--- the export come out as "" on this client.
-local TALENT_TAB_BANDS = { { 1000, 3000 }, { 5000, 7000 }, { 9000, 11000 } }   -- posX range of tab 1, 2, 3
-local TALENT_ROW_RANGE = { 2100, 5800 }                                          -- posY range of the grid
-local TALENT_TREE_BY_CLASS = {                                                   -- tree IDs, used if the config doesn't list them
-	WARRIOR = 1117, PALADIN = 1100, HUNTER = 1091, ROGUE = 1111, PRIEST = 1114,
-	SHAMAN = 1082, MAGE = 1112, WARLOCK = 1116, DRUID = 1089,
-}
+-- Forever exposes talents through C_Traits, not GetTalentInfo, so the client's nodes are matched to the sim's
+-- order by TraitDefinition ID using TopFit.TalentTrees (talentdata.lua, generated from the sim by
+-- tools/gen_talents.py). The official WoWSims exporter addon does the same. As in the sim's own serializer,
+-- trailing zeroes of every tree and trailing dashes are cut off.
+local lastTalentInfo
 
-local function TalentTabForX(x)
-	for tab, band in ipairs(TALENT_TAB_BANDS) do
-		if x >= band[1] and x <= band[2] then return tab end
+local function GetActiveTalentConfigID()
+	if C_ClassTalents and C_ClassTalents.GetActiveConfigID then
+		return C_ClassTalents.GetActiveConfigID()
+	end
+	if C_SpecializationInfo and C_SpecializationInfo.GetCombatConfigIDForSpecGroup then
+		local group = C_SpecializationInfo.GetActiveSpecGroup and C_SpecializationInfo.GetActiveSpecGroup() or 1
+		return C_SpecializationInfo.GetCombatConfigIDForSpecGroup(group)
 	end
 end
 
--- -> { [tab] = { {x=, y=, rank=}, ... } }, number of nodes read   (nil when the trait API isn't usable)
-local function ReadTraitTalentNodes()
-	if not (C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_Traits and C_Traits.GetTreeNodes and C_Traits.GetNodeInfo) then
+-- { [TraitDefinition ID] = rank } for every talent with points in the active config, or nil if unreadable
+local function ReadTalentRanks()
+	if not (C_Traits and C_Traits.GetConfigInfo and C_Traits.GetTreeNodes and C_Traits.GetNodeInfo and C_Traits.GetEntryInfo) then
 		return nil
 	end
-	local configID = C_ClassTalents.GetActiveConfigID()
+	local configID = GetActiveTalentConfigID()
 	if not configID then return nil end
+	local configInfo = C_Traits.GetConfigInfo(configID)
+	if not (configInfo and configInfo.treeIDs) then return nil end
 
-	local treeIDs
-	local configInfo = C_Traits.GetConfigInfo and C_Traits.GetConfigInfo(configID)
-	if configInfo and configInfo.treeIDs and #configInfo.treeIDs > 0 then
-		treeIDs = configInfo.treeIDs
-	else
-		local _, classToken = UnitClass("player")
-		treeIDs = TALENT_TREE_BY_CLASS[classToken] and { TALENT_TREE_BY_CLASS[classToken] } or {}
-	end
-
-	local tabs, count = { {}, {}, {} }, 0
-	for _, treeID in ipairs(treeIDs) do
+	local ranks = {}
+	for _, treeID in ipairs(configInfo.treeIDs) do
 		for _, nodeID in ipairs(C_Traits.GetTreeNodes(treeID) or {}) do
-			local info = C_Traits.GetNodeInfo(configID, nodeID)
-			local x, y = info and info.posX, info and info.posY
-			local tab = x and y and TalentTabForX(x)
-			if tab and y >= TALENT_ROW_RANGE[1] and y <= TALENT_ROW_RANGE[2] then
-				table.insert(tabs[tab], { x = x, y = y, rank = info.activeRank or info.currentRank or 0 })
-				count = count + 1
+			local node = C_Traits.GetNodeInfo(configID, nodeID)
+			-- currentRank also counts ranks granted without spending points
+			local rank = node and (node.currentRank or node.ranksPurchased) or 0
+			if rank > 0 and node.activeEntry then
+				local entry = C_Traits.GetEntryInfo(configID, node.activeEntry.entryID)
+				if entry and entry.definitionID then
+					ranks[entry.definitionID] = rank
+				end
 			end
 		end
 	end
-	if count == 0 then return nil end
-	return tabs, count
+	return ranks
 end
-
--- classic 3-tab API, sorted on the tier/column it reports; empty indices are skipped like the official exporter
-local function ReadClassicTalentNodes()
-	if type(GetNumTalentTabs) ~= "function" or type(GetTalentInfo) ~= "function" or type(GetNumTalents) ~= "function" then
-		return nil
-	end
-	local numTabs = GetNumTalentTabs() or 0
-	if numTabs == 0 then return nil end
-	local tabs, count = {}, 0
-	for tab = 1, numTabs do
-		tabs[tab] = {}
-		for i = 1, (GetNumTalents(tab) or 0) do
-			local name, _, tier, column, rank = GetTalentInfo(tab, i)
-			if name and tier and column then
-				table.insert(tabs[tab], { x = column, y = tier, rank = rank or 0 })
-				count = count + 1
-			end
-		end
-	end
-	if count == 0 then return nil end
-	return tabs, count
-end
-
-local lastTalentSource, lastTalentCounts
 
 local function GetTalentString()
-	local tabs, source = ReadTraitTalentNodes(), "traits"
-	if not tabs then tabs, source = ReadClassicTalentNodes(), "classic" end
-	if not tabs then
-		lastTalentSource, lastTalentCounts = nil, nil
+	lastTalentInfo = nil
+	local _, classToken = UnitClass("player")
+	local trees = TopFit.TalentTrees and TopFit.TalentTrees[classToken]
+	if not trees then
+		lastTalentInfo = { problem = "talentdata.lua has no talent trees for class " .. tostring(classToken)
+			.. " (run: python tools/update_data.py --only talents)" }
+		return ""
+	end
+	local ranks = ReadTalentRanks()
+	if not ranks then
+		lastTalentInfo = { problem = "the client's talent API (C_Traits) returned nothing" }
 		return ""
 	end
 
-	local segments, counts = {}, {}
-	for tab = 1, #tabs do
-		local nodes = tabs[tab]
-		table.sort(nodes, function(a, b)          -- row (posY / tier), then column (posX / column)
-			if a.y ~= b.y then return a.y < b.y end
-			return a.x < b.x
-		end)
-		local digits = {}
-		for _, n in ipairs(nodes) do table.insert(digits, tostring(n.rank)) end
-		segments[tab] = table.concat(digits)
-		counts[tab] = #nodes
+	local treeStrings, spent = {}, {}
+	for treeIdx, definitionIds in ipairs(trees) do
+		local digits, points = {}, 0
+		for talentIdx, definitionId in ipairs(definitionIds) do
+			local rank = ranks[definitionId] or 0
+			digits[talentIdx] = tostring(rank)
+			points = points + rank
+		end
+		treeStrings[treeIdx] = (table.concat(digits):gsub("0+$", ""))
+		spent[treeIdx] = points
 	end
-	lastTalentSource, lastTalentCounts = source, counts
-	return table.concat(segments, "-")
+	lastTalentInfo = { spent = spent }
+	return (table.concat(treeStrings, "-"):gsub("%-+$", ""))
 end
 
--- /run TopFit:DebugTalents()  -- shows which API the export used, the node count per tab and the resulting string
+-- /run TopFit:DebugTalents()  -- prints the points spent per tree and the string that will be exported
 function TopFit:DebugTalents()
 	local str = GetTalentString()
-	if lastTalentSource then
-		TopFit:Print(("talents via %s API, nodes per tab: %s -> %s"):format(
-			lastTalentSource, table.concat(lastTalentCounts, "/"), str))
+	if lastTalentInfo and lastTalentInfo.spent then
+		TopFit:Print(("talents: points per tree %s -> \"%s\""):format(table.concat(lastTalentInfo.spent, "/"), str))
 	else
-		TopFit:Print("talents could not be read: neither the trait API (C_Traits) nor GetTalentInfo returned any nodes."
-			.. " The export will have an empty talents string.")
+		TopFit:Print("talents could not be read: " .. ((lastTalentInfo and lastTalentInfo.problem) or "unknown reason")
+			.. ". The export will have an empty talents string.")
 	end
+end
+
+-- Professions, read like the official exporter on the retail-based Forever client (skill line -> sim name).
+local PROFESSION_BY_SKILL_LINE = {
+	[164] = "Blacksmithing", [165] = "Leatherworking", [171] = "Alchemy", [182] = "Herbalism", [186] = "Mining",
+	[197] = "Tailoring", [202] = "Engineering", [333] = "Enchanting", [393] = "Skinning",
+}
+
+local function GetProfessionList()
+	local list = {}
+	if not (GetProfessions and GetProfessionInfo) then return list end
+	pcall(function()
+		local first, second = GetProfessions()
+		for _, index in pairs({ first, second }) do
+			local _, _, skillLevel, _, _, _, skillLine = GetProfessionInfo(index)
+			local name = PROFESSION_BY_SKILL_LINE[skillLine]
+			if name then table.insert(list, { name = name, level = skillLevel }) end
+		end
+	end)
+	return list
 end
 
 -- ============================================================================
@@ -285,7 +279,11 @@ function TopFit:GenerateWowsimsExportString()
 				if parsed.enchant > 0 then
 					itemEntry.enchant = parsed.enchant
 				end
-				-- no gems: the official exporter's Forever item layout is id + enchant only
+				-- Forever items can carry a random suffix ("of the Eagle"); the sim needs it to know the item's stats.
+				-- (No gems: the Forever item layout is id, enchant and random_suffix only.)
+				if parsed.randomSuffix ~= 0 then
+					itemEntry.random_suffix = parsed.randomSuffix
+				end
 				table.insert(itemsList, itemEntry)
 			else
 				table.insert(itemsList, JSON_NULL)
@@ -300,9 +298,10 @@ function TopFit:GenerateWowsimsExportString()
 		class = wowsimsClass,
 		race = wowsimsRace,
 		level = UnitLevel("player"),
+		flavor = "forever",
 		talents = GetTalentString(),
-		-- the importer maps over this array and throws if it is missing; TopFit doesn't read professions
-		professions = {},
+		-- the sim's importer maps over this array and throws if it is missing
+		professions = GetProfessionList(),
 		gear = {
 			items = itemsList
 		}
