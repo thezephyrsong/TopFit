@@ -370,7 +370,8 @@ end
 -- Each entry keeps a count and one example item link. Only runs on a cache miss, so the
 -- item cache version bump is what makes a full re-scan (and therefore a full log) happen.
 -- ============================================================================
-local IGNORED_STAT_KEY_PREFIXES = { "EMPTY_SOCKET", "ITEM_MOD_POWER_REGEN0" }
+local IGNORED_STAT_KEY_PREFIXES = { "EMPTY_SOCKET", "ITEM_MOD_POWER_REGEN0",
+	"ITEM_MOD_SPELL_DAMAGE_DONE", "ITEM_MOD_SPELL_HEALING_DONE" }
 
 local function IsKnownStatKey(key)
 	if not TopFit.statList then return false end
@@ -431,10 +432,22 @@ end
 -- removed here and the tooltip text is the only source. Call AFTER LogUnrecognizedItemData so the
 -- discovery log still records which rating keys exist (e.g. a first ArP/resilience item).
 -- Returns the table it was given.
+--
+-- It also removes the native spell damage / healing keys. Forever's GetItemStats() reports the
+-- "Increases healing done by up to X and damage done by up to Y" Equip line itself, and the same
+-- line is parsed from tooltip text into TOPFIT_SPELL_HEALING_FLAT / TOPFIT_SPELL_DAMAGE_FLAT, so
+-- keeping both counted it twice (seen on Twilight Gloves of the Prophet, 2026-11-08). Bump
+-- ITEM_CACHE_VERSION in core.lua whenever this list changes.
+local NATIVE_DUPLICATE_KEYS = {
+	ITEM_MOD_SPELL_DAMAGE_DONE_SHORT  = true,
+	ITEM_MOD_SPELL_HEALING_DONE_SHORT = true,
+}
+
 function TopFit:StripRatingStats(stats)
 	if not stats then return stats end
 	for key in pairs(stats) do
-		if type(key) == "string" and key:match("^ITEM_MOD_.+_RATING_SHORT$") then
+		if type(key) == "string"
+			and (key:match("^ITEM_MOD_.+_RATING_SHORT$") or NATIVE_DUPLICATE_KEYS[key]) then
 			stats[key] = nil
 		end
 	end
