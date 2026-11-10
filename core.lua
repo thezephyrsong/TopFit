@@ -672,7 +672,11 @@ function TopFit:OnInitialize()
 
     -- Version 5 (2026-10-10): split TOPFIT_RANGED_DPS / TOPFIT_MELEE_DPS added alongside the generic DPS key.
     -- Version 6 (2026-10-10): totalBonus no longer includes the item's current enchant.
-    self.ITEM_CACHE_VERSION = 6
+    -- Version 7 (2026-11-08): native ITEM_MOD_SPELL_DAMAGE/HEALING_DONE_SHORT keys stripped (duplicated the
+    -- parsed TOPFIT_SPELL_*_FLAT values); plain "healing/damage done by magical spells" lines now parsed.
+    -- Version 8 (2026-11-08): native spell/school damage, resistance and health-regen keys remapped onto
+    -- scored keys; spell penetration line parsed.
+    self.ITEM_CACHE_VERSION = 8
     if self.db.global.itemCacheVersion ~= self.ITEM_CACHE_VERSION then
         self.db.global.itemCache = {}
         self.db.global.itemCacheVersion = self.ITEM_CACHE_VERSION

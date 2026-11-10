@@ -226,6 +226,18 @@ TopFit.PermanentPercentStatPatterns =
 	-- from the split healing-X-and-damage-Y line above; credits the SAME value to both stats.
 	{ pattern = "increases damage and healing done by magical spells and effects by up to (%d+)",
 	  sameValueKeys = { "TOPFIT_SPELL_DAMAGE_FLAT", "TOPFIT_SPELL_HEALING_FLAT" } },
+	-- Spell penetration -- seen unmatched in the discovery log 2026-11-08 (x21, e.g. Violet Sorcerer's
+	-- Mantle). Written by assignment to the key statList already has, so a native value is overwritten
+	-- rather than doubled.
+	{ pattern = "your spells pierce (%d+) magical resistance",
+	  statKey = "ITEM_MOD_SPELL_PENETRATION_SHORT" },
+	-- PLAIN (non-combined) spell healing / damage, one number each -- seen unmatched in the discovery
+	-- log 2026-11-08 (healing x19, e.g. Earthfury Belt; damage x7, e.g. Demolition Girdle). Must stay
+	-- ahead of the school pattern below, which would otherwise read "magical" as a school name.
+	{ pattern = "increases healing done by magical spells and effects by up to (%d+)",
+	  statKey = "TOPFIT_SPELL_HEALING_FLAT" },
+	{ pattern = "increases damage done by magical spells and effects by up to (%d+)",
+	  statKey = "TOPFIT_SPELL_DAMAGE_FLAT" },
 	-- SCHOOL-specific damage -- CONFIRMED on real gear 2026-09-27 (Filigreed Shadow Circlet:
 	-- "Increases damage done by Shadow spells and effects by up to 14."). Unlike hit/crit talents,
 	-- these are tracked per school, not one generic bucket: a Shadow Priest wants Shadow damage and
@@ -370,8 +382,34 @@ end
 -- Each entry keeps a count and one example item link. Only runs on a cache miss, so the
 -- item cache version bump is what makes a full re-scan (and therefore a full log) happen.
 -- ============================================================================
-local IGNORED_STAT_KEY_PREFIXES = { "EMPTY_SOCKET", "ITEM_MOD_POWER_REGEN0",
-	"ITEM_MOD_SPELL_DAMAGE_DONE", "ITEM_MOD_SPELL_HEALING_DONE" }
+-- Native GetItemStats() keys that carry a stat TopFit already scores under a different key
+-- (added 2026-11-08 from the discovery log). StripRatingStats moves each value onto its target
+-- key, only if the target is not already set, then removes the native key, so nothing is scored
+-- or listed twice. Parsed tooltip text is merged afterwards by assignment and wins on overlap.
+--   spell damage / healing / per-school damage -> the TOPFIT_*_FLAT keys the Equip text parses to
+--   resistances -> the RESISTANCEn_NAME keys in the Resistances group (1 holy .. 6 arcane)
+--   health regen -> statList's ITEM_MOD_HEALTH_REGENERATION_SHORT (native name differs)
+-- ITEM_MOD_SPELL_POWER_SHORT is deliberately NOT here: it would credit damage and healing alike
+-- even when an item only grants one of them.
+local NATIVE_KEY_REMAP = {
+	ITEM_MOD_SPELL_DAMAGE_DONE_SHORT  = "TOPFIT_SPELL_DAMAGE_FLAT",
+	ITEM_MOD_SPELL_HEALING_DONE_SHORT = "TOPFIT_SPELL_HEALING_FLAT",
+	ITEM_MOD_ARCANE_DAMAGE_DONE_SHORT = "TOPFIT_ARCANE_DAMAGE_FLAT",
+	ITEM_MOD_FIRE_DAMAGE_DONE_SHORT   = "TOPFIT_FIRE_DAMAGE_FLAT",
+	ITEM_MOD_FROST_DAMAGE_DONE_SHORT  = "TOPFIT_FROST_DAMAGE_FLAT",
+	ITEM_MOD_HOLY_DAMAGE_DONE_SHORT   = "TOPFIT_HOLY_DAMAGE_FLAT",
+	ITEM_MOD_NATURE_DAMAGE_DONE_SHORT = "TOPFIT_NATURE_DAMAGE_FLAT",
+	ITEM_MOD_SHADOW_DAMAGE_DONE_SHORT = "TOPFIT_SHADOW_DAMAGE_FLAT",
+	ITEM_MOD_HOLY_RESISTANCE_SHORT    = "RESISTANCE1_NAME",
+	ITEM_MOD_FIRE_RESISTANCE_SHORT    = "RESISTANCE2_NAME",
+	ITEM_MOD_NATURE_RESISTANCE_SHORT  = "RESISTANCE3_NAME",
+	ITEM_MOD_FROST_RESISTANCE_SHORT   = "RESISTANCE4_NAME",
+	ITEM_MOD_SHADOW_RESISTANCE_SHORT  = "RESISTANCE5_NAME",
+	ITEM_MOD_ARCANE_RESISTANCE_SHORT  = "RESISTANCE6_NAME",
+	ITEM_MOD_HEALTH_REGEN_SHORT       = "ITEM_MOD_HEALTH_REGENERATION_SHORT",
+}
+
+local IGNORED_STAT_KEY_PREFIXES = { "EMPTY_SOCKET", "ITEM_MOD_POWER_REGEN0" }
 
 local function IsKnownStatKey(key)
 	if not TopFit.statList then return false end
@@ -405,7 +443,7 @@ function TopFit:LogUnrecognizedItemData(itemLink, rawStats)
 		for _, prefix in ipairs(IGNORED_STAT_KEY_PREFIXES) do
 			if key:sub(1, #prefix) == prefix then ignored = true break end
 		end
-		if not ignored and not IsKnownStatKey(key) then
+		if not ignored and not NATIVE_KEY_REMAP[key] and not IsKnownStatKey(key) then
 			bump(log.keys, key)
 		end
 	end
@@ -433,21 +471,29 @@ end
 -- discovery log still records which rating keys exist (e.g. a first ArP/resilience item).
 -- Returns the table it was given.
 --
--- It also removes the native spell damage / healing keys. Forever's GetItemStats() reports the
--- "Increases healing done by up to X and damage done by up to Y" Equip line itself, and the same
--- line is parsed from tooltip text into TOPFIT_SPELL_HEALING_FLAT / TOPFIT_SPELL_DAMAGE_FLAT, so
--- keeping both counted it twice (seen on Twilight Gloves of the Prophet, 2026-11-08). Bump
--- ITEM_CACHE_VERSION in core.lua whenever this list changes.
-local NATIVE_DUPLICATE_KEYS = {
-	ITEM_MOD_SPELL_DAMAGE_DONE_SHORT  = true,
-	ITEM_MOD_SPELL_HEALING_DONE_SHORT = true,
-}
-
+-- It also remaps the native keys listed in NATIVE_KEY_REMAP (spell damage / healing, per-school
+-- damage, resistances, health regen) onto the keys TopFit scores. Forever's GetItemStats() reports
+-- the spell damage / healing Equip line itself while the same line is parsed from tooltip text, so
+-- without this the stat was listed twice (seen on Twilight Gloves of the Prophet, 2026-11-08).
+-- Bump ITEM_CACHE_VERSION in core.lua whenever this list changes.
 function TopFit:StripRatingStats(stats)
 	if not stats then return stats end
+	local toRemap
 	for key in pairs(stats) do
-		if type(key) == "string"
-			and (key:match("^ITEM_MOD_.+_RATING_SHORT$") or NATIVE_DUPLICATE_KEYS[key]) then
+		if type(key) == "string" then
+			if key:match("^ITEM_MOD_.+_RATING_SHORT$") then
+				stats[key] = nil
+			elseif NATIVE_KEY_REMAP[key] then
+				toRemap = toRemap or {}
+				toRemap[#toRemap + 1] = key
+			end
+		end
+	end
+	-- second pass: adding keys while iterating with pairs() is undefined in Lua
+	if toRemap then
+		for _, key in ipairs(toRemap) do
+			local target = NATIVE_KEY_REMAP[key]
+			if stats[target] == nil then stats[target] = stats[key] end
 			stats[key] = nil
 		end
 	end
