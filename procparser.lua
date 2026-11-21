@@ -218,6 +218,15 @@ TopFit.PermanentPercentStatPatterns =
 	  statKey = "TOPFIT_HIT_CHANCE_ALL" },
 	{ pattern = "improves your chance to get a critical strike by ([%d%.]+)%%",
 	  statKey = "TOPFIT_CRIT_CHANCE_ALL" },
+	-- Seen unmatched in the discovery log 2026-11-21 on real Forever gear: ranged-only hit (x24, e.g. Infernal
+	-- Trickster Leggings) and the melee+ranged crit wording (x4, e.g. Blackhand's Breadth). Ranged hit goes on
+	-- the same key as the plain physical hit line above, because TopFit has no ranged-only hit key and the sim
+	-- presets weigh physical hit on TOPFIT_HIT_CHANCE_ALL; a caster set that weighs that key would also credit it.
+	-- "Melee and ranged" is exactly the physical-crit bucket.
+	{ pattern = "improves your chance to hit with ranged weapons by ([%d%.]+)%%",
+	  statKey = "TOPFIT_HIT_CHANCE_ALL" },
+	{ pattern = "improves your chance to get a critical strike with melee and ranged attacks by ([%d%.]+)%%",
+	  statKey = "TOPFIT_CRIT_CHANCE_PHYSICAL" },
 	-- dual-stat spell healing/damage line -- two captures, handled specially below
 	{ pattern = "increases healing done by up to (%d+) and damage done by up to (%d+) for all magical spells and effects",
 	  dualStatKeys = { "TOPFIT_SPELL_HEALING_FLAT", "TOPFIT_SPELL_DAMAGE_FLAT" } },
@@ -409,6 +418,12 @@ local NATIVE_KEY_REMAP = {
 	ITEM_MOD_HEALTH_REGEN_SHORT       = "ITEM_MOD_HEALTH_REGENERATION_SHORT",
 }
 
+-- "+N All Resistances" (ITEM_MOD_SPELL_RESISTANCE_ALL_SCHOOLS_SHORT, seen x17 in the 2026-11-21 log, e.g. Titanosaur
+-- Scale Pendant) is added to each of the five schools below, on top of any single-school value the item also has.
+-- Holy is not part of "all" here, matching the all-resistance spell effects in the sim data.
+local ALL_RESISTANCES_KEY = "ITEM_MOD_SPELL_RESISTANCE_ALL_SCHOOLS_SHORT"
+local ALL_RESISTANCES_TARGETS = { "RESISTANCE2_NAME", "RESISTANCE3_NAME", "RESISTANCE4_NAME", "RESISTANCE5_NAME", "RESISTANCE6_NAME" }
+
 local IGNORED_STAT_KEY_PREFIXES = { "EMPTY_SOCKET", "ITEM_MOD_POWER_REGEN0" }
 
 local function IsKnownStatKey(key)
@@ -483,7 +498,7 @@ function TopFit:StripRatingStats(stats)
 		if type(key) == "string" then
 			if key:match("^ITEM_MOD_.+_RATING_SHORT$") then
 				stats[key] = nil
-			elseif NATIVE_KEY_REMAP[key] then
+			elseif key == ALL_RESISTANCES_KEY or NATIVE_KEY_REMAP[key] then
 				toRemap = toRemap or {}
 				toRemap[#toRemap + 1] = key
 			end
@@ -493,8 +508,18 @@ function TopFit:StripRatingStats(stats)
 	if toRemap then
 		for _, key in ipairs(toRemap) do
 			local target = NATIVE_KEY_REMAP[key]
-			if stats[target] == nil then stats[target] = stats[key] end
-			stats[key] = nil
+			if target then
+				if stats[target] == nil then stats[target] = stats[key] end
+				stats[key] = nil
+			end
+		end
+		-- after the single-school keys are in place, so an item with both gets the sum
+		local allResistances = stats[ALL_RESISTANCES_KEY]
+		if allResistances then
+			for _, target in ipairs(ALL_RESISTANCES_TARGETS) do
+				stats[target] = (stats[target] or 0) + allResistances
+			end
+			stats[ALL_RESISTANCES_KEY] = nil
 		end
 	end
 	return stats

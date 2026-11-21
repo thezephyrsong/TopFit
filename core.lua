@@ -678,7 +678,9 @@ function TopFit:OnInitialize()
     -- scored keys; spell penetration line parsed.
     -- Version 9 (2026-11-14): cached items now keep their green-text bonus (greenBonus) so the debug tooltip can
     -- show every stat that goes into the set value.
-    self.ITEM_CACHE_VERSION = 9
+    -- Version 10 (2026-11-21): ranged-weapon hit and "melee and ranged" crit lines parsed; "+N All Resistances"
+    -- native key spread over the five schools.
+    self.ITEM_CACHE_VERSION = 10
     if self.db.global.itemCacheVersion ~= self.ITEM_CACHE_VERSION then
         self.db.global.itemCache = {}
         self.db.global.itemCacheVersion = self.ITEM_CACHE_VERSION
