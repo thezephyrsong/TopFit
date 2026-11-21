@@ -138,17 +138,22 @@ end
 -- Shaman/Paladin/Priest, which are the only ones with any talentStatConversions entries at all)
 -- hit the free fast-path below and never reach that call. Worth revisiting if scoring a large
 -- bag/bank on one of those four classes turns out to be slow in practice.
-function TopFit:GetEffectiveWeights(weights, setTable)
-	-- "+Attack Power" also grants Ranged Attack Power (Dan, 2026-10-16), so a point of Attack Power is
-	-- worth the AP weight PLUS the RAP weight. This matters for Hunter weights (the sim gives a Hunter 0.00
-	-- for plain AP and 0.39 for RAP: without this, +AP gear would score nothing for a Hunter). Items and
+function TopFit:GetEffectiveWeightsUnguarded(weights, setTable)
+	-- "+Attack Power" also grants Ranged Attack Power (Dan, 2026-10-16), so gear Attack Power has to be
+	-- worth at least the RAP weight. This matters for Hunter weights (the sim gives a Hunter 0.00 for
+	-- plain AP and 0.39 for RAP: without this, +AP gear would score nothing for a Hunter). Items and
 	-- enchants that list ONLY ranged AP still use the RAP weight alone. (Enchant records that list the
 	-- same number as both AP and RAP are collapsed to AP in enchant.lua, so nothing is counted twice.)
+	-- Changed 2026-11-14 from AP weight PLUS RAP weight to the LARGER of the two: with both weights at 1.0
+	-- the sum scored a plain "+32 Attack Power" item as 64 while its tooltip row showed 32. The larger
+	-- weight gives the same result as before for the sim presets (AP 0 -> uses RAP) and counts an
+	-- AP item once when both weights are set by hand.
 	local rangedAPWeight = weights["ITEM_MOD_RANGED_ATTACK_POWER_SHORT"]
-	if rangedAPWeight and rangedAPWeight ~= 0 then
+	if rangedAPWeight and rangedAPWeight ~= 0
+		and rangedAPWeight > (weights["ITEM_MOD_ATTACK_POWER_SHORT"] or 0) then
 		local merged = {}
 		for stat, value in pairs(weights) do merged[stat] = value end
-		merged["ITEM_MOD_ATTACK_POWER_SHORT"] = (weights["ITEM_MOD_ATTACK_POWER_SHORT"] or 0) + rangedAPWeight
+		merged["ITEM_MOD_ATTACK_POWER_SHORT"] = rangedAPWeight
 		weights = merged
 	end
 	-- A set from a Forever-sim preset has weights that already ASSUME the full talent (the sim's
@@ -209,6 +214,25 @@ function TopFit:GetEffectiveWeights(weights, setTable)
 	end
 
 	return effective or weights
+end
+
+-- Public entry point. Weapon DPS sits on an item under the generic ITEM_MOD_DAMAGE_PER_SECOND_SHORT key
+-- AND under a melee or ranged copy of the same number (AddSplitWeaponDps in procparser.lua; enchant
+-- weapon damage is credited the same way in enchant.lua), so a set that weights both would count a
+-- weapon's DPS twice. When a set weights the generic key and a melee/ranged one, the specific key wins
+-- and the generic weight is dropped here (2026-11-14). Returns the unguarded table itself when there
+-- is nothing to drop, so the cheap path stays cheap.
+function TopFit:GetEffectiveWeights(weights, setTable)
+	local effective = TopFit:GetEffectiveWeightsUnguarded(weights, setTable)
+	local genericKey = "ITEM_MOD_DAMAGE_PER_SECOND_SHORT"
+	if effective and (effective[genericKey] or 0) ~= 0
+		and ((effective["TOPFIT_MELEE_DPS"] or 0) ~= 0 or (effective["TOPFIT_RANGED_DPS"] or 0) ~= 0) then
+		local guarded = {}
+		for stat, value in pairs(effective) do guarded[stat] = value end
+		guarded[genericKey] = nil
+		return guarded
+	end
+	return effective
 end
 
 -- Sums the percent stat bonuses granted by talents configured in talentbonuses.lua.

@@ -211,6 +211,47 @@ local function TooltipAddCompareLines(tt, link)
     end
 end
 
+-- Debug-row helpers (2026-11-14). The rows used to multiply by each set's SAVED weights, while the "Set
+-- Values" line is scored with the EFFECTIVE weights (talent conversions, the Attack Power / Ranged Attack
+-- Power rule, the DPS guard), skips hard-capped stats, and also counts green-text bonuses and proc
+-- effects. Rows and total therefore disagreed. These helpers make the rows use the same numbers.
+local function BuildSetWeightList()
+    local list = {}
+    local sets = (TopFit.db and TopFit.db.profile and TopFit.db.profile.sets) or {}
+    for _, setTable in pairs(sets) do
+        local raw = setTable.weights or {}
+        local weights = TopFit.GetEffectiveWeights and TopFit:GetEffectiveWeights(raw, setTable) or raw
+        list[#list + 1] = { setTable = setTable, weights = weights }
+    end
+    return list
+end
+
+-- "a / b / c": one weighted value per set; a stat under an active hard cap is not part of the score
+-- (it goes to the cap check instead), so it is shown as "capped"
+local function WeightedValueString(setList, stat, value)
+    local parts = {}
+    for _, entry in ipairs(setList) do
+        local caps = entry.setTable.caps
+        if caps and caps[stat] and TopFit.HasActiveHardCap and TopFit:HasActiveHardCap(caps[stat]) then
+            parts[#parts + 1] = "|cff808080capped|r"
+        else
+            parts[#parts + 1] = tostring(tonumber((entry.weights[stat] or 0) * value) or "0")
+        end
+    end
+    return table.concat(parts, " / ")
+end
+
+-- the stats a proc adds to the item's total (same rule as GetItemInfoTable in inventory.lua)
+local function GetScoredProcStats(procInfo)
+    if not procInfo then return nil end
+    if procInfo.stats then
+        return TopFit.GetProcEffectiveStats and TopFit:GetProcEffectiveStats(procInfo) or nil
+    end
+    local value = TopFit.GetProcEffectiveValue and TopFit:GetProcEffectiveValue(procInfo)
+    if value and procInfo.statKey then return { [procInfo.statKey] = value } end
+    return nil
+end
+
 local function TooltipAddLines(tt, link)
     if not TopFit or not TopFit.GetCachedItem then return end
     local itemTable = TopFit:GetCachedItem(link)
@@ -224,43 +265,44 @@ local function TooltipAddLines(tt, link)
                 tt:AddLine("  Not usable by your class (" .. table.concat(reasons, "; ") .. ") -- ignored by calculations", 1, 0.4, 0.4)
             end
         end
+        local setList = BuildSetWeightList()
+
         if itemTable["itemBonus"] then
             for stat, value in pairs(itemTable["itemBonus"]) do
                 if not string.find(stat, "SET: ") then
-                    local valueString = ""
-                    local first = true
-                    for _, setTable in pairs(TopFit.db.profile.sets or {}) do
-                        local weightedValue = (setTable.weights and setTable.weights[stat] or 0) * value
-                        if first then
-                            first = false
-                        else
-                            valueString = valueString .. " / "
-                        end
-                        valueString = valueString .. (tonumber(weightedValue) or "0")
-                    end
-                    tt:AddDoubleLine("  +" .. value .. " " .. (_G[stat] or stat), valueString, 0.5, 0.9, 1)
+                    tt:AddDoubleLine("  +" .. value .. " " .. (_G[stat] or stat),
+                        WeightedValueString(setList, stat, value), 0.5, 0.9, 1)
                 end
             end
         end
-        
+
+        -- scored, but not part of GetItemStats(): other green text on the item
+        if itemTable["greenBonus"] and next(itemTable["greenBonus"]) then
+            tt:AddLine("Other bonuses (scored):", 0.5, 0.9, 1)
+            for stat, value in pairs(itemTable["greenBonus"]) do
+                tt:AddDoubleLine("  +" .. value .. " " .. (_G[stat] or stat),
+                    WeightedValueString(setList, stat, value), 0.5, 0.9, 1)
+            end
+        end
+
+        -- scored, but not part of GetItemStats(): the item's proc, averaged over its uptime
+        local procStats = GetScoredProcStats(itemTable["procInfo"])
+        if procStats and next(procStats) then
+            tt:AddLine("Proc (average uptime, scored):", 0.5, 0.9, 1)
+            for stat, value in pairs(procStats) do
+                tt:AddDoubleLine("  +" .. round(value, 2) .. " " .. (_G[stat] or stat),
+                    WeightedValueString(setList, stat, value), 0.5, 0.9, 1)
+            end
+        end
+
         if itemTable["enchantBonus"] then
             tt:AddLine(TopFit.SCORE_ENCHANTS and "Enchant:" or "Enchant (not scored):", 1, 0.9, 0.5)
             for stat, value in pairs(itemTable["enchantBonus"]) do
-                local valueString = ""
-                local first = true
-                for _, setTable in pairs(TopFit.db.profile.sets or {}) do
-                    local weightedValue = (setTable.weights and setTable.weights[stat] or 0) * value
-                    if first then
-                        first = false
-                    else
-                        valueString = valueString .. " / "
-                    end
-                    valueString = valueString .. (tonumber(weightedValue) or "0")
-                end
-                tt:AddDoubleLine("  +" .. value .. " " .. (_G[stat] or stat), valueString, 1, 0.9, 0.5)
+                tt:AddDoubleLine("  +" .. value .. " " .. (_G[stat] or stat),
+                    WeightedValueString(setList, stat, value), 1, 0.9, 0.5)
             end
         end
-        
+
         if itemTable["gemBonus"] then
             local first = true
             for stat, value in pairs(itemTable["gemBonus"]) do
@@ -268,19 +310,8 @@ local function TooltipAddLines(tt, link)
                     first = false
                     tt:AddLine("Gems:", 0.8, 0.2, 0)
                 end
-                
-                local valueString = ""
-                local firstWeight = true
-                for _, setTable in pairs(TopFit.db.profile.sets or {}) do
-                    local weightedValue = (setTable.weights and setTable.weights[stat] or 0) * value
-                    if firstWeight then
-                        firstWeight = false
-                    else
-                        valueString = valueString .. " / "
-                    end
-                    valueString = valueString .. (tonumber(weightedValue) or "0")
-                end
-                tt:AddDoubleLine("  +" .. value .. " " .. (_G[stat] or stat), valueString, 0.8, 0.2, 0)
+                tt:AddDoubleLine("  +" .. value .. " " .. (_G[stat] or stat),
+                    WeightedValueString(setList, stat, value), 0.8, 0.2, 0)
             end
         end
     end

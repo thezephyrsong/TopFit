@@ -402,6 +402,7 @@ function TopFit:GetItemInfoTable(item)
         ["itemBonus"] = itemBonus,
         ["gems"] = gems,
         ["enchantBonus"] = enchantBonus,
+        ["greenBonus"] = greenBonus,
         ["gemBonus"] = gemBonus,
         ["emptySocketColors"] = emptySocketColors,
         ["socketBonusInfo"] = socketBonusInfo,

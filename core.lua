@@ -676,7 +676,9 @@ function TopFit:OnInitialize()
     -- parsed TOPFIT_SPELL_*_FLAT values); plain "healing/damage done by magical spells" lines now parsed.
     -- Version 8 (2026-11-08): native spell/school damage, resistance and health-regen keys remapped onto
     -- scored keys; spell penetration line parsed.
-    self.ITEM_CACHE_VERSION = 8
+    -- Version 9 (2026-11-14): cached items now keep their green-text bonus (greenBonus) so the debug tooltip can
+    -- show every stat that goes into the set value.
+    self.ITEM_CACHE_VERSION = 9
     if self.db.global.itemCacheVersion ~= self.ITEM_CACHE_VERSION then
         self.db.global.itemCache = {}
         self.db.global.itemCacheVersion = self.ITEM_CACHE_VERSION

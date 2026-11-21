@@ -67,10 +67,24 @@ local function PseudoToStats(pseudo, add)
     local function p(i) return pseudo[i + 1] or 0 end
     add("TOPFIT_DODGE_CHANCE_ALL", p(4))
     add("TOPFIT_BLOCK_CHANCE_ALL", p(16))
-    add("TOPFIT_HIT_CHANCE_ALL", math.max(p(12), p(24)))
-    add("TOPFIT_HIT_CHANCE_SPELL", p(13))
-    add("TOPFIT_CRIT_CHANCE_ALL", math.max(p(14), p(25)))
-    add("TOPFIT_CRIT_CHANCE_SPELL", p(15))
+    -- When melee/ranged and spell give the SAME amount it is one effect on everything (Enchant Shield -
+    -- Critical Strike: 1% melee, ranged and spell crit), so it goes to the generic key only, like an item's
+    -- "with all spells and attacks" line. Writing both made a caster set that weights ALL and SPELL
+    -- equally count it twice (2026-11-14).
+    local hit, spellHit = math.max(p(12), p(24)), p(13)
+    if hit > 0 and hit == spellHit then
+        add("TOPFIT_HIT_CHANCE_ALL", hit)
+    else
+        add("TOPFIT_HIT_CHANCE_ALL", hit)
+        add("TOPFIT_HIT_CHANCE_SPELL", spellHit)
+    end
+    local crit, spellCrit = math.max(p(14), p(25)), p(15)
+    if crit > 0 and crit == spellCrit then
+        add("TOPFIT_CRIT_CHANCE_ALL", crit)
+    else
+        add("TOPFIT_CRIT_CHANCE_ALL", crit)
+        add("TOPFIT_CRIT_CHANCE_SPELL", spellCrit)
+    end
     add("TOPFIT_HASTE_PERCENT", math.max(p(20), p(21), p(22)))
 end
 local KNOWN_PSEUDO = { [4] = true, [12] = true, [13] = true, [14] = true, [15] = true, [16] = true,
